@@ -1706,13 +1706,20 @@ that fails one refuses to start, naming the provider and the field.
   user's first successful federated sign-in (requires `email_verified = true`
   from the upstream; otherwise the sign-in is rejected).
 
-**Which to choose.** Use `provision_on_first_login` unless you specifically
-need every federated user approved by an administrator before they can sign
-in at all: `link_only`'s lack of self-service in this release means an
-administrator inserts one database row per user before that user's first
-sign-in can succeed, which does not scale past a handful of people. Choose
-`link_only` only when that per-user approval step is a requirement you want,
-not a cost you are accepting by taking the default.
+**Which to choose.** The question is who should be able to create an
+account.
+- **`provision_on_first_login` admits everyone the upstream can verify.** A
+  new user is created enabled, and signed in, on their first visit. That is
+  right when the upstream's accounts are all yours, such as a single-tenant
+  Microsoft Entra issuer, or when open sign-up is what you want. **With a
+  public provider such as Google it means anyone with a Google account**, and
+  sui-id has no way to limit it to one email domain.
+- **`link_only` admits only users an administrator has linked.** In this
+  release that means one database row per user, created directly, before
+  that user's first sign-in. That does not scale past a handful of people.
+
+So: if you would not let every account at that upstream sign up, use
+`link_only`, and accept its cost. Otherwise `provision_on_first_login`.
 
 Every provider is created disabled. The config file's `enabled` key has no
 effect (a block that sets it true logs one warning per boot saying so) —

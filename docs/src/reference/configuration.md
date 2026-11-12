@@ -253,17 +253,19 @@ providers for federated sign-in (the "Sign in with X" flow).
 | `client_id` | string | **yes** | — | OAuth 2.0 client ID registered at the upstream. |
 | `client_secret_env` | string | no | `""` | Name of the environment variable holding the client secret. Omit or set empty for public clients (no secret). Never put the secret inline. |
 | `scopes` | string | no | `"openid email"` | Space-separated scopes to request from the upstream. |
-| `provision_mode` | string | no | `"link_only"` | `"link_only"` — an upstream identity with no existing link is refused, shown the login page's generic "account link required" message; **this release has no self-service linking**, so an administrator must create the `federation_link` row directly before that user's first sign-in can succeed (a later design may restore self-service, with fresh local authentication, local MFA, CSRF, a single-use durable intent, and explicit approval — no date is set). `"provision_on_first_login"` — a password-less local account is created on first sign-in (requires `email_verified = true` from the upstream). **Prefer `provision_on_first_login` unless per-user administrator approval before first sign-in is a requirement, not a cost you are accepting by taking the default** — see the [operator guide](../guides/operators.md#federated-sign-in-upstream-oidc). |
+| `provision_mode` | string | no | `"link_only"` | `"link_only"` — an upstream identity with no existing link is refused, shown the login page's generic "account link required" message; **this release has no self-service linking**, so an administrator must create the `federation_link` row directly before that user's first sign-in can succeed (a later design may restore self-service, with fresh local authentication, local MFA, CSRF, a single-use durable intent, and explicit approval — no date is set). `"provision_on_first_login"` — a password-less local account is created, **enabled**, on first sign-in, for anyone the upstream vouches for with a verified email (`email_verified = true`). **With a public provider such as Google, that is open sign-up: anyone with an account there gets an account here**, and sui-id cannot limit it to one email domain. Choose it when that is what you want, or when the upstream's accounts are all yours (for example a single-tenant Microsoft Entra issuer) — see the [operator guide](../guides/operators.md#federated-sign-in-upstream-oidc). |
 | `enabled` | bool | no | `false` | **No longer has any effect** (RFC 096-B2). Enabling a provider is an administrator's own action, at **Federation providers** in the admin UI (`/admin/federation-providers`); the key is still accepted, and a block that sets it true logs one warning per boot saying so. |
-| `allowed_origins` | array of strings | no | `[]` | Canonical HTTPS origins (scheme, host, and port) this provider's discovery document may name for `authorization_endpoint`, `token_endpoint` and `userinfo_endpoint`. Empty means the issuer's own origin alone. If you set this, list every origin you want allowed, and **include the issuer's own origin**. Write each origin exactly in canonical form: lowercase host, no path or trailing `/`, and no `:443` (`https://accounts.google.com`, not `https://Accounts.google.com/`). At most 8 entries, no duplicates. Startup refuses any other value. |
+| `allowed_origins` | array of strings | no | `[]` | Canonical HTTPS origins (scheme, host, and port) this provider's discovery document may name for `authorization_endpoint`, `token_endpoint`, `userinfo_endpoint` and `jwks_uri`. Empty means the issuer's own origin alone. If you set this, list every origin you want allowed, and **include the issuer's own origin**. Write each origin exactly in canonical form: lowercase host, no path or trailing `/`, and no `:443` (`https://accounts.google.com`, not `https://Accounts.google.com/`). At most 8 entries, no duplicates. Startup refuses any other value. |
 | `id_token_algs` | array of strings | no | `["RS256"]` | The ID-token signature algorithms this provider is trusted to use: one to four of `RS256`, `PS256`, `ES256` and `EdDSA`. `none` and the `HS*` family are refused at startup. Recorded when the provider is first created; see below. |
 
 > **Security note.** Every provider is created disabled, and stays
 > disabled, regardless of what this file's `enabled` key says — RFC
 > 096-B2 makes enabling a provider an administrator's own action, at
 > **Federation providers** in the admin UI (`/admin/federation-providers`).
-> The first locally-provisioned user is created with `is_disabled = true`
-> as well.
+> **A user created by `provision_on_first_login` is enabled at once**: anyone
+> the upstream vouches for is signed in on their first visit. (Until
+> 0.90.0 this note said such a user was created disabled. That was never
+> true.)
 
 > **Which fields take effect after the provider already exists.**
 > `display_name` is reconciled from this file on every boot, and applies
@@ -276,14 +278,14 @@ providers for federated sign-in (the "Sign in with X" flow).
 > fields changed. Values are compared by meaning: listing the same scopes,
 > algorithms or origins in another order is not a change. (The secret is compared by its plaintext, in constant
 > time, after decrypting the stored value — never logged either way.)
-> Review and re-enable it the same way as after an upgrade: **Federation
+> Check and re-enable it the same way as after an upgrade: **Federation
 > providers** in the admin UI (`/admin/federation-providers`), then
 > **Check and enable**.
 >
 > Removing a provider's `[[federation_providers]]` block entirely also
 > disables it (keeping its existing federation links) rather than
 > deleting anything. Restoring the block keeps it disabled until it is
-> reviewed and re-enabled.
+> checked and re-enabled.
 >
 > `enabled` is never read into the stored provider at all, at creation or
 > on any later boot — RFC 096-B2 made enabling a provider an
@@ -299,7 +301,15 @@ issuer             = "https://accounts.google.com"
 client_id          = "1234567890-abc.apps.googleusercontent.com"
 client_secret_env  = "GOOGLE_CLIENT_SECRET"
 scopes             = "openid email profile"
+# With Google, provision_on_first_login admits anyone with a Google account.
 provision_mode     = "provision_on_first_login"
+# Google's discovery document names endpoints on four origins.
+allowed_origins    = [
+  "https://accounts.google.com",
+  "https://oauth2.googleapis.com",
+  "https://openidconnect.googleapis.com",
+  "https://www.googleapis.com",
+]
 
 [[federation_providers]]
 slug               = "entra"
@@ -308,7 +318,18 @@ issuer             = "https://login.microsoftonline.com/{tenant}/v2.0"
 client_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 client_secret_env  = "ENTRA_CLIENT_SECRET"
 provision_mode     = "link_only"
+# Microsoft's userinfo endpoint is on Microsoft Graph, not the issuer's origin.
+allowed_origins    = [
+  "https://login.microsoftonline.com",
+  "https://graph.microsoft.com",
+]
 ```
+
+The `allowed_origins` above are what each provider's discovery document
+named on 2026-11-12. A provider can move an endpoint. If **Check and
+enable** is refused with *"the upstream's discovery document was refused"*,
+the server log names the endpoint and its origin. Add that origin, if you
+trust it, and restart.
 
 ---
 

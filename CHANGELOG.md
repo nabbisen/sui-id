@@ -128,6 +128,21 @@ Changed, below.
   kept; nothing is deleted. Restoring the block keeps the provider
   disabled until it is checked and re-enabled.
 
+### Security
+
+- **Correction: a federated user created by `provision_on_first_login` is
+  enabled at once.** The configuration reference said such a user was created
+  disabled, for an administrator to approve. That was never true. With a
+  public provider such as Google, `provision_on_first_login` lets anyone with
+  an account there sign up. If you chose it relying on that note, review the
+  users it has created, and see the operator guide's *Which to choose*.
+- **`rustix` 1.1.6**, closing RUSTSEC-2026-0486: its xattr functions marked
+  unwritten bytes as initialized when given a zero-length buffer (unsound).
+  sui-id reaches `rustix` only through its mail and temporary-file
+  dependencies, and the project denies unsound advisories, so it is updated
+  rather than allowed. The scheduled `Security audit` caught it on
+  2026-11-11.
+
 ## [0.89.0] — 2026-11-11
 
 **sui-id can now be downloaded as a verified static binary, with no
