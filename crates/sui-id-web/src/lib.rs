@@ -47,6 +47,7 @@ pub use pages::{
     Flash,
     FlashKind,
     LoginContext,
+    LoginFederationProvider,
     MeAuditEntry,
     MeLanguageData,
     MeMfaData,

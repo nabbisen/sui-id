@@ -23,7 +23,7 @@ use std::str::FromStr;
 use sui_id_core::errors::CoreError;
 use sui_id_core::session;
 use sui_id_shared::ids::SessionId;
-use sui_id_web::{Flash, FlashKind, LoginContext, render_login};
+use sui_id_web::{Flash, FlashKind, LoginContext, LoginFederationProvider, render_login};
 
 #[derive(Debug, Deserialize)]
 
@@ -49,6 +49,30 @@ pub struct LoginGetQuery {
     pub next: String,
     #[serde(default)]
     pub fed_error: Option<String>,
+}
+
+/// RFC 096-B2 S5b §A: every enabled federation provider, for the login
+/// page's own "Sign in with …" buttons, ordered by `display_name` (the
+/// dispatch's own wording -- `list_enabled`'s SQL orders by `slug`,
+/// which is an internal routing detail, not what an end user reads).
+/// Migration 0051's `CHECK` guarantees an enabled row is `validated`
+/// with current evidence, so nothing more needs filtering here.
+async fn enabled_federation_providers_for_login(
+    db: &sui_id_store::Database,
+) -> Vec<LoginFederationProvider> {
+    let mut rows = sui_id_store::repos::federation_provider::list_enabled(db)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!(error = %e, "could not list enabled federation providers for login");
+            Vec::new()
+        });
+    rows.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+    rows.into_iter()
+        .map(|r| LoginFederationProvider {
+            slug: r.slug,
+            display_name: r.display_name,
+        })
+        .collect()
 }
 
 /// Derive the `LoginContext` from the `?next=` parameter (RFC 091).
@@ -120,7 +144,16 @@ pub async fn login_get(
         .fed_error
         .as_deref()
         .map(|v| crate::handlers::federation::fed_error_message(v, lang.strings()));
-    Ok(Html(render_login(flash, next, lang, false, Some(login_ctx))).into_response())
+    let providers = enabled_federation_providers_for_login(&app.db).await;
+    Ok(Html(render_login(
+        flash,
+        next,
+        lang,
+        false,
+        Some(login_ctx),
+        providers,
+    ))
+    .into_response())
 }
 
 /// Attempt to sign in, trying the local credential store first, then any
@@ -447,6 +480,7 @@ pub async fn login_post(
     } else {
         session::SessionAudience::AdminReaders
     };
+    let providers = enabled_federation_providers_for_login(&app.db).await;
     let no_admin_access = |next: String| {
         let t = lang.strings();
         let flash = Flash {
@@ -454,7 +488,15 @@ pub async fn login_post(
             text: t.login_no_admin_access.into(),
         };
         let next = if next.is_empty() { None } else { Some(next) };
-        Html(render_login(Some(flash), next, lang, false, None)).into_response()
+        Html(render_login(
+            Some(flash),
+            next,
+            lang,
+            false,
+            None,
+            providers.clone(),
+        ))
+        .into_response()
     };
     // RFC 005: local-first cascade; falls back to external user-sources
     // when the username is not found locally.
@@ -534,7 +576,14 @@ pub async fn login_post(
             };
             Ok((
                 StatusCode::UNAUTHORIZED,
-                Html(render_login(Some(flash), next, lang, false, None)),
+                Html(render_login(
+                    Some(flash),
+                    next,
+                    lang,
+                    false,
+                    None,
+                    providers,
+                )),
             )
                 .into_response())
         }
@@ -789,9 +838,9 @@ async fn mfa_challenge_post_federated(
         Ok(sui_id_store::commands::F03Outcome::Promoted { session, .. }) => {
             let next_target = find_fed_pending_row(&app, &fed_pending_raw)
                 .await
-                .and_then(|row| row.next_path)
-                .filter(|s| crate::same_site_return_path::same_site_return_path(s).is_some())
-                .unwrap_or_else(|| "/admin".into());
+                .and_then(|row| row.next_path);
+            let next_target =
+                crate::handlers::federation::post_signin_target(next_target.as_deref());
             // RFC 096-B1 stage 12b fix round, item 1: the generic
             // `login_pending_mfa` row dual-issued alongside the federated
             // one (stage 9) is never reached by L02 on this path --
@@ -1023,9 +1072,17 @@ pub async fn logout(
         kind: FlashKind::Info,
         text: lang.strings().signed_out_flash.into(),
     };
+    let providers = enabled_federation_providers_for_login(&app.db).await;
     Ok((
         jar,
-        Html(render_login(Some(flash), None, lang, false, None)),
+        Html(render_login(
+            Some(flash),
+            None,
+            lang,
+            false,
+            None,
+            providers,
+        )),
     )
         .into_response())
 }

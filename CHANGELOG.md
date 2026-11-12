@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Disable.** An administrator can take a federation provider offline
   at any time: federated sign-in through it stops immediately, any
   sign-in already in progress ends, and its users keep their links.
+- **The login page now offers each enabled federation provider as a
+  "Sign in with …" button.** It never did before, though this is what
+  RFC 004 described from the start: until now, federated sign-in could
+  only be started by typing `/auth/federated/{slug}/start` directly into
+  the browser. A disabled provider offers no button.
 
 ### Changed
 
@@ -67,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     "the issuer's origin alone"), must include the issuer's own origin,
     and each entry must be written in canonical form, with no duplicates:
     lowercase host, no path or trailing `/`, and no `:443`.
+  - `slug` must be 1–64 characters of lowercase letters, digits and
+    hyphens, as the configuration reference already said, and no two
+    blocks may share one.
   - `provision_mode` must be exactly `link_only` or
     `provision_on_first_login`; an unrecognized value now refuses to
     start instead of silently being treated as `link_only`.

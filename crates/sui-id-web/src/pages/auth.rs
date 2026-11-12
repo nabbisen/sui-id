@@ -8,6 +8,21 @@ use leptos::prelude::*;
 // already carry (deferred from RFC-MI-022).
 use super::me_security::{MeTab, me_security_tabs};
 
+/// RFC 096-B2 S5b: one enabled federation provider, as the login page
+/// needs it — its route `slug` and the operator-chosen `display_name`
+/// for its button's label. Nothing else about the provider (its trust
+/// policy least of all) belongs on a page an end user, not an
+/// administrator, sees.
+#[derive(Clone)]
+pub struct LoginFederationProvider {
+    pub slug: String,
+    pub display_name: String,
+}
+
+fn url_encode(s: &str) -> String {
+    url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
+}
+
 /// Context that drives login-page copy (RFC 091 / v2.3 §4).
 ///
 /// Derived in the handler from the `?next=` parameter; never from
@@ -31,10 +46,39 @@ pub fn render_login(
     show_passkey_option: bool,
     // RFC 091: context-aware copy. None defaults to AdminPanel.
     context: Option<LoginContext>,
+    // RFC 096-B2 S5b: every enabled federation provider, already ordered
+    // by `display_name` by the caller. Empty means no group and no
+    // divider at all -- cycle L's own "the login screen does not offer a
+    // disabled provider at all" protection, now true for a real reason.
+    federation_providers: Vec<LoginFederationProvider>,
 ) -> String {
     render(move || {
         let next_value = next.clone().unwrap_or_default();
         let t = lang.strings();
+        let next_query = next.clone().filter(|n| !n.is_empty());
+        let federation_group = (!federation_providers.is_empty()).then(|| {
+            let buttons: Vec<_> = federation_providers
+                .iter()
+                .map(|p| {
+                    let href = match &next_query {
+                        Some(n) => {
+                            format!("/auth/federated/{}/start?next={}", p.slug, url_encode(n))
+                        }
+                        None => format!("/auth/federated/{}/start", p.slug),
+                    };
+                    let label = t.login_federation_button.replace("{name}", &p.display_name);
+                    view! {
+                        <a href=href class="button">{label}</a>
+                    }
+                })
+                .collect();
+            view! {
+                <div class="divider-with-label" aria-hidden="true">
+                    <span>{t.login_federation_divider}</span>
+                </div>
+                <div class="stack">{buttons}</div>
+            }
+        });
         let ctx = context.unwrap_or(LoginContext::AdminPanel);
         let (page_title, page_body): (&'static str, Option<String>) = match &ctx {
             LoginContext::AdminPanel => (t.login_title_admin, Some(t.login_body_admin.to_owned())),
@@ -84,6 +128,7 @@ pub fn render_login(
                 <p class="muted auth-meta-link">
                     <a href="/forgot-password">{t.login_forgot_password_link}</a>
                 </p>
+                {federation_group}
                 {show_passkey_option.then(|| view! {
                     <script src="/static/webauthn.js"></script>
                 })}

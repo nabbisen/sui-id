@@ -1683,8 +1683,11 @@ local-only accounts.
 
 ## Federated sign-in (upstream OIDC)
 
-Configure `[[federation_providers]]` blocks to enable "Sign in with Google/Microsoft/…"
-buttons on the login page. See [configuration reference](../reference/configuration.md).
+Configure `[[federation_providers]]` blocks to add providers, then an
+administrator enables each one at **Federation providers** in the admin UI
+(`/admin/federation-providers`) — only an enabled provider's "Sign in with
+Google/Microsoft/…" button appears on the login page. See
+[configuration reference](../reference/configuration.md).
 
 **Provision modes:**
 

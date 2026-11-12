@@ -170,6 +170,8 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     login_fed_contact_admin: "无法为此账户或提供方完成登录，请联系管理员。",
     login_fed_link_required: "此次登录无法自动关联到本地账户，请联系管理员。",
     login_fed_unverified_email: "身份提供方报告您的电子邮箱尚未验证。请先在身份提供方处验证邮箱，然后重试。",
+    login_federation_divider: "或",
+    login_federation_button: "使用 {name} 登录",
 
     // Setup wizard
     setup_step_welcome: "欢迎",

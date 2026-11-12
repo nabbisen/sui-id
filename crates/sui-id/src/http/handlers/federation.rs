@@ -1429,7 +1429,10 @@ pub async fn federated_callback(
                     let cookie =
                         session_cookie(session_id.to_string(), app.config.server.cookie_secure);
                     let jar = jar.add(cookie);
-                    Ok(terminal(jar, Redirect::to("/admin")))
+                    Ok(terminal(
+                        jar,
+                        Redirect::to(&post_signin_target(claimed.next_path.as_deref())),
+                    ))
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -1754,7 +1757,24 @@ async fn complete_federated_signin(
 
     let cookie = session_cookie(session_row.id.to_string(), app.config.server.cookie_secure);
     let jar = jar.add(cookie);
-    Ok(terminal(jar, Redirect::to("/admin")))
+    Ok(terminal(
+        jar,
+        Redirect::to(&post_signin_target(claimed.next_path.as_deref())),
+    ))
+}
+
+/// Where a completed federated sign-in lands: the attempt's own `next_path`,
+/// re-validated at use, else `/admin`. All three success paths use this:
+/// first-login provisioning, an existing link, and the second factor's
+/// completion (`admin/auth.rs`). So a sign-in started from an OIDC
+/// authorization returns to it, as the password path's validated `next`
+/// does. Before the S5b review, the two direct branches always landed on
+/// `/admin`, though the attempt carried `next_path` for exactly this.
+pub(crate) fn post_signin_target(next_path: Option<&str>) -> String {
+    next_path
+        .filter(|s| crate::same_site_return_path::same_site_return_path(s).is_some())
+        .map(str::to_owned)
+        .unwrap_or_else(|| "/admin".into())
 }
 
 // ── RFC 096-B1 stage 6e: the `fed_error` surfacing map ───────────────────────

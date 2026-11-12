@@ -192,8 +192,12 @@ the five states are indistinguishable by design.
 
 ## Federated sign-in (RFC 004)
 
-When upstream OIDC providers are configured, sui-id adds "Sign in with X"
-buttons to the login page.
+When an upstream OIDC provider is configured **and enabled**, sui-id adds a
+"Sign in with X" button to the login page. A configured but disabled
+provider — every newly configured provider starts disabled, and so does one
+whose trust policy changed in the config file — adds no button until an
+administrator checks and enables it
+(`/admin/federation-providers`).
 
 The flow is fully server-side from the RP perspective:
 

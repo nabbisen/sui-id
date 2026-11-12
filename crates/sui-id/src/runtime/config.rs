@@ -281,6 +281,33 @@ impl Config {
         // this loop only parses `provision_mode` first (also fallibly,
         // RFC 096-B2 S2a) and prefixes every refusal with the provider's
         // slug, matching this file's own existing message style.
+        // The slug is a URL path segment (`/auth/federated/{slug}/start`,
+        // and the login page's button links to it), so it is held to what
+        // the configuration reference already promised ("lowercase
+        // alphanumeric with optional hyphens"), and must name one provider
+        // only. Enforced since the S5b review; until then it was only
+        // documented.
+        let mut seen_slugs = std::collections::BTreeSet::new();
+        for provider in &self.federation_providers {
+            let slug = &provider.slug;
+            if slug.is_empty()
+                || slug.len() > 64
+                || !slug
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            {
+                anyhow::bail!(
+                    "federation_provider[{slug:?}]: slug must be 1-64 characters of lowercase \
+                     letters, digits and '-' (it is part of the sign-in URL)"
+                );
+            }
+            if !seen_slugs.insert(slug.as_str()) {
+                anyhow::bail!(
+                    "federation_provider[{slug}]: slug is used by more than one \
+                     [[federation_providers]] block; each provider needs its own"
+                );
+            }
+        }
         for provider in &self.federation_providers {
             let provision_mode = sui_id_store::models::ProvisionMode::try_parse(
                 &provider.provision_mode,

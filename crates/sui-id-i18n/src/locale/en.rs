@@ -167,6 +167,8 @@ pub static STRINGS_EN: Strings = Strings {
     login_fed_contact_admin: "Sign-in could not be completed for this account or provider. Contact an administrator.",
     login_fed_link_required: "This sign-in could not be linked to a local account automatically. Contact an administrator.",
     login_fed_unverified_email: "Your identity provider reports that your email address is not verified. Verify it with your identity provider, then try again.",
+    login_federation_divider: "or",
+    login_federation_button: "Sign in with {name}",
 
     // Setup wizard
     setup_step_welcome: "Welcome",

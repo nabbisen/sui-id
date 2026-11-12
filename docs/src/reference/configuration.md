@@ -247,7 +247,7 @@ providers for federated sign-in (the "Sign in with X" flow).
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `slug` | string | **yes** | — | URL-safe identifier used in routes: `/auth/federated/{slug}/start`. Must be lowercase alphanumeric with optional hyphens. |
+| `slug` | string | **yes** | — | URL-safe identifier used in routes: `/auth/federated/{slug}/start`. Must be 1–64 characters of lowercase letters, digits and hyphens, and unique across blocks; startup refuses anything else. |
 | `display_name` | string | **yes** | — | Human-readable label for the "Sign in with X" button. |
 | `issuer` | string | **yes** | — | Upstream OIDC issuer URL. Used to fetch `/.well-known/openid-configuration`. |
 | `client_id` | string | **yes** | — | OAuth 2.0 client ID registered at the upstream. |

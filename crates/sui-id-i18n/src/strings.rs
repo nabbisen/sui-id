@@ -257,6 +257,15 @@ pub struct Strings {
     /// the remedy is verifying the address with the upstream identity
     /// provider, not with sui-id.
     pub login_fed_unverified_email: &'static str,
+    /// RFC 096-B2 S5b: the divider label above the federation-provider
+    /// buttons group, same `divider-with-label` shape the passkey option
+    /// already uses above the password form.
+    pub login_federation_divider: &'static str,
+    /// RFC 096-B2 S5b: one federation-provider's own "Sign in with …"
+    /// button label, a `{name}`-templated string (`pages/me_security/
+    /// overview.rs:75`'s own `.replace` precedent) filled in with the
+    /// provider's `display_name`.
+    pub login_federation_button: &'static str,
 
     // ---- Setup wizard ----
     pub setup_step_welcome: &'static str,

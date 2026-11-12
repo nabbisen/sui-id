@@ -99,11 +99,19 @@ struct Started {
 }
 
 async fn start(state: &AppState, slot: &super::federation_fail_closed::NonceSlot) -> Started {
+    start_uri(state, slot, "/auth/federated/up/start").await
+}
+
+async fn start_uri(
+    state: &AppState,
+    slot: &super::federation_fail_closed::NonceSlot,
+    uri: &str,
+) -> Started {
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/auth/federated/up/start")
+                .uri(uri)
                 .body(Body::empty())
                 .expect("req"),
         )
@@ -349,5 +357,35 @@ async fn a_returning_identity_does_not_provision_twice() {
     assert_eq!(
         provisioned_count, 1,
         "the second sign-in did not provision again"
+    );
+}
+
+/// S5b review: first-login provisioning, the other direct-success branch,
+/// lands on the `next` its attempt started with, not always on `/admin`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_first_time_identity_lands_on_the_next_it_started_with() {
+    let mut state = base_state().await;
+    let (issuer, slot) =
+        mock_upstream_for("sub-next-fed-user".into(), "nextuser@example.com".into()).await;
+    add_federation_provider_config(&mut state, &issuer);
+    seed_provider_row(&state, &issuer).await;
+
+    let started = start_uri(
+        &state,
+        &slot,
+        "/auth/federated/up/start?next=%2Fme%2Fsecurity",
+    )
+    .await;
+    let (status, headers) = callback(&state, &started).await;
+
+    assert!(status.is_redirection(), "callback: {status}");
+    let location = headers
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .expect("redirect location");
+    assert_eq!(location, "/me/security");
+    assert!(
+        extract_set_cookie(&headers, "sui_id_session").is_some(),
+        "a session cookie was issued"
     );
 }

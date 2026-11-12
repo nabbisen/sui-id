@@ -293,3 +293,45 @@ fn an_explicit_origin_set_missing_the_issuers_own_origin_is_refused_at_load() {
     assert!(msg.contains("idp"), "{msg}: must name the provider");
     assert!(msg.contains("issuer"), "{msg}");
 }
+
+/// S5b review: a slug is a URL path segment, so it is held to what the
+/// configuration reference documents: lowercase alphanumeric with optional
+/// hyphens. The login page's button links to it.
+#[test]
+fn a_slug_that_is_not_url_safe_is_refused_at_load() {
+    for bad in [
+        "",
+        "has space",
+        "a/b",
+        "q?x",
+        "dot.dot",
+        "Google",
+        "under_score",
+        &"x".repeat(65),
+    ] {
+        let mut c = Config::sample();
+        let mut provider = a_federation_provider();
+        provider.slug = bad.to_string();
+        c.federation_providers.push(provider);
+        let msg = c.validate().expect_err(bad).to_string();
+        assert!(msg.contains("slug"), "{bad:?}: {msg}");
+    }
+    for good in ["google", "entra-id", "idp2", "x"] {
+        let mut c = Config::sample();
+        let mut provider = a_federation_provider();
+        provider.slug = good.to_string();
+        c.federation_providers.push(provider);
+        assert!(c.validate().is_ok(), "{good:?} must be accepted");
+    }
+}
+
+/// S5b review: two blocks may not share a slug; the second would fail to
+/// be created at startup, with nothing saying why.
+#[test]
+fn a_slug_used_by_two_blocks_is_refused_at_load() {
+    let mut c = Config::sample();
+    c.federation_providers.push(a_federation_provider());
+    c.federation_providers.push(a_federation_provider());
+    let msg = c.validate().expect_err("duplicate slug").to_string();
+    assert!(msg.contains("more than one"), "{msg}");
+}
