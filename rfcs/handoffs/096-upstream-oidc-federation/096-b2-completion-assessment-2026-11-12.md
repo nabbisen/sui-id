@@ -1,6 +1,10 @@
 # RFC 096-B2 — completion assessment, 2026-11-12
 
-> ## Whose turn it is: **yours**, for three decisions (§5).
+> ## Decided 2026-11-12. `@nabbisen`: *"1. Accepted. 2. Yes. 3. Yes."*
+> 096-B2 is accepted, recorded in RFC 096's header (`:13`). Stage 14 runs
+> before 0.90.0's tag, and the `test_id` cleanup goes into 0.90.0's
+> preparation. The request was to check both against the fundamental
+> philosophy before acting on them. That check is §6.
 
 **Prepared by.** The architect, 2026-11-12, after stage 7 landed.
 **Asked of you.**
@@ -108,3 +112,56 @@ closure, as it was for 096-A (RFC 096 header, `:13`).
 3. **The `test_id` cleanup (§4) in 0.90.0's preparation?** Recommended:
    **yes**. It is mechanical, the dev team can do it, and the G23 check stops
    it recurring.
+
+## 6 — the three decisions, checked against both halves before acting
+
+**Half 1 — clean, safe and secure, robust and sophisticated. Half 2 — APIs
+and UI/UX nobody misunderstands.** Each decision was checked by measuring,
+not by reading this document again.
+
+**Decision 1, accept 096-B2.** Accepting a phase as finished means nothing
+it shipped may still contradict itself or the product. The check found five
+things, all now fixed:
+- **The documented Google and Microsoft examples would have been refused
+  at "Check and enable".** Both providers' discovery documents, fetched
+  2026-11-12, name endpoints on origins beyond the issuer's: four for
+  Google, and Graph for Microsoft's userinfo. sui-id checks all four
+  endpoints, `jwks_uri` included. The examples now carry those
+  `allowed_origins`, with a note on what to do when a provider moves one,
+  and the `allowed_origins` row names `jwks_uri`.
+- **The configuration reference has said since July that a provisioned
+  user starts disabled.** No version of the code ever did that. Worse,
+  `provision_on_first_login` with Google is **open sign-up for every Google
+  account**, and the guide *recommended* it. The recommendation was the
+  architect's (the stage 6e dispatch), not a ruling. The reference, the
+  operator guide's *Which to choose*, the Google example, and a `### Security`
+  CHANGELOG entry now say what is true.
+- **A new user who signed in with the new button got "Forbidden".** With no
+  `next`, every federated success path lands on `/admin`, which a plain
+  user cannot open. The password path avoids this, by RFC 102 A7. The
+  release preparation fixes it (its §A): land by role, `/me/security`
+  otherwise.
+- **Three phrases called the re-enable action "review"**, where the UI's
+  button says "Check and enable". The action is now named as the button
+  names it, and "Requires review" stays the status.
+- **The scheduled `Security audit` had failed unnoticed since 2026-11-11** on
+  RUSTSEC-2026-0486 (`rustix`, unsound). `rustix` 1.1.6 fixes it. That
+  belongs to the release, not to 096-B2, and is recorded here because the
+  check found it.
+
+**Decision 2, stage 14 before the tag.**
+- **Half 1:** it runs on a throwaway instance bound to loopback, and the
+  secret exists only in the runner's environment. The runbook says what
+  never to paste, and what to remove from the log first.
+- **Half 2:** each step names the page, the button and the exact text the
+  product shows. Every expected result was checked against the code, and
+  two were corrected while writing it: the landing page, and the refusal's
+  text after an unlink.
+- **It runs on the exact commit to be tagged**, so it tests what ships.
+
+**Decision 3, the `test_id` cleanup.** A relabelled `test_id` is as false as
+an unresolved one if the test it names doesn't exercise the command. So the
+dispatch finds each command's tests through the coverage registry. A
+command with no registered test is **reported as missing, not papered over**,
+and G23 gains a check, with a negative fixture, that every `test_id` names a
+real test.
