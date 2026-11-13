@@ -1,6 +1,6 @@
 # 096-B1 stage 14 — the live run against Google: a runbook
 
-> ## Whose turn it is: **yours, once the architect names the commit** (§1).
+> ## Whose turn it is: **yours.** The commit is named in §1.
 > It runs after 0.90.0's preparation lands, on that exact commit, and before
 > the tag. Decided 2026-11-12, on the 096-B2 completion assessment §5.2.
 
@@ -33,14 +33,22 @@ hostile-provider evidence"* (`:1093-1094`). That is 096-A's corpus, and
 
 ## 1 — the commit
 
-The architect writes the exact commit here when 0.90.0's preparation lands:
-**`<commit>`**. Build it from a clean tree:
+0.90.0's preparation landed as
+**`1955bc5305d06e575cac344e233c3f97bf4d14e6`** (2026-11-13). `main` is one
+commit past it: the commit that wrote this hash here, which changes
+nothing but this file. So check out the exact commit, detached, and build
+that from a clean tree:
 
 ```sh
-git -C <your sui-id checkout> status --short   # must print nothing
-git -C <your sui-id checkout> log -1 --format=%H   # must equal <commit>
+cd <your sui-id checkout>
+git status --short                                   # must print nothing
+git fetch origin
+git checkout --detach 1955bc5305d06e575cac344e233c3f97bf4d14e6
+git log -1 --format=%H    # must print 1955bc5305d06e575cac344e233c3f97bf4d14e6
 cargo build --release -p sui-id --locked
 ```
+
+Afterwards, `git checkout main` returns you to the branch.
 
 ## 2 — a Google OAuth client
 
