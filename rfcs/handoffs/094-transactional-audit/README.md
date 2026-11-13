@@ -1,5 +1,14 @@
 # RFC 094 developer handoff
 
+> **Dispatched 2026-11-14, for `0.91.0`: the write primitives with no
+> direct test** —
+> [`primitive-coverage-after-0.90.0-2026-11-14.md`](primitive-coverage-after-0.90.0-2026-11-14.md).
+> Two primitives that no production code calls come out of production
+> (U24's `users::set_last_login`, which nothing calls at all, and K06's
+> `signing_keys::insert_with_plaintext`, which only tests call). Ten get a
+> direct test with a boundary per WHERE clause. It is returned as a
+> working tree and lands after the `0.90.0` tag.
+
 > # **`0.87.0` IS RELEASED AND PUBLISHED**, 2026-11-01. Tag `0.87.0` at
 > `cebb169`, annotated and on `main`. **Level B on that exact commit**
 > (`workflow_dispatch` `41262339914`, **28 jobs, 28 success, 0 skipped,
