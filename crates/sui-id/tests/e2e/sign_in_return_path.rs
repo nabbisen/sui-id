@@ -387,9 +387,12 @@ async fn federated_next_path_write_and_read_reject_a_bad_value() {
             .headers()
             .get(header::LOCATION)
             .and_then(|v| v.to_str().ok());
+        // Release prep §A: `drive_to_federated_mfa_with_next`'s user is a
+        // plain `Role::User`, so the rejected-bad-value default is
+        // `/me/security`, not `/admin`.
         assert_eq!(
             loc,
-            Some("/admin"),
+            Some("/me/security"),
             "bad next_path {bad:?} must not be written, let alone followed"
         );
     }
@@ -451,6 +454,26 @@ async fn federated_next_path_follows_a_same_site_control() {
     assert_eq!(loc, Some(CONTROL));
 }
 
+/// Release prep §A: the second-factor completion path, genuinely no
+/// `next` at all (not a bad value falling back to the same default,
+/// which the two tests above already cover) -- a plain `Role::User`
+/// lands on `/me/security`, not `/admin`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn federated_second_factor_completion_non_admin_with_no_next_lands_on_me_security() {
+    let mut state = test_app();
+    complete_setup_and_login(&state).await;
+    let setup = drive_to_federated_mfa_with_next(&mut state, "").await;
+    let admin_csrf = get_admin_csrf(&state, &setup).await;
+    let code = totp_code_from_secret(&setup.totp_secret).await;
+    let resp = post_mfa_code(&state, &setup, &code, &admin_csrf).await;
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok());
+    assert_eq!(loc, Some("/me/security"));
+}
+
 async fn totp_code_from_secret(secret: &[u8]) -> String {
     let step = chrono::Utc::now().timestamp() / 30;
     format!(
@@ -492,9 +515,11 @@ async fn federated_next_path_read_site_rejects_an_already_stored_bad_value() {
             .headers()
             .get(header::LOCATION)
             .and_then(|v| v.to_str().ok());
+        // Release prep §A: `drive_to_federated_mfa_with_next`'s user is a
+        // plain `Role::User`.
         assert_eq!(
             loc,
-            Some("/admin"),
+            Some("/me/security"),
             "an already-stored bad next_path must not be followed at read time"
         );
     }

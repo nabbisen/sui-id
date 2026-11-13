@@ -215,6 +215,14 @@ pub(super) fn seal_test_client_secret(state: &AppState) -> Vec<u8> {
 /// confidential (`client_secret_enc` set) -- see [`TEST_CLIENT_SECRET`]'s
 /// own doc for why.
 pub(super) async fn linked_user(state: &AppState, issuer: &str) -> UserId {
+    linked_user_with_role(state, issuer, Role::User).await
+}
+
+/// Release prep §A: `linked_user` with a chosen role, needed to prove
+/// `post_signin_target`'s default is role-appropriate -- `linked_user`
+/// itself is kept as the plain-`Role::User` case every other test here
+/// already calls, unchanged.
+pub(super) async fn linked_user_with_role(state: &AppState, issuer: &str, role: Role) -> UserId {
     let now = chrono::Utc::now();
     let uid = UserId::new();
     sui_id_store::repos::users::create(
@@ -223,8 +231,8 @@ pub(super) async fn linked_user(state: &AppState, issuer: &str) -> UserId {
             id: uid,
             username: "fed-user".into(),
             display_name: None,
-            is_admin: false,
-            role: Role::User,
+            is_admin: role == Role::Admin,
+            role,
             last_login_at: None,
             is_disabled: false,
             is_deleted: false,
@@ -511,7 +519,10 @@ async fn fed_active_linked_user_signs_in() {
     let user = linked_user(&state, &issuer).await;
 
     let o = federated_signin(&state, &nonce_slot).await;
-    assert_eq!(o.location, "/admin");
+    // Release prep §A: `linked_user` is a plain `Role::User`, so with no
+    // `next` the role-appropriate default is `/me/security`, not `/admin`
+    // (which `can_read_admin()` would refuse this role on arrival anyway).
+    assert_eq!(o.location, "/me/security");
     assert!(o.session_cookie.is_some(), "the harness reaches a session");
     assert_eq!(sessions_of(&state, user).await, 1);
 }
@@ -557,11 +568,68 @@ async fn fed_sign_in_uses_the_stored_algs_not_the_config_ones() {
 
     let o = federated_signin(&state, &nonce_slot).await;
     assert_eq!(
-        o.location, "/admin",
+        o.location, "/me/security",
         "the stored policy's RS256 must decide, not the config file's ES256"
     );
     assert!(o.session_cookie.is_some(), "the harness reaches a session");
     assert_eq!(sessions_of(&state, user).await, 1);
+}
+
+// ── Release prep §A: where a completed sign-in lands is role-appropriate,
+// not unconditionally `/admin` ────────────────────────────────────────────
+
+/// The existing-link direct path (no MFA), a plain `Role::User`: covered
+/// again here, explicitly about the fix, even though
+/// `fed_active_linked_user_signs_in` above already asserts the same
+/// value as part of a different claim.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn existing_link_non_admin_with_no_next_lands_on_me_security() {
+    let mut state = test_app();
+    complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
+        super::tls_mock::LoopbackFixtureResolver,
+    )));
+    let (issuer, nonce_slot) = mock_upstream().await;
+    add_federation_provider_config(&mut state, &issuer);
+    linked_user_with_role(&state, &issuer, Role::User).await;
+
+    let o = federated_signin(&state, &nonce_slot).await;
+    assert_eq!(o.location, "/me/security");
+}
+
+/// The one scenario no other test proves: an existing-link user whose
+/// role actually *can* read `/admin` still lands there with no `next` --
+/// the fix narrows the default, it does not remove it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn existing_link_admin_with_no_next_still_lands_on_admin() {
+    let mut state = test_app();
+    complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
+        super::tls_mock::LoopbackFixtureResolver,
+    )));
+    let (issuer, nonce_slot) = mock_upstream().await;
+    add_federation_provider_config(&mut state, &issuer);
+    linked_user_with_role(&state, &issuer, Role::Admin).await;
+
+    let o = federated_signin(&state, &nonce_slot).await;
+    assert_eq!(o.location, "/admin");
+}
+
+/// A valid `next` still wins over the role-appropriate default, for a
+/// plain `Role::User` -- the S5b fix this release does not touch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn existing_link_non_admin_with_a_valid_next_is_not_overridden_by_the_default() {
+    let mut state = test_app();
+    complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
+        super::tls_mock::LoopbackFixtureResolver,
+    )));
+    let (issuer, nonce_slot) = mock_upstream().await;
+    add_federation_provider_config(&mut state, &issuer);
+    linked_user_with_role(&state, &issuer, Role::User).await;
+
+    let o = federated_signin_with_next(&state, &nonce_slot, "/oauth2/consent").await;
+    assert_eq!(o.location, "/oauth2/consent");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

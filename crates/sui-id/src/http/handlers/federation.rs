@@ -1412,6 +1412,12 @@ pub async fn federated_callback(
                 last_used_at: None,
             };
             let session_id = session_row.id;
+            // `provision_federated_user` is about to move `user` -- its role
+            // is always `Role::User` (set above), but captured by value
+            // here rather than re-hardcoded at the redirect, so a future
+            // change to how provisioned users get their role cannot drift
+            // out of step with where that role actually lands them.
+            let role = user.role;
             return match sui_id_store::commands::provision_federated_user(
                 &app.db,
                 claimed.id,
@@ -1431,7 +1437,7 @@ pub async fn federated_callback(
                     let jar = jar.add(cookie);
                     Ok(terminal(
                         jar,
-                        Redirect::to(&post_signin_target(claimed.next_path.as_deref())),
+                        Redirect::to(&post_signin_target(claimed.next_path.as_deref(), role)),
                     ))
                 }
                 Err(e) => {
@@ -1755,26 +1761,52 @@ async fn complete_federated_signin(
         m.signin(sui_id_store::metrics::signin_result::SUCCESS);
     }
 
+    // RFC 096-B2 release prep §A: an existing link's role was never read on
+    // this path before (only `user_id` was, for the session row), so a
+    // best-effort read here, never inside the commands transaction above --
+    // the landing page is not an authority decision, and a failed read
+    // defaults to `Role::User`, never a guessed `Admin`.
+    let role = sui_id_store::repos::users::get(&app.db, user_id)
+        .await
+        .map(|u| u.role)
+        .unwrap_or(Role::User);
     let cookie = session_cookie(session_row.id.to_string(), app.config.server.cookie_secure);
     let jar = jar.add(cookie);
     Ok(terminal(
         jar,
-        Redirect::to(&post_signin_target(claimed.next_path.as_deref())),
+        Redirect::to(&post_signin_target(claimed.next_path.as_deref(), role)),
     ))
 }
 
 /// Where a completed federated sign-in lands: the attempt's own `next_path`,
-/// re-validated at use, else `/admin`. All three success paths use this:
-/// first-login provisioning, an existing link, and the second factor's
-/// completion (`admin/auth.rs`). So a sign-in started from an OIDC
-/// authorization returns to it, as the password path's validated `next`
-/// does. Before the S5b review, the two direct branches always landed on
-/// `/admin`, though the attempt carried `next_path` for exactly this.
-pub(crate) fn post_signin_target(next_path: Option<&str>) -> String {
+/// re-validated at use, else a role-appropriate default. All three success
+/// paths use this: first-login provisioning, an existing link, and the
+/// second factor's completion (`admin/auth.rs`). So a sign-in started from
+/// an OIDC authorization returns to it, as the password path's validated
+/// `next` does.
+///
+/// **The default is `/admin` only for a role that can actually read it**
+/// (`role.can_read_admin()`) **— otherwise `/me/security`.** Before this
+/// fix, every path defaulted to `/admin` unconditionally: a plain `user`
+/// provisioned by `provision_on_first_login`, or linked under `link_only`,
+/// signed in successfully and then got `Forbidden` from `/admin`'s
+/// `CurrentAdminOrAuditor` the moment the redirect landed — the one case
+/// RFC 102 A7 already prevents on the password path, by deciding the
+/// audience before signing in rather than after. Caller supplies the
+/// role it already has, or [`Role::User`] when a best-effort read of it
+/// failed — never a guessed `Admin`, since that would be the unsafe
+/// direction to default in.
+pub(crate) fn post_signin_target(next_path: Option<&str>, role: Role) -> String {
     next_path
         .filter(|s| crate::same_site_return_path::same_site_return_path(s).is_some())
         .map(str::to_owned)
-        .unwrap_or_else(|| "/admin".into())
+        .unwrap_or_else(|| {
+            if role.can_read_admin() {
+                "/admin".into()
+            } else {
+                "/me/security".into()
+            }
+        })
 }
 
 // ── RFC 096-B1 stage 6e: the `fed_error` surfacing map ───────────────────────

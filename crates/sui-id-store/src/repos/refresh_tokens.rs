@@ -49,6 +49,12 @@ const AAD: &[u8] = b"sui-id/refresh_token/v1";
 /// sealed with the master key before writing. The `RefreshTokenRow` itself
 /// carries no plaintext field — the plaintext is only held by the caller's
 /// `RawRefreshToken` value until it is delivered to the client.
+///
+/// Test-only: no production caller. Production issuance is T09,
+/// `commands::insert_initial_refresh_token`, through
+/// [`insert_prepared_within_tx`]. Gated so it cannot become a second,
+/// unaudited issuance path (0.90.0 preparation review).
+#[cfg(any(test, feature = "test-support"))]
 pub async fn insert(
     db: &Database,
     row: &RefreshTokenRow,

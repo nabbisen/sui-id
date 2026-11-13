@@ -257,9 +257,10 @@ async fn check_and_enable_lets_a_real_sign_in_through_then_disable_takes_it_away
     );
 
     // The reason this exists: a real federated sign-in now succeeds.
+    // Release prep §A: `link_user` is a plain `Role::User`.
     let o = federated_signin(&state, &nonce_slot).await;
     assert_eq!(
-        o.location, "/admin",
+        o.location, "/me/security",
         "a real sign-in must succeed once the provider is enabled"
     );
     assert!(o.session_cookie.is_some(), "the harness reaches a session");

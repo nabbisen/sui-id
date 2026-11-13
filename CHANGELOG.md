@@ -7,12 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Upgrading disables federated sign-in through every configured
-provider, until an administrator checks and re-enables each one — read
-the [upgrade guide's v0.90.x
-section](docs/src/guides/upgrade.md#v090x) before upgrading.** Startup
-also validates a federation provider's configuration more strictly; see
-Changed, below.
+## [0.90.0] — 2026-11-13
+
+**Federation providers are now administered from the admin UI, with a
+"Sign in with …" button on the login page for each one enabled.**
+Upgrading disables federated sign-in through every configured provider,
+until an administrator checks and re-enables each one — read the
+[upgrade guide's v0.90.x section](docs/src/guides/upgrade.md#v090x)
+before upgrading. This release also corrects the documentation's claim
+that a user created on their first federated sign-in starts disabled. They
+never did, so review such users if you relied on it. And it updates
+`rustix` for a security advisory.
 
 ### Added
 

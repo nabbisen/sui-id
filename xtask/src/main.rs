@@ -74,7 +74,11 @@ fn run_audit_structure(args: &[String]) -> std::process::ExitCode {
         .unwrap_or_else(|| PathBuf::from("contracts/audit-coverage-matrix.md"));
 
     if negative_fixtures {
-        return write_authority::run_negative_fixtures(&root);
+        let write_authority_result = write_authority::run_negative_fixtures(&root);
+        if write_authority_result != std::process::ExitCode::SUCCESS {
+            return write_authority_result;
+        }
+        return write_commands::run_test_id_negative_fixture(&root);
     }
 
     let mut failures: Vec<String> = Vec::new();

@@ -39,7 +39,7 @@ owner = "Do the thing"
 rationale = "r"
 mutation_surface = "`m`"
 files = ["crates/store/src/repos/things.rs"]
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 event = ["thing.done"]
 descriptor = ["A01_DONE"]
 "#;
@@ -141,7 +141,7 @@ fn backward_a_source_name_absent_from_the_matrix_is_caught() {
     f.write(
         "contracts/write-commands.toml",
         &format!(
-            "{WRITE_COMMANDS_TOML}\n[[command]]\nid = \"B02\"\nclass = \"A\"\nstatus = \"implemented\"\nsealed = true\nowner = \"o\"\nrationale = \"r\"\nmutation_surface = \"`m`\"\nfiles = [\"crates/store/src/repos/things.rs\"]\ntest_id = \"`t`\"\nevent = [\"other.done\"]\ndescriptor = [\"B02_DONE\"]\n"
+            "{WRITE_COMMANDS_TOML}\n[[command]]\nid = \"B02\"\nclass = \"A\"\nstatus = \"implemented\"\nsealed = true\nowner = \"o\"\nrationale = \"r\"\nmutation_surface = \"`m`\"\nfiles = [\"crates/store/src/repos/things.rs\"]\ntest_id = \"none -- fixture, not meant to resolve\"\nevent = [\"other.done\"]\ndescriptor = [\"B02_DONE\"]\n"
         ),
     );
     let out = f.run_gate();

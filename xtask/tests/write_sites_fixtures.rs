@@ -50,7 +50,7 @@ impl Fixture {
                  rationale = \"r\"\n\
                  mutation_surface = \"{sealed_row_mutation_surface}\"\n\
                  files = [\"crates/store/src/commands.rs\"]\n\
-                 test_id = \"`t`\"\n\
+                 test_id = \"none -- fixture, not meant to resolve\"\n\
                  event = [\"thing.done\"]\n\
                  descriptor = [\"A01_DONE\"]\n"
             ),

@@ -8,7 +8,7 @@
 //! (`write_authority.rs`); this module owns everything G17 already checked
 //! without an AST, unchanged in substance.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use regex::Regex;
@@ -63,6 +63,7 @@ pub struct Row {
     pub event: Option<Vec<String>>,
     pub descriptor: Option<Vec<String>>,
     pub sealed_by: Option<toml::Value>,
+    pub test_id: Option<String>,
     pub keys: Vec<String>,
 }
 
@@ -84,6 +85,7 @@ impl Row {
             event: t.get("event").and_then(string_list),
             descriptor: t.get("descriptor").and_then(string_list),
             sealed_by: t.get("sealed_by").cloned(),
+            test_id: t.get("test_id").and_then(|v| v.as_str()).map(str::to_owned),
             keys: t.keys().cloned().collect(),
         }
     }
@@ -562,6 +564,151 @@ pub fn check_files(root: &Path, by_id: &BTreeMap<String, Row>, failures: &mut Ve
     }
 }
 
+// ── (H): every `test_id` names a real test ──────────────────────────────
+//
+// Release prep §B (the completion assessment's §4/§5.3): 46 rows named a
+// function that does not exist -- case labels from before the tests
+// existed, never checked because nothing checked a `test_id`'s content,
+// only that the key was present. `source_files` (above) deliberately
+// excludes test files and `tests/` directories, since every other check
+// in this module looks for `declare_write_command!`, which never lives
+// in one; this check needs the opposite walk, since a test is exactly
+// what *does* live there, and `xtask/` itself is in scope too (RFC 094's
+// own structural tests, where a handful of `test_id`s point).
+
+/// Every `.rs` file under `crates/` and `xtask/`, test files and
+/// directories included -- unlike [`source_files`], which exists to find
+/// production code and excludes them.
+fn all_rust_files(root: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for top in ["crates", "xtask"] {
+        let base = root.join(top);
+        if !base.is_dir() {
+            continue;
+        }
+        out.extend(
+            walkdir::WalkDir::new(&base)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+                .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("rs"))
+                .map(|e| e.path().to_path_buf()),
+        );
+    }
+    out.sort();
+    out
+}
+
+/// Fixed, hand-written pattern, proven valid at every build.
+#[allow(clippy::expect_used)]
+fn test_fn_re() -> Regex {
+    Regex::new(
+        r"#\[\s*(?:test|tokio::test(?:\([^)]*\))?)\s*\]\s*(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+    )
+    .expect("fixed pattern")
+}
+
+/// Every `#[test]`/`#[tokio::test(...)]` function name anywhere under
+/// `crates/` or `xtask/`. Scanned on the same blanked text every other
+/// check in this module reads (comments and string contents replaced
+/// with spaces of the same length) so a name mentioned only in a comment
+/// or a string literal is never mistaken for a real test.
+fn test_function_names(root: &Path) -> BTreeSet<String> {
+    let re = test_fn_re();
+    let mut names = BTreeSet::new();
+    for path in all_rust_files(root) {
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let blanked = blank(&raw);
+        for m in re.captures_iter(&blanked) {
+            names.insert(m[1].to_string());
+        }
+    }
+    names
+}
+
+/// Fixed, hand-written pattern, proven valid at every build.
+#[allow(clippy::expect_used)]
+fn backticked_name_re() -> Regex {
+    Regex::new(r"`([A-Za-z_][A-Za-z0-9_]*)`").expect("fixed pattern")
+}
+
+/// Every backtick-delimited identifier in a `test_id` string, in order.
+/// A row with none at all (every `"none -- <reason>"` row today) names
+/// nothing to resolve, and is exempt by having nothing for this check to
+/// check -- not by reading `status`, so a future reserved row needs no
+/// special case here either.
+fn backticked_names(test_id: &str) -> Vec<String> {
+    backticked_name_re()
+        .captures_iter(test_id)
+        .map(|m| m[1].to_string())
+        .collect()
+}
+
+/// `--negative-fixtures`: a row naming a function that does not exist
+/// must be refused. Built as one fabricated `Row`, not a file on disk --
+/// `check_test_id` only reads `by_id` and the real source tree, so a
+/// fixture is exactly a `BTreeMap` with one entry naming a function this
+/// tree genuinely does not define; every other field is irrelevant to
+/// this one check and left at a harmless default.
+pub fn run_test_id_negative_fixture(root: &Path) -> std::process::ExitCode {
+    let bogus = "this_function_does_not_exist_anywhere_zz99";
+    eprintln!(
+        "audit-structure --negative-fixtures (test_id): a row naming `{bogus}`, which is \
+         not a real test, must be refused"
+    );
+    let mut by_id = BTreeMap::new();
+    by_id.insert(
+        "Z99".to_string(),
+        Row {
+            id: Some("Z99".to_string()),
+            class: None,
+            status: None,
+            sealed: None,
+            files: None,
+            event: None,
+            descriptor: None,
+            sealed_by: None,
+            test_id: Some(format!("`{bogus}`")),
+            keys: Vec::new(),
+        },
+    );
+    let mut failures: Vec<String> = Vec::new();
+    check_test_id(root, &by_id, &mut failures);
+    if failures.is_empty() {
+        eprintln!(
+            "audit-structure --negative-fixtures (test_id): FAIL: the bogus test_id was not \
+             rejected -- the gate passed on a row it should have flagged"
+        );
+        return std::process::ExitCode::FAILURE;
+    }
+    eprintln!("  audit-structure rejected it, by name: {:?}", failures);
+    eprintln!("audit-structure --negative-fixtures (test_id): PASS");
+    std::process::ExitCode::SUCCESS
+}
+
+/// (H): a `test_id` naming a function that is not a real test anywhere
+/// under `crates/` or `xtask/` is as false as an unresolved one -- the
+/// completion assessment's own words, since a relabelled `test_id` that
+/// still names nothing is not a repair.
+pub fn check_test_id(root: &Path, by_id: &BTreeMap<String, Row>, failures: &mut Vec<String>) {
+    let known = test_function_names(root);
+    for (rid, row) in by_id {
+        let Some(test_id) = &row.test_id else {
+            continue;
+        };
+        for name in backticked_names(test_id) {
+            if !known.contains(&name) {
+                failures.push(format!(
+                    "(H) row {rid}: test_id names `{name}`, which is not a #[test] or \
+                     #[tokio::test] function anywhere under crates/ or xtask/"
+                ));
+            }
+        }
+    }
+}
+
 /// Fixed, hand-written pattern, proven valid at every build.
 #[allow(clippy::expect_used)]
 fn hand_count_re() -> Regex {
@@ -723,6 +870,7 @@ pub fn run(root: &Path, inventory_rel: &Path, fix: bool) -> anyhow::Result<Outco
     check_sealed_by(&by_id, &mut failures);
     check_files(root, &by_id, &mut failures);
     check_header(&text, &mut failures);
+    check_test_id(root, &by_id, &mut failures);
 
     let summary = if failures.is_empty() {
         let sealed = rows

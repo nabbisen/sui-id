@@ -25,6 +25,15 @@
 //! the wording sensitivity turned out to be specific to std's blanket
 //! `From<T>` diagnostic formatting, which this bound no longer goes
 //! through.
+//!
+//! rustc 1.100 found one more sensitivity: the note for a bound on a
+//! *foreign* function or method now also prints its enclosing `impl`
+//! header. So `secret_cannot_become_attribute` and
+//! `event_cannot_bind_to_wrong_command` ask through a bound on their own
+//! fixture function instead, whose note prints identically on 1.95 and
+//! 1.100, default and `--all-features` (0.90.0 preparation review). The
+//! second fixture's old shape, an orphan-rule impl, also could not fail;
+//! its own header says why.
 
 #[test]
 fn compile_fail_protocol_cannot_construct_audited() {

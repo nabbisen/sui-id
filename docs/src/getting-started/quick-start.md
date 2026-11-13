@@ -24,7 +24,7 @@ it needs at runtime is below.
 2. **Download the binary and `SHA256SUMS`:**
 
    ```bash
-   VERSION=0.89.0   # the current release -- see https://github.com/nabbisen/sui-id/releases
+   VERSION=0.90.0   # the current release -- see https://github.com/nabbisen/sui-id/releases
    curl -fLO "https://github.com/nabbisen/sui-id/releases/download/$VERSION/sui-id-${ARCH}-unknown-linux-musl"
    curl -fLO "https://github.com/nabbisen/sui-id/releases/download/$VERSION/SHA256SUMS"
    ```

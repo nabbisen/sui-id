@@ -477,8 +477,9 @@ async fn federation_app() -> (AppState, UserId, super::federation_fail_closed::N
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn r102_l04_federated_sign_in_commits_session_event_and_last_login() {
     let (state, user, nonce_slot) = federation_app().await;
+    // Release prep §A: `linked_user` is a plain `Role::User`.
     let o = federated_signin(&state, &nonce_slot).await;
-    assert_eq!(o.location, "/admin");
+    assert_eq!(o.location, "/me/security");
     let session = o.session_cookie.expect("session");
     assert_eq!(all_sessions(&state, user).await, 1);
     assert_eq!(

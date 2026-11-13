@@ -242,8 +242,10 @@ async fn mock_upstream_for(
 
 /// The happy path F04 exists for: an unknown upstream identity, verified
 /// email, `provision_on_first_login` — a new user is created, linked,
-/// signed in, and lands on `/admin` with a session cookie, through the
-/// real router rather than the store directly.
+/// signed in, and lands on `/me/security` with a session cookie (release
+/// prep §A: a provisioned user is always a plain `Role::User`, which
+/// cannot read `/admin`), through the real router rather than the store
+/// directly.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_first_time_identity_is_provisioned_and_signed_in() {
     let mut state = base_state().await;
@@ -260,7 +262,7 @@ async fn a_first_time_identity_is_provisioned_and_signed_in() {
         .get(header::LOCATION)
         .and_then(|v| v.to_str().ok())
         .expect("redirect location");
-    assert_eq!(location, "/admin");
+    assert_eq!(location, "/me/security");
     assert!(
         extract_set_cookie(&headers, "sui_id_session").is_some(),
         "a session cookie was issued"
@@ -327,7 +329,7 @@ async fn a_returning_identity_does_not_provision_twice() {
     assert!(status.is_redirection(), "second callback: {status}");
     assert_eq!(
         headers.get(header::LOCATION).and_then(|v| v.to_str().ok()),
-        Some("/admin")
+        Some("/me/security")
     );
 
     let user_count: i64 = state
@@ -362,6 +364,14 @@ async fn a_returning_identity_does_not_provision_twice() {
 
 /// S5b review: first-login provisioning, the other direct-success branch,
 /// lands on the `next` its attempt started with, not always on `/admin`.
+///
+/// Release prep §A: `next` is deliberately `/oauth2/consent`, not
+/// `/me/security` as this test originally used -- a provisioned user's
+/// role-appropriate *default* is now also `/me/security` (see
+/// `a_first_time_identity_is_provisioned_and_signed_in`), so asserting
+/// that value here would no longer distinguish "`next` won" from "the
+/// default applied and `next` was silently ignored." A distinct value
+/// keeps this test meaningful.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_first_time_identity_lands_on_the_next_it_started_with() {
     let mut state = base_state().await;
@@ -373,7 +383,7 @@ async fn a_first_time_identity_lands_on_the_next_it_started_with() {
     let started = start_uri(
         &state,
         &slot,
-        "/auth/federated/up/start?next=%2Fme%2Fsecurity",
+        "/auth/federated/up/start?next=%2Foauth2%2Fconsent",
     )
     .await;
     let (status, headers) = callback(&state, &started).await;
@@ -383,7 +393,7 @@ async fn a_first_time_identity_lands_on_the_next_it_started_with() {
         .get(header::LOCATION)
         .and_then(|v| v.to_str().ok())
         .expect("redirect location");
-    assert_eq!(location, "/me/security");
+    assert_eq!(location, "/oauth2/consent");
     assert!(
         extract_set_cookie(&headers, "sui_id_session").is_some(),
         "a session cookie was issued"

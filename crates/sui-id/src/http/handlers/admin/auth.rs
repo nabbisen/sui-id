@@ -839,8 +839,15 @@ async fn mfa_challenge_post_federated(
             let next_target = find_fed_pending_row(&app, &fed_pending_raw)
                 .await
                 .and_then(|row| row.next_path);
+            // RFC 096-B2 release prep §A: same best-effort role read as the
+            // other two success paths -- `session` carries only `user_id`,
+            // not the role, and a failed read defaults to `Role::User`.
+            let role = sui_id_store::repos::users::get(&app.db, session.user_id)
+                .await
+                .map(|u| u.role)
+                .unwrap_or(sui_id_store::models::Role::User);
             let next_target =
-                crate::handlers::federation::post_signin_target(next_target.as_deref());
+                crate::handlers::federation::post_signin_target(next_target.as_deref(), role);
             // RFC 096-B1 stage 12b fix round, item 1: the generic
             // `login_pending_mfa` row dual-issued alongside the federated
             // one (stage 9) is never reached by L02 on this path --

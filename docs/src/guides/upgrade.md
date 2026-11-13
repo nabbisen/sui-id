@@ -70,6 +70,12 @@ origins, algorithm policy, authentication method, or a safe preflight
 (RFC 096), so this release disables every provider on upgrade rather
 than trust a configuration nobody has re-verified.
 
+**Two migrations run** (`0050`, `0051`) from `0.89.x`, so starting the new
+binary **takes the automatic pre-migration snapshot** first — see "The
+pre-migration snapshot" below for where it lands, its name and mode, and
+that it is never deleted automatically. Going back to `0.89.x` means
+restoring that snapshot, exactly as "Rollback" below describes.
+
 **Before upgrading**, check every `[[federation_providers]]` block
 against the stricter rules startup now enforces — see the [configuration
 reference](../reference/configuration.md#federation_providers-rfc-004)

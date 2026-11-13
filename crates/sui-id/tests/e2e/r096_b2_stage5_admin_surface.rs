@@ -650,8 +650,9 @@ async fn check_and_enable_through_the_admin_surface_then_a_real_sign_in_then_dis
     assert_eq!(enabled_event.actor, Some(admin_id));
 
     // The reason this exists: a real federated sign-in now succeeds.
+    // Release prep §A: the signing-in user is a plain `Role::User`.
     let o = super::federation_fail_closed::federated_signin(&state, &nonce_slot).await;
-    assert_eq!(o.location, "/admin");
+    assert_eq!(o.location, "/me/security");
     assert!(o.session_cookie.is_some());
 
     // §A: the disable-confirm page, then the disable POST.

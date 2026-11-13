@@ -273,8 +273,9 @@ async fn a_sign_in_started_from_the_rendered_button_completes_then_disappears_on
         .expect("start");
     assert!(start_resp.status().is_redirection());
 
+    // Release prep §A: `linked_user` is a plain `Role::User`.
     let o = federated_signin_with_next(&state, &nonce_slot, "").await;
-    assert_eq!(o.location, "/admin");
+    assert_eq!(o.location, "/me/security");
     assert!(o.session_cookie.is_some());
     assert_eq!(sessions_of(&state, user).await, 1);
 

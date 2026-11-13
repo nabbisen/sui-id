@@ -73,7 +73,7 @@ owner = "Do the thing"
 rationale = "r"
 mutation_surface = "`m`"
 files = ["crates/store/src/repos/things.rs"]
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 event = ["thing.done", "thing.failed"]
 descriptor = ["A01_DONE", "A01_FAILED"]
 "#;
@@ -87,7 +87,7 @@ owner = "Later"
 rationale = "r"
 mutation_surface = "`m`"
 files = []
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 "#;
 
 const SEALED_BY_A01_P01: &str = r#"[[command]]
@@ -100,7 +100,7 @@ owner = "Covered by A01's transaction"
 rationale = "r"
 mutation_surface = "`m`"
 files = ["crates/store/src/repos/things.rs"]
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 "#;
 
 const SEALED_B02: &str = r#"[[command]]
@@ -112,7 +112,7 @@ owner = "Another"
 rationale = "r"
 mutation_surface = "`m`"
 files = ["crates/store/src/repos/things.rs"]
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 event = ["other.done"]
 descriptor = ["B02_DONE"]
 "#;

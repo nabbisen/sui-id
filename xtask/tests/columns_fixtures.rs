@@ -150,7 +150,7 @@ owner = "o"
 rationale = "r"
 mutation_surface = "`m`"
 files = ["crates/sui-id-store/src/repos/things.rs"]
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 event = ["user.create"]
 descriptor = ["U01_CREATE"]
 
@@ -163,7 +163,7 @@ owner = "o"
 rationale = "r"
 mutation_surface = "`m`"
 files = ["crates/sui-id-store/src/repos/things.rs"]
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 event = ["user.disable"]
 descriptor = ["U02_DISABLE"]
 
@@ -176,7 +176,7 @@ owner = "o"
 rationale = "r"
 mutation_surface = "`m`"
 files = ["crates/sui-id-store/src/repos/things.rs"]
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 event = ["mfa.admin_reset"]
 descriptor = ["U07_RESET"]
 
@@ -189,7 +189,7 @@ owner = "o"
 rationale = "r"
 mutation_surface = "`m`"
 files = ["crates/sui-id-store/src/repos/things.rs"]
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 event = ["admin.user.unlock"]
 descriptor = ["U08_UNLOCK"]
 "#;
@@ -570,7 +570,7 @@ fn a_new_sealed_command_without_a_row_is_caught() {
     f.write(
         "contracts/write-commands.toml",
         &format!(
-            "{WRITE_COMMANDS_TOML}\n[[command]]\nid = \"U05\"\nclass = \"A\"\nstatus = \"implemented\"\nsealed = true\nowner = \"o\"\nrationale = \"r\"\nmutation_surface = \"`m`\"\nfiles = [\"crates/sui-id-store/src/repos/things.rs\"]\ntest_id = \"`t`\"\nevent = [\"user.role_change\"]\ndescriptor = [\"U05_ROLE\"]\n"
+            "{WRITE_COMMANDS_TOML}\n[[command]]\nid = \"U05\"\nclass = \"A\"\nstatus = \"implemented\"\nsealed = true\nowner = \"o\"\nrationale = \"r\"\nmutation_surface = \"`m`\"\nfiles = [\"crates/sui-id-store/src/repos/things.rs\"]\ntest_id = \"none -- fixture, not meant to resolve\"\nevent = [\"user.role_change\"]\ndescriptor = [\"U05_ROLE\"]\n"
         ),
     );
     f.assert_red(&["user.role_change is a sealed Class-A event"]);

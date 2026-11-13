@@ -319,7 +319,8 @@ async fn the_real_browser_binding_cookie_lets_the_claim_succeed() {
     )
     .await;
 
-    assert_eq!(location_of(&resp), "/admin");
+    // Release prep §A: `linked_user` is a plain `Role::User`.
+    assert_eq!(location_of(&resp), "/me/security");
     let _ = user_id;
     // RFC 096-B1 stage 6c: the claim runs before token exchange, leaving
     // the row `exchanging` -- not `pending`, which would mean the claim

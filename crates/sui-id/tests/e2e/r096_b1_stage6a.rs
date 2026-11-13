@@ -339,7 +339,8 @@ async fn both_cookies_expire_on_the_success_path() {
         .get(header::LOCATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    assert_eq!(location, "/admin");
+    // Release prep §A: `linked_user` is a plain `Role::User`.
+    assert_eq!(location, "/me/security");
     assert!(
         extract_set_cookie(resp.headers(), "sui_id_session").is_some(),
         "the harness reaches a session"

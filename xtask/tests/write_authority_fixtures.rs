@@ -36,7 +36,7 @@ owner = "Do the thing"
 rationale = "r"
 mutation_surface = "`m`"
 files = ["crates/store/src/repos/things.rs"]
-test_id = "`t`"
+test_id = "none -- fixture, not meant to resolve"
 event = ["thing.done"]
 descriptor = ["A01_DONE"]
 "#;
