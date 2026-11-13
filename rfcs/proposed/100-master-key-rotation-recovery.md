@@ -7,7 +7,9 @@ rotation removed to this RFC; the filesystem-atomicity threat delta
 independently reviewed.
 **Implementation prerequisites.** RFC 094 M2a Implemented — this RFC's `K04`/`K05`
 database phases use that Class-A transaction seam; this RFC Accepted; the
-crash-injection harness approved.
+crash-injection harness approved. **As of 2026-11-14 the first is met**:
+RFC 094 closed in `v0.88.0`, and its seam carries a reseal command already
+(K07; see *Refresh against the code as built*). The other two are open.
 **Closure prerequisites.** Every transition prefix in the recovery table either
 resumes idempotently or returns cleanly to `OldReady`; no prefix yields mixed
 ciphertext, a missing active key, or an overstated audit record; independent
@@ -46,6 +48,91 @@ boundary moved. The rationale for the split: every other part of RFC 094 answers
 answers "can offline key rotation survive a crash at any point?" — a filesystem
 atomicity and recovery problem with its own threat model. Reviewed as an
 appendix to audit atomicity it would receive the wrong kind of scrutiny.
+
+## Refresh against the code as built (2026-11-14)
+
+This RFC was written on 2026-07-28, before RFC 094's seam existed. Since then:
+- RFC 094 closed (`v0.88.0`);
+- a reseal command was sealed on that seam (K07, RFC 094 cycle J stage 4);
+- the rotation command's ordering was fixed urgently (`v0.87.1`,
+  `rfcs/handoffs/094-transactional-audit/urgent-master-key-ordering-2026-11-03.md`).
+
+The architect re-measured the rotation path on `6774d29`. **Nothing below
+changes the design's invariants (M1–M6).** It records where the code stands
+against them, and four changes to the design that the measurements imply.
+
+### What exists today
+
+| Piece | As built | This RFC's design |
+|---|---|---|
+| Database phase | **K07**, `commands::reseal_master_key` (`sui-id-store/src/commands.rs:6755`). One Class-A transaction reseals six tables and appends `admin.master_key.resealed` (`:6615`). | `K04`: the same reseal, plus the sentinel and the pending `master_key_rotation` row, appending `admin.master_key.database_resealed` |
+| Completion record | `admin.master_key.rotated`, a **best-effort** append after both renames (`sui-id/src/cli.rs:671`), outside any transaction | `K05`: Class-A, appending `admin.master_key.activated` |
+| Staging the new key | `<key_file>.new`, `create_new` with mode `0600` (`runtime/keyring.rs:73`, called at `cli.rs:621`). A rotation refuses if it already exists (`cli.rs:578`). **No `sync_all` on the file and no fsync of its directory**: `write_key_file` returns after `write_all` (`keyring.rs:90`) | journal-bound temporaries: fsync, read back, verify, publish without replacement, fsync the directory |
+| Activation | `rename(key_file → .bak.<stamp>)` (`cli.rs:648`), **then** `rename(.new → key_file)` (`cli.rs:655`). **The active path is removed first**, and no directory fsync follows either rename | replace the active path atomically, without first removing it, then fsync the directory |
+| Where the key comes from | `SUI_ID_MASTER_KEY` beats the key file (`keyring.rs:31-32`). Rotation reads the old key through the same `resolve` (`cli.rs:592`) and **never checks its origin** | refuse when the environment or a provider supplied the active key |
+| A missing key file | `resolve` **generates a fresh key and writes it** (`keyring.rs:59-60`). Startup (`runtime/startup.rs:168`) and ten CLI commands call it. **Measured 2026-11-14**: a start with the key file removed logs one WARN, writes a new key, and serves (`/.well-known/openid-configuration`: 200) | M6: fail closed before readiness |
+| Detecting the wrong key | **None at startup.** Nothing in `startup.rs` decrypts. The active signing key is first unsealed at token issuance (`sui-id-core/src/oidc/authorize.rs:1019`). Traced, **not run** against a populated database: the measured instance above had no sealed rows yet | a sentinel, which recovery authenticates candidates against |
+| Journal, `master_key_rotation`, startup recovery | none | as specified below |
+
+**The crash prefixes this leaves open today**, in the order rotation runs:
+1. **After K07 commits, before the staged key reaches the disk.** The
+   database's commit is durable; the key may still be only in the page
+   cache. A power loss here **makes every sealed column unreadable**, short of
+   restoring the pre-rotation backup the command tells the operator to take
+   (which opens with the old key). The `v0.87.1` fix
+   closed the disk-full case, where the write fails before the reseal, but
+   not this one. Its design said *"the key is on disk"* without requiring an
+   fsync. That was the architect's error.
+2. **Between the two renames.** No file is at `key_file`. The real key is
+   at `.new`, but the next start or CLI command takes `resolve`'s
+   generate branch and writes a fresh, wrong key there.
+3. **After both renames, before a directory fsync.** Either rename may not
+   have persisted. After a power loss the directory can come back in an
+   earlier state: prefix 2's, or the old key at `key_file` over a database
+   already resealed under the new one. That is a wrong-key start, which
+   nothing detects today (the table's *Detecting the wrong key* row).
+
+None of these is attacker-reachable. Rotation is an offline command the
+operator runs, which is why this RFC exists rather than a security advisory.
+The motivation's *"not crash-safe"* stands. These prefixes make it specific.
+
+### What this changes in the design
+
+1. **K07 is the database phase. `K04` is not built.** Extend K07's
+   transaction with the sentinel reseal and the pending `master_key_rotation`
+   row. Keep its event name, `admin.master_key.resealed`: it already asserts
+   only that the database phase committed, which is M4's boundary, and
+   renaming a shipped event costs every audit reader for no gain. `K04`'s
+   inventory id stays retired. **`K05` is built as specified, under the
+   shipped name too**: `admin.master_key.rotated` becomes a Class-A append
+   in K05's transaction, instead of the best-effort append it is today. It
+   already fires at the same point, after activation. The operator docs
+   already teach the `resealed`/`rotated` pair (`docs/src/reference/audit-events.md`,
+   and `docs/src/guides/operators.md`, *Diagnosing a rotation from the audit
+   log*). So **M4's two events are `admin.master_key.resealed` and
+   `admin.master_key.rotated`**, wherever this RFC says
+   `database_resealed` and `activated`.
+2. **A startup key check, for every start, not only recovery.** The sentinel
+   is checked before readiness on every start. A wrong key, whether from
+   rotation, a restore from a backup whose key was lost, or a mistyped
+   environment variable, refuses then, instead of starting and failing at
+   the first sign-in. This is M6 applied to startup in general. It is in this
+   RFC's scope because recovery cannot work without it.
+3. **`resolve` generates a key only for a database that has never been
+   sealed.** With a sentinel present, a missing key file fails closed, at
+   startup and in every CLI command.
+4. **Two fixes need not wait for this RFC.** Each is small, closes a prefix
+   above, and is required by the design anyway:
+   - `write_key_file` calls `sync_all` and fsyncs the parent directory;
+     rotation fsyncs the directory after each rename. That closes prefixes 1
+     and 3. It also makes `cli.rs`'s *"the only durable copy"* (`:484`, `:616`)
+     true.
+   - Rotation refuses when the key's origin is `Env`, before opening the
+     database.
+
+   Prefix 2 needs change 3 (or the journal) and stays open until this RFC
+   is built. **When the two fixes land is still open** (*Still open*
+   below).
 
 ## Motivation
 
@@ -247,3 +334,40 @@ retained backup is not selected as a startup key candidate.
    crash-safe.
 2. Should a retained old-key backup expire automatically at `review_at`, or only
    produce a finding? This RFC currently specifies a finding only.
+
+### Proposed answers (architect, 2026-11-14)
+
+These are proposals, not decisions.
+
+1. **No dry-run of preparation. A read-only `--check` instead.** It runs every
+   refusal this RFC defines before the workspace exists, and creates
+   nothing:
+   - the platform and same-filesystem preconditions;
+   - the key's origin;
+   - that the active key opens the sentinel;
+   - that no workspace or `.new` is left over.
+
+   A dry-run that prepares and rolls back is a second crash-safe path to
+   build and test, and it is exercised less than the real one. `--check`
+   gives the operator what they want, *will this refuse, before I take
+   the downtime?*, with no new state to recover from.
+2. **A finding only, never automatic removal.** Removing a retained backup
+   is irreversible, and it may be the only key that opens a database backup
+   taken before the rotation. A finding can be acted on, renewed or ignored,
+   and costs nothing if it is wrong. M5 already bounds custody: no disposition,
+   no `Complete`.
+
+### Still open, and not the architect's
+
+- **The independent design review** this RFC requires, which also covers its
+  design prerequisite, the filesystem-atomicity threat delta. It must come
+  from you or an external architect you engage (ROADMAP §S1a). The architect
+  refreshed this RFC and cannot also review it.
+- **When the two fixes in *What this changes*, item 4, land.** The
+  recommendation is the first stage of `0.91.0`, ahead of this RFC and
+  independent of its acceptance. They are small, each closes a crash prefix
+  that loses or hides the key, and the design requires both anyway. The
+  alternative is a `0.90.1` patch straight after `0.90.0`. **Not `0.90.0`
+  itself**, so the tagged tree stays the one the live run tests.
+- **The crash-injection harness**, whose approval is an implementation
+  prerequisite.
