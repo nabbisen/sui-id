@@ -360,14 +360,13 @@ These are proposals, not decisions.
 ### Still open, and not the architect's
 
 - **The independent design review** this RFC requires, which also covers its
-  design prerequisite, the filesystem-atomicity threat delta. It must come
-  from you or an external architect you engage (ROADMAP §S1a). The architect
-  refreshed this RFC and cannot also review it.
-- **When the two fixes in *What this changes*, item 4, land.** The
-  recommendation is the first stage of `0.91.0`, ahead of this RFC and
-  independent of its acceptance. They are small, each closes a crash prefix
-  that loses or hides the key, and the design requires both anyway. The
-  alternative is a `0.90.1` patch straight after `0.90.0`. **Not `0.90.0`
-  itself**, so the tagged tree stays the one the live run tests.
+  design prerequisite, the filesystem-atomicity threat delta. The architect
+  refreshed this RFC and cannot also review it. **The reviewer is named**:
+  `@nabbisen`, 2026-11-14: *"Understood. I will review it."*
+- **When the two fixes in *What this changes*, item 4, land: settled.** The
+  first stage of `0.91.0`, ahead of this RFC and independent of its
+  acceptance; not `0.90.0`, so the tagged tree stays the one the live run
+  tests. `@nabbisen`, 2026-11-14: *"You recommendation is accepted."*
+  Dispatched: [`../handoffs/100-master-key-rotation/0.91.0-stage-1-two-rotation-fixes-2026-11-14.md`](../handoffs/100-master-key-rotation/0.91.0-stage-1-two-rotation-fixes-2026-11-14.md).
 - **The crash-injection harness**, whose approval is an implementation
   prerequisite.

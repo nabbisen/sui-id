@@ -1,9 +1,9 @@
 # Verus: a scoping note, and one first target
 
-> ## Whose turn it is: **yours**, for one decision (§6).
-> Nothing here changes code. Whether the target becomes an RFC, and when
-> it is built, is decided on this note (ROADMAP, *"After K: a scoping note
-> on formal verification"*).
+> ## Decided 2026-11-14: §6's recommendation, authorized.
+> `@nabbisen`: *"Authorized."* The RFC is written:
+> [RFC 146](../rfcs/proposed/146-totp-step-selection-is-proved.md),
+> Proposed. Its build waits for the soak, with no freeze exception.
 
 **Written.** 2026-11-14, by the architect.
 **Verus.** `0.2026.11.02.8bf68ee` (`verus --version`, re-read today; it has

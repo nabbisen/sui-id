@@ -45,6 +45,7 @@ residual risk carried into RFC 097 — it may not be silently skipped.
 | [`implementation.md`](./implementation.md) | Ordered build stages, file/DB surfaces, platform refusals |
 | [`crash-matrix.md`](./crash-matrix.md) | Every injection point and its required outcome |
 | [`verification.md`](./verification.md) | Evidence contract and closure criteria |
+| [`0.91.0-stage-1-two-rotation-fixes-2026-11-14.md`](./0.91.0-stage-1-two-rotation-fixes-2026-11-14.md) | **Dispatched 2026-11-14, ahead of this RFC and not its implementation**: the staged key and its renames are synced to disk, and rotation refuses an environment-supplied key. Measured in RFC 100's refresh, authorized the same day |
 
 ## Stop and return to the architect if
 
