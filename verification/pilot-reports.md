@@ -139,7 +139,7 @@ requiring a separate fork.
 
 | Technique | Recommendation | Revisit trigger |
 |---|---|---|
-| Kani (`authorize`) | **Adopt** as scheduled CI job | Kani in CI |
+| Kani (`authorize`) | **Adopt** as scheduled CI job. *Never adopted: no job was added. Retired 2026-11-14, in `0.91.0` S3; see `verification/README.md`, item 9* | Kani in CI |
 | Kani (`verify_pkce`) | **Defer** | Kani SHA-256 stub support |
 | TLA+ (rotation protocol) | **Adopt** as living documentation | TLC in CI or new concurrent protocol |
 | Flux | **Defer** | Flux in stable toolchain |

@@ -53,6 +53,7 @@ ROADMAP.md	658706ddbed319e228edf698df963a221a9dca6e3ba4b7ca9a9a2ec92e2d7ac6	1	Cl
 ROADMAP.md	66cebadbafa4da26caab4cd9e8f630bba442002ad34dd60ac6e4e9c09a766195	1	23 RFCs sit in accepted/ and not one has ever moved to done/ . The RFC-completion stage @nabbisen identified on 2026-10-01 (RFC 131's owner 
 ROADMAP.md	68a3e3ed97de6ca9d6583624727828adfc39a44555bbbb185c9180166cba96e7	1	Where no role other than the author can perform a review, the gap is recorded as unreviewed design judgment and the owner rules on it with t
 ROADMAP.md	68f7f61d1d322987878c8ea251c35a35b403b80d9d47c1a6b47224c1985e1328	1	Decided 2026-11-14 ( @nabbisen : "Authorized." ): write the RFC now and build after the soak, with no freeze exception.
+ROADMAP.md	6df3faff703853a9013f786134435cd75e9248a95597830151b4ebd765cd7db5	1	M — the key file reaches the disk, and M4-B closes v0.91.0 Authorized 2026-11-14 ( @nabbisen : "Accepted." , on the scope and on the Kani ha
 ROADMAP.md	6e364cabaa11522c5c854bd5ae883cd048fd57c65b877741fc33ee0d474451fd	1	Cycle D proposed by the architect and authorized by @nabbisen on 2026-10-15, in his words: "Your recommendation is accepted." He also restat
 ROADMAP.md	766450b57c4bb79e356dfd9ac065f79cbec7c49ef087e3ca6fa8ba0c5afad2b6	1	#### S1a — The workflow, ruled by @nabbisen on 2026-10-01
 ROADMAP.md	7ad76e9c59033d37b81b763b1549dd4d58140478893bcafa484220ece91b1f9e	1	M2b — Remaining conversion and authority switch — CLOSED 2026-11-08 — Convert settings, pending settings, federation configuration, client m
@@ -806,6 +807,7 @@ rfcs/handoffs/145-a-passkey-alone-can-sign-you-in/README.md	41cb01280edd8e7d93df
 rfcs/handoffs/145-a-passkey-alone-can-sign-you-in/README.md	b8a52b5e281cccd177a8e92056d5aa45a5e2fdc1d51f175391877a3bd28c8cbd	1	@nabbisen : "RFC 145 is almost accepted." He asked the architect to review it against his fundamental philosophy, which is ROADMAP.md §S1c's
 rfcs/handoffs/145-a-passkey-alone-can-sign-you-in/design-review-2026-11-07.md	8edb33e0a7db98a30591bc6b9a3c64474e005ca9e4c71aac92c74fa57d1bf11f	1	@nabbisen 's "almost accepted" stays exactly that until he reads this record and the amended RFC.
 rfcs/handoffs/145-a-passkey-alone-can-sign-you-in/design-review-2026-11-07.md	f6926dfc284807b47745bd4e65bce6a161bdb85e55f931302347baeb8d2b05f5	1	Reviewer. The architect, at @nabbisen 's request : "RFC 145 is almost accepted.
+rfcs/handoffs/146-totp-step-selection-is-proved/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md	9fa398de5c43f94a7d588c79ab378765c9f76e740b7bc6014d8b5c1b9c69e4cb	1	Authority. Cycle M's decision 2, @nabbisen , 2026-11-14: "Accepted." , on [ ../100-master-key-rotation/cycle-m-and-0.91.0-2026-11-14.md ](..
 rfcs/handoffs/146-totp-step-selection-is-proved/design-review-2026-11-14.md	37da60883087174cf4748ade3fe9999220e4680fea3ac26ae78bca182b6dcf91	1	RFC. [ ../../accepted/146-totp-step-selection-is-proved.md ](../../accepted/146-totp-step-selection-is-proved.md) Reviewer. @nabbisen , the 
 rfcs/proposed/009-sql-backends.md	71bcda199dd7a9e7b4d32577425dd85cea7613eb17d006d2782f3750fd63e515	1	Requires explicit owner direction before scheduling.
 rfcs/proposed/009-sql-backends.md	deca24718bfe0e0e869e69bbc850d2c1ad5c9ccb19ad62ea5bfb0e49c168ef1d	1	No version designation without owner direction and soak.
@@ -849,4 +851,5 @@ scripts/tests/test_owner_attributions.py	f6bbaf57737fffc7e4f6cd6c1d3631ab46a6042
 scripts/tests/test_rfc_integrity.py	852caa87d4b4409213729ac94457f87a85e2f42f0a028e75f14275891bea72e5	1	The gate must accept all three today, unless @nabbisen rules otherwise on self-review -- that ruling is not this gate's to make, so these te
 verification/README.md	06e050a8d32336e7ef9a5a6b93ec3107f6aa83a577c7be6e9b39a38a4139cffe	1	Its second was the architect's proposal for the rest, approved 2026-11-14 ( @nabbisen : "Approved." ).
 verification/README.md	18c44a0aadabe8fd645be248921f75f4d6b41014ba2eec130c99fffb1eea3c15	1	Raised by @nabbisen , 2026-11-14, on accepting RFC 146: "I wonder if it is better for us to update documentation to define what is verus's p
+verification/README.md	e77aa94bc3336b477e1c51161a71fcae85471971843cebf0f268461dbc90b5ce	1	Decided 2026-11-14: removed ( @nabbisen : "Accepted." , on cycle M's §5).
 verification/verus-scoping-note-2026-11-14.md	6cad115125f1d9d7ddcd6d3036499a96c23b99fc320e35a92995d8d0f068d6e0	1	@nabbisen : "Authorized." The RFC is written:

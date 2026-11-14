@@ -1,5 +1,18 @@
 # Cycle M and `0.91.0` — the key file reaches the disk, and M4-B closes
 
+> ## Authorized 2026-11-14. `@nabbisen`: 1. *"Accepted."* 2. *"Accepted."* 3. *"Confirmed."*
+> 1. **Scope**: §3 as proposed. RFC 100's build is planned for `0.92.0`.
+> 2. **Kani**: the harnesses are removed, and the guard is added. **S3 dispatched** —
+>    [`../146-totp-step-selection-is-proved/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md`](../146-totp-step-selection-is-proved/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md).
+> 3. **Stage 14's date** is the owner's. No date is set yet, so the tag waits for it.
+>
+> **One question, before S3 lands.** Point 4 of the approved position on formal
+> verification says *a proof that nobody runs is removed, not kept, through an
+> RFC*, and names these harnesses as its example (`verification/README.md:76-80`).
+> Point 9 makes their disposition *a separate, small decision*. §5 did not
+> mention point 4. The architect reads decision 2 as that point-9 decision, and
+> proposes no RFC. If you meant point 4 to govern, S3 waits for one.
+
 **Proposed.** 2026-11-14, by the architect, on `@nabbisen`'s *"Scope 0.91
 carefully."*, after `0.90.0` was published (`44d442d`).
 **Whose turn.** Yours, for the three decisions in §6. Until then, the architect

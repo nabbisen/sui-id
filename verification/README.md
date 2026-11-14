@@ -99,6 +99,10 @@ position.**
 9. **The Kani harnesses** at `authz.rs:197`: wire them into a scheduled job,
    or remove them. This is a separate, small decision. Until it is made,
    they prove nothing, because nothing runs them.
+   **Decided 2026-11-14: removed** (`@nabbisen`: *"Accepted."*, on cycle M's
+   §5). The tests in `authz/tests.rs` already check P1–P5 on every CI run.
+   `0.91.0` S3 also makes those tests fail when an action or role is missing
+   from their lists, which was the one thing the harnesses would have added.
 
 ### Verus versions
 
