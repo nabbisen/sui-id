@@ -345,11 +345,24 @@ fn available_bytes_beside(_db_path: &Path) -> Option<u64> {
 /// name, in its own directory, so an operator with several can see which
 /// one to restore without opening any (RFC 142 stage 5 §4).
 pub fn pre_migration_snapshot_path(db_path: &Path, from: i64, to: i32) -> PathBuf {
+    pre_migration_snapshot_path_at(db_path, from, to, chrono::Utc::now())
+}
+
+/// [`pre_migration_snapshot_path`] for a given instant, so the name's one
+/// format can be computed for a time other than now. The name has
+/// one-second resolution: a test that predicts it must cover every second
+/// its call might land in, not only the second it read.
+pub fn pre_migration_snapshot_path_at(
+    db_path: &Path,
+    from: i64,
+    to: i32,
+    at: chrono::DateTime<chrono::Utc>,
+) -> PathBuf {
     let file_name = db_path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("database");
-    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+    let stamp = at.format("%Y%m%dT%H%M%SZ");
     db_path.with_file_name(format!(
         "{file_name}.pre-upgrade-schema-{from}-to-{to}-{stamp}.sqlite"
     ))

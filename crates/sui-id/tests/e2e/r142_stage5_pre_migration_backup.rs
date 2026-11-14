@@ -415,15 +415,28 @@ fn an_existing_file_of_the_same_name_refuses_and_the_existing_file_is_untouched(
     let dir = tempfile::tempdir().expect("tempdir");
     let path = seeded_at(dir.path(), 44);
     let max = sui_id_store::migrations::MAX_SCHEMA_VERSION;
-    let collision = sui_id_store::backup::pre_migration_snapshot_path(&path, 44, max);
-    // A pre-existing file with the exact name `open()` will compute --
-    // deterministic because the name has second resolution and this test
-    // runs in well under a second.
-    {
-        let mut f = std::fs::File::create(&collision).expect("pre-create collision");
+    // A pre-existing file with the exact name `open()` will compute. The
+    // name has one-second resolution and `open()` reads the clock itself, so
+    // one predicted name is not enough: under CI load the second can tick
+    // between this read and `open()`'s, and `open()` then picks a free name
+    // and succeeds (CI run 43574983415). So every second from now through
+    // the next two minutes is taken. `open()` reads the clock after `now`,
+    // so it lands in this window unless the gap exceeds two minutes.
+    let now = chrono::Utc::now();
+    let collisions: Vec<PathBuf> = (0..=120)
+        .map(|s| {
+            sui_id_store::backup::pre_migration_snapshot_path_at(
+                &path,
+                44,
+                max,
+                now + chrono::Duration::seconds(s),
+            )
+        })
+        .collect();
+    for c in &collisions {
+        let mut f = std::fs::File::create(c).expect("pre-create collision");
         f.write_all(b"not a database").expect("write");
     }
-    let collision_before = std::fs::read(&collision).expect("read collision before");
 
     let result = sui_id::database::open(&path, MasterKey::generate(), PreMigrationBackup::Take);
 
@@ -431,10 +444,28 @@ fn an_existing_file_of_the_same_name_refuses_and_the_existing_file_is_untouched(
         result.is_err(),
         "must refuse: create_new must not overwrite"
     );
+    for c in &collisions {
+        assert_eq!(
+            std::fs::read(c).expect("read collision after"),
+            b"not a database",
+            "the pre-existing file must be byte-identical afterwards: {}",
+            c.display()
+        );
+    }
+    let snapshots = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter(|e| {
+            e.as_ref()
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains("pre-upgrade-schema")
+        })
+        .count();
     assert_eq!(
-        std::fs::read(&collision).expect("read collision after"),
-        collision_before,
-        "the pre-existing file must be byte-identical afterwards"
+        snapshots,
+        collisions.len(),
+        "no snapshot was written beside them"
     );
 }
 

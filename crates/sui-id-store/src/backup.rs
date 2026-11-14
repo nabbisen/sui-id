@@ -14,7 +14,7 @@ mod types;
 
 pub use ops::{
     FreeSpaceCheck, check_free_space, pre_migration_snapshot, pre_migration_snapshot_path,
-    run_backup, run_restore, run_verify, to_mb,
+    pre_migration_snapshot_path_at, run_backup, run_restore, run_verify, to_mb,
 };
 pub use types::{BackupError, BackupOptions, Manifest, RestoreOptions, VerifyReport};
 

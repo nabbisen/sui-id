@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   properties on every CI run. Those tests now also fail to build, or fail,
   if a role or action is added without being tested.
 
+### Tests and CI
+
+- **A pre-migration backup test no longer fails when the clock's second
+  ticks over mid-test**, as it did once on CI. It predicted one snapshot
+  name, and `open()` read the clock again. It now covers every second of a
+  two-minute window. `sui-id-store` gains
+  `backup::pre_migration_snapshot_path_at`, the same name for a given
+  instant.
+
 ## [0.90.0] — 2026-11-14
 
 **Federation providers are now administered from the admin UI, with a
