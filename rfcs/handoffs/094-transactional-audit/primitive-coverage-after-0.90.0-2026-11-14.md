@@ -1,6 +1,9 @@
 # The write primitives with no direct test — after `0.90.0`
 
-> ## Whose turn it is: **the implementation role's.**
+> ## Landed 2026-11-14, as `0.91.0` S2, accepted as returned —
+> `.git-exclude/reviewed/primitive-coverage-after-0.90.0-2026-11-14.md`.
+>
+> ## Whose turn it was: **the implementation role's.**
 > Return it as a **working tree, not a commit.** It lands after the `0.90.0`
 > tag, so the tagged tree stays the one the owner's live run tested.
 

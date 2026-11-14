@@ -61,3 +61,7 @@ pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
     })
     .await
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests;

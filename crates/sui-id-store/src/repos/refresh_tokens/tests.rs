@@ -366,3 +366,223 @@ async fn wrong_client_returns_conflict_without_revoking() {
         "token must remain active after client mismatch rejection"
     );
 }
+
+// ── T06: revoke_all_for_user — only this user's live tokens ──────────────────
+
+#[tokio::test]
+async fn revoke_all_for_user_leaves_other_users_and_already_revoked_rows_alone() {
+    let (db, uid, cid) = seed_db().await;
+    // A second user, as a foreign key in the *same* database -- a second,
+    // separate `seed_db()` would open an unrelated in-memory database.
+    let other_uid = UserId::new();
+    users::create(
+        &db,
+        &UserRow {
+            id: other_uid,
+            username: format!("test-{other_uid}"),
+            display_name: None,
+            email: None,
+            email_normalized: None,
+            email_verified_at: None,
+            preferred_lang: None,
+            is_admin: false,
+            role: Role::User,
+            is_disabled: false,
+            is_deleted: false,
+            last_login_at: None,
+            user_uuid: uuid::Uuid::new_v4(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            failed_login_count: 0,
+            locked_until: None,
+            source: crate::models::UserSource::Local,
+            external_stable_id: None,
+        },
+    )
+    .await
+    .expect("seed other user");
+
+    // This user's live token -- must be revoked.
+    let live_token = fresh_token();
+    let live_row = insert_active(&db, &live_token, uid, cid, None, 3600).await;
+
+    // This user's already-revoked token -- its `revoked_at` must keep its
+    // old value, not be overwritten with a new timestamp.
+    let already_revoked_token = fresh_token();
+    let already_revoked_row =
+        insert_active(&db, &already_revoked_token, uid, cid, None, 3600).await;
+    refresh_tokens::revoke(&db, &already_revoked_row.id)
+        .await
+        .expect("revoke");
+    let revoked_at_before: chrono::DateTime<Utc> = db
+        .with_conn_sync({
+            let id = already_revoked_row.id.as_str().to_owned();
+            move |conn| {
+                Ok(conn.query_row(
+                    "SELECT revoked_at FROM refresh_tokens WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )?)
+            }
+        })
+        .expect("read revoked_at");
+
+    // Another user's live token -- must be untouched.
+    let other_token = fresh_token();
+    insert_active(&db, &other_token, other_uid, cid, None, 3600).await;
+
+    let n = refresh_tokens::revoke_all_for_user(&db, uid)
+        .await
+        .expect("revoke_all_for_user");
+    assert_eq!(n, 1, "exactly the one live row for this user");
+
+    let live_revoked_at: Option<chrono::DateTime<Utc>> = db
+        .with_conn_sync({
+            let id = live_row.id.as_str().to_owned();
+            move |conn| {
+                Ok(conn.query_row(
+                    "SELECT revoked_at FROM refresh_tokens WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )?)
+            }
+        })
+        .expect("read live revoked_at");
+    assert!(
+        live_revoked_at.is_some(),
+        "this user's live token must now be revoked"
+    );
+
+    let revoked_at_after: chrono::DateTime<Utc> = db
+        .with_conn_sync({
+            let id = already_revoked_row.id.as_str().to_owned();
+            move |conn| {
+                Ok(conn.query_row(
+                    "SELECT revoked_at FROM refresh_tokens WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )?)
+            }
+        })
+        .expect("read already-revoked revoked_at again");
+    assert_eq!(
+        revoked_at_after, revoked_at_before,
+        "an already-revoked row's revoked_at must not change"
+    );
+
+    let other_revoked_at: Option<chrono::DateTime<Utc>> = db
+        .with_conn_sync(move |conn| {
+            Ok(conn.query_row(
+                "SELECT revoked_at FROM refresh_tokens WHERE user_id = ?1",
+                [other_uid.to_string()],
+                |r| r.get(0),
+            )?)
+        })
+        .expect("read other user's revoked_at");
+    assert!(
+        other_revoked_at.is_none(),
+        "another user's live token must be untouched"
+    );
+}
+
+// ── T08: backfill_token_hashes — only rows with no hash yet ──────────────────
+
+#[tokio::test]
+async fn backfill_token_hashes_fills_only_null_rows_and_is_idempotent() {
+    let (db, uid, cid) = seed_db().await;
+
+    // A row `insert` already gave a hash -- must be left exactly alone.
+    let already_hashed_token = fresh_token();
+    let already_hashed_row = insert_active(&db, &already_hashed_token, uid, cid, None, 3600).await;
+    let hash_before: Vec<u8> = db
+        .with_conn_sync({
+            let id = already_hashed_row.id.as_str().to_owned();
+            move |conn| {
+                Ok(conn.query_row(
+                    "SELECT token_hash FROM refresh_tokens WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )?)
+            }
+        })
+        .expect("read existing hash");
+
+    // A row with no hash yet -- simulating a pre-migration-0019 row, the
+    // one case this function exists for.
+    let null_token = fresh_token();
+    let null_row = insert_active(&db, &null_token, uid, cid, None, 3600).await;
+    db.with_conn_sync({
+        let id = null_row.id.as_str().to_owned();
+        move |conn| {
+            conn.execute(
+                "UPDATE refresh_tokens SET token_hash = NULL WHERE id = ?1",
+                [id],
+            )?;
+            Ok(())
+        }
+    })
+    .expect("clear hash");
+
+    let filled = refresh_tokens::backfill_token_hashes(&db)
+        .await
+        .expect("backfill");
+    assert_eq!(filled, 1, "exactly the one NULL row");
+
+    let expected_hash = RefreshTokenHash::of(&null_token).as_bytes().to_vec();
+    let hash_after_fill: Vec<u8> = db
+        .with_conn_sync({
+            let id = null_row.id.as_str().to_owned();
+            move |conn| {
+                Ok(conn.query_row(
+                    "SELECT token_hash FROM refresh_tokens WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )?)
+            }
+        })
+        .expect("read filled hash");
+    assert_eq!(
+        hash_after_fill, expected_hash,
+        "the backfilled hash must be the real hash of the row's own token"
+    );
+
+    let hash_unchanged: Vec<u8> = db
+        .with_conn_sync({
+            let id = already_hashed_row.id.as_str().to_owned();
+            move |conn| {
+                Ok(conn.query_row(
+                    "SELECT token_hash FROM refresh_tokens WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )?)
+            }
+        })
+        .expect("read unchanged hash");
+    assert_eq!(
+        hash_unchanged, hash_before,
+        "a row that already had a hash must not be touched"
+    );
+
+    // Run it again: nothing left to fill, nothing changes.
+    let filled_again = refresh_tokens::backfill_token_hashes(&db)
+        .await
+        .expect("second backfill");
+    assert_eq!(filled_again, 0, "the second run finds nothing to do");
+
+    let hash_after_second_run: Vec<u8> = db
+        .with_conn_sync({
+            let id = null_row.id.as_str().to_owned();
+            move |conn| {
+                Ok(conn.query_row(
+                    "SELECT token_hash FROM refresh_tokens WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )?)
+            }
+        })
+        .expect("read hash after second run");
+    assert_eq!(
+        hash_after_second_run, expected_hash,
+        "the second run must not change the already-filled hash"
+    );
+}

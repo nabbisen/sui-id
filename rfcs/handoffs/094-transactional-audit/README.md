@@ -1,6 +1,6 @@
 # RFC 094 developer handoff
 
-> **Dispatched 2026-11-14, for `0.91.0`: the write primitives with no
+> **Dispatched and landed 2026-11-14, in `0.91.0`: the write primitives with no
 > direct test** —
 > [`primitive-coverage-after-0.90.0-2026-11-14.md`](primitive-coverage-after-0.90.0-2026-11-14.md).
 > Two primitives that no production code calls come out of production

@@ -238,3 +238,50 @@ async fn swap_passkey_within_tx_refuses_when_the_credential_is_gone() {
         .expect_err("an unknown credential id must refuse");
     assert!(matches!(err, StoreError::NotFound));
 }
+
+// ── U29: update_passkey touches only its own row, not a sibling ─────────────
+
+#[tokio::test]
+async fn update_passkey_touches_only_the_named_credential() {
+    let db = open_test_db();
+    let user_id = seed_user(&db).await;
+    let other = credential_row(user_id, 1);
+    create(&db, &other, b"other-plain").await.unwrap();
+    let target = credential_row(user_id, 2);
+    let target_id = target.id;
+    create(&db, &target, b"target-plain-before").await.unwrap();
+
+    let before = Utc::now();
+    update_passkey(&db, target_id, b"target-plain-after")
+        .await
+        .unwrap();
+    let after = Utc::now();
+
+    let rows = list_for_user(&db, user_id).await.unwrap();
+    let target_row = rows
+        .iter()
+        .find(|r| r.id == target_id)
+        .expect("target row still exists");
+    let other_row = rows
+        .iter()
+        .find(|r| r.id == other.id)
+        .expect("other row still exists");
+
+    let target_plain = decrypt_passkey(&db, target_row).await.unwrap();
+    assert_eq!(target_plain, b"target-plain-after");
+    let target_used = target_row.last_used_at.expect("target last_used_at set");
+    assert!(
+        target_used >= before && target_used <= after,
+        "last_used_at must be between the instants read around the call, got {target_used}"
+    );
+
+    let other_plain = decrypt_passkey(&db, other_row).await.unwrap();
+    assert_eq!(
+        other_plain, b"other-plain",
+        "a second credential of the same user must not be re-sealed"
+    );
+    assert_eq!(
+        other_row.last_used_at, None,
+        "a second credential of the same user must keep its own last_used_at"
+    );
+}

@@ -872,25 +872,6 @@ pub fn count_admins_within_tx(conn: &rusqlite::Connection) -> StoreResult<usize>
     Ok(n as usize)
 }
 
-/// RFC 074: record a successful login timestamp.
-/// Called by the session-creation path after password / passkey / TOTP
-/// verification succeeds. Best-effort — a failed write must never abort login.
-pub async fn set_last_login(
-    db: &Database,
-    user_id: &UserId,
-    now: chrono::DateTime<chrono::Utc>,
-) -> StoreResult<()> {
-    let uid = user_id.to_string();
-    db.with_conn(move |conn| {
-        conn.execute(
-            "UPDATE users SET last_login_at = ?2 WHERE id = ?1",
-            rusqlite::params![uid, now],
-        )?;
-        Ok(())
-    })
-    .await
-}
-
 // ── RFC 005: LDAP shadow-row management ──────────────────────────────────────
 
 /// Find a user by their external stable identity (RFC 005).

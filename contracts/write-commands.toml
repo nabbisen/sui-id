@@ -331,9 +331,9 @@ status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Successful-login bookkeeping"
 rationale = "timestamp/counter maintenance is not a separate privileged command; since RFC 102 stage 2 the no-MFA password sign-in does it inside L01, and since stages 3 and 4 the second-factor, directory and federated sign-ins do it inside L02, L03 and L04"
-mutation_surface = "`users::clear_lockout`, `users::set_last_login`"
+mutation_surface = "`users::clear_lockout`"
 files = ["crates/sui-id-store/src/repos/users.rs"]
-test_id = "`a_password_verification_does_not_clear_the_second_factor_count` -- covers clear_lockout; set_last_login has no test anywhere"
+test_id = "`a_password_verification_does_not_clear_the_second_factor_count`"
 
 [[command]]
 id = "U25"
@@ -389,7 +389,7 @@ owner = "Passkey signature-counter update"
 rationale = "per-auth authenticator state; covered by login/MFA event"
 mutation_surface = "`user_webauthn_credentials::update_passkey`"
 files = ["crates/sui-id-store/src/repos/user_webauthn_credentials.rs"]
-test_id = "none -- no test exists for this primitive; only called from webauthn.rs's passkey sign-in path"
+test_id = "`update_passkey_touches_only_the_named_credential`"
 
 [[command]]
 id = "U30"
@@ -422,7 +422,7 @@ owner = "Pending MFA ceremony create/consume"
 rationale = "short-lived one-time protocol state; since RFC 102 stage 3 the consume is L02's guarded delete, and L07 removes every row at lockout. Cycle J stage 2: the directory branch's insert is also covered by L08, atomically with the shadow upsert (U26) -- not `sealed_by`, because the local-password branch's insert (`authn::session.rs`) still calls this bare primitive directly, outside any transaction, by design (RFC 102 A6)"
 mutation_surface = "`login_pending_mfa::insert`, `login_pending_mfa::delete` (the local-password branch's insert stays this bare primitive; the directory branch's insert is L08's `insert_within_tx`)"
 files = ["crates/sui-id-store/src/repos/login_pending_mfa.rs"]
-test_id = "`l02_injected_failure_before_append_rolls_back_everything` -- covers insert; delete has no direct test, only production use"
+test_id = "`l02_injected_failure_before_append_rolls_back_everything` -- covers insert; `delete_removes_only_its_own_row` covers delete"
 
 [[command]]
 id = "U33"
@@ -433,7 +433,7 @@ owner = "WebAuthn ceremony create/consume"
 rationale = "short-lived one-time protocol state"
 mutation_surface = "`webauthn_pending::insert`, `webauthn_pending::delete`"
 files = ["crates/sui-id-store/src/repos/webauthn_pending.rs"]
-test_id = "`finish_webauthn_refuses_pending_with_wrong_kind` -- covers insert; delete has no direct test, only production use"
+test_id = "`finish_webauthn_refuses_pending_with_wrong_kind` -- covers insert; `delete_removes_only_its_own_row` covers delete"
 
 [[command]]
 id = "U34"
@@ -570,7 +570,7 @@ owner = "Consent last-used touch"
 rationale = "high-frequency usage bookkeeping; grant/revoke commands are U20/U21"
 mutation_surface = "`user_consent::touch_last_used`"
 files = ["crates/sui-id-store/src/repos/user_consent.rs"]
-test_id = "none -- no test exists for this primitive; only called from handlers/oidc.rs"
+test_id = "`touch_last_used_touches_only_its_own_pair`"
 
 [[command]]
 id = "U37"
@@ -1043,7 +1043,7 @@ owner = "Administrative/user refresh revocation"
 rationale = "subordinate to U02/U04/U09/U10/U19/C06, and to T05 (RFC 7009 revocation, cycle J stage 10 R2)"
 mutation_surface = "`refresh_tokens::revoke`, `refresh_tokens::revoke_all_for_user`, `refresh_tokens::revoke_all_for_client_within_tx`"
 files = ["crates/sui-id-store/src/repos/refresh_tokens.rs"]
-test_id = "`t05_revoke_calls_both_token_kinds_and_is_idempotent`, `u20_revokes_the_grant_and_every_refresh_token_for_the_client` -- revoke_all_for_user has no direct test; coverage through RP-initiated logout not yet assessed"
+test_id = "`t05_revoke_calls_both_token_kinds_and_is_idempotent`, `u20_revokes_the_grant_and_every_refresh_token_for_the_client`, `revoke_all_for_user_leaves_other_users_and_already_revoked_rows_alone`"
 
 [[command]]
 id = "T07"
@@ -1065,7 +1065,7 @@ owner = "Refresh hash backfill"
 rationale = "idempotent startup migration/maintenance with structured telemetry"
 mutation_surface = "`refresh_tokens::backfill_token_hashes`"
 files = ["crates/sui-id-store/src/repos/refresh_tokens.rs"]
-test_id = "none -- no test exists for this primitive; only called from main.rs's startup/CLI migration path"
+test_id = "`backfill_token_hashes_fills_only_null_rows_and_is_idempotent`"
 
 [[command]]
 id = "T09"
@@ -1252,9 +1252,9 @@ status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Sealed-key insert/reseal primitives"
 rationale = "corrected 2026-11-03 (cycle J stage 1): the previous text read \"subordinate to S10 or K01 only\" and was false -- `sui_id_core::oidc::key_rotation::rotate_master_key` was a **third, independent, top-level caller** of the same `reseal_all` primitives, resealing six tables inside one `db.with_tx_sync` (`signing_keys`, `refresh_tokens`, `user_totp` twice, `user_webauthn_credentials`, `smtp_config`, `email_outbox`). **That wrong rationale is why master-key rotation had no command row at all**: an inventory stating a primitive is only ever subordinate tells the next reader there is no top-level command to look for, so a wrong rationale does not merely mislead, it suppresses the search. Sealed cycle J stage 4 (2026-11-03): the orchestration moved to `sui-id-store::commands::reseal_master_key`, K07 below, `admin.master_key.resealed`."
-mutation_surface = "`signing_keys::insert_with_plaintext`, `insert_sealed_on_conn`, all `reseal_all` functions"
+mutation_surface = "`signing_keys::insert_sealed_on_conn`, all `reseal_all` functions"
 files = ["crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-store/src/repos/smtp_config.rs", "crates/sui-id-store/src/repos/email_outbox.rs"]
-test_id = "`k01_rotates_key_and_appends_audit_row`, `k07_reseals_every_one_of_the_six_tables` -- covers insert_sealed_on_conn and reseal_all; insert_with_plaintext has no dedicated test, only fixture use"
+test_id = "`k01_rotates_key_and_appends_audit_row`, `k07_reseals_every_one_of_the_six_tables`"
 
 [[command]]
 id = "K07"
@@ -1289,7 +1289,7 @@ owner = "Claim/update/requeue email work"
 rationale = "worker lifecycle with structured operational telemetry"
 mutation_surface = "`email_outbox::claim_one_eligible`, `email_outbox::mark_sent`, `email_outbox::record_failure`, `email_outbox::mark_permanently_failed`, `email_outbox::requeue_stuck_sending`"
 files = ["crates/sui-id-store/src/repos/email_outbox.rs"]  # claim_one_eligible, mark_sent, record_failure, mark_permanently_failed, requeue_stuck_sending -- all in this one file
-test_id = "`mark_sent_after_claim`, `record_failure_increments_attempt_count`, `requeue_stuck_sending_resets_old_rows` -- mark_permanently_failed has no test"
+test_id = "`mark_sent_after_claim`, `record_failure_increments_attempt_count`, `requeue_stuck_sending_resets_old_rows`, `mark_permanently_failed_touches_only_its_own_row`"
 
 [[command]]
 id = "O03"
@@ -1300,7 +1300,7 @@ owner = "Purge expired protocol rows"
 rationale = "retention housekeeping; count/error telemetry"
 mutation_surface = "`auth_codes::purge_expired`, `sessions::purge_expired`, `refresh_tokens::purge_expired`, `login_pending_mfa::purge_expired`, `webauthn_pending::purge_expired`, `revoked_access_tokens::purge_expired`, `federation_login_attempt::purge_expired`, `federation_mfa_pending::purge_expired`, `pending_settings_change::purge_expired`, `password_reset_tokens::delete_expired` -- all ten called from `runtime::gc::run_once`'s sweep except `pending_settings_change::purge_expired`, called from `sui-id-core`'s `settings::pending_change`. Cycle J stage 10: `password_reset_tokens::delete_expired` had zero callers anywhere, including this sweep, despite its own doc describing it as exactly this kind of periodic cleanup -- wired into `run_once` by this stage (a real retention gap this row's prose had already been claiming was closed)."
 files = ["crates/sui-id-store/src/repos/auth_codes.rs", "crates/sui-id-store/src/repos/sessions.rs", "crates/sui-id-store/src/repos/login_pending_mfa.rs", "crates/sui-id-store/src/repos/webauthn_pending.rs", "crates/sui-id-store/src/repos/password_reset_tokens.rs", "crates/sui-id-store/src/repos/pending_settings_change.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/revoked_access_tokens.rs", "crates/sui-id-store/src/repos/federation_login_attempt.rs", "crates/sui-id-store/src/repos/federation_mfa_pending.rs"]  # each file's own purge_expired
-test_id = "`auth_code_lifecycle_invariants`, `session_lifecycle_invariants`, `refresh_family_lifecycle_invariants`, `purge_deletes_exactly_the_old_rows_of_every_status_and_counts_them`, `purge_expired_removes_a_row_older_than_24_hours_past_expiry`, `purge_expired_removes_only_expired_rows`, `gc_removes_an_expired_reset_token_and_keeps_an_unexpired_one` -- login_pending_mfa::purge_expired, webauthn_pending::purge_expired, and revoked_access_tokens::purge_expired have no test anywhere"
+test_id = "`auth_code_lifecycle_invariants`, `session_lifecycle_invariants`, `refresh_family_lifecycle_invariants`, `purge_deletes_exactly_the_old_rows_of_every_status_and_counts_them`, `purge_expired_removes_a_row_older_than_24_hours_past_expiry`, `purge_expired_removes_only_expired_rows`, `gc_removes_an_expired_reset_token_and_keeps_an_unexpired_one`, `purge_expired_removes_only_rows_whose_expiry_has_passed` (login_pending_mfa and webauthn_pending each have their own test of this name, in their own module), `purge_expired_removes_only_rows_whose_exp_has_passed` (revoked_access_tokens)"
 
 [[command]]
 id = "O04"

@@ -222,4 +222,5 @@ pub fn covers(granted_scopes: &str, requested_scopes: &str) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;

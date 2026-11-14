@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   properties on every CI run. Those tests now also fail to build, or fail,
   if a role or action is added without being tested.
 
+- **`sui-id-store` no longer exports `users::set_last_login`.** It had no
+  callers anywhere in the workspace; `last_login_at` is written by the
+  login-completion functions directly. `signing_keys::insert_with_plaintext`
+  is now built only under `#[cfg(test)]` or the `test-support` feature —
+  it inserted a signing key with its plaintext key material unsealed, a
+  shape production code must never call; its five callers are all test
+  code.
+
 ### Fixed
 
 - **Rotating the master key now syncs the new key to disk, and its

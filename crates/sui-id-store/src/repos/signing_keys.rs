@@ -26,6 +26,14 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<SigningKeyRow> {
 
 /// Insert a new signing key. Pass the *plaintext* private key bytes in
 /// `private_key_plain`; this function seals them before INSERT.
+///
+/// Test-only: no production caller. Production insertion is K06,
+/// `insert_sealed_on_conn`, which takes an already-sealed blob so
+/// plaintext key material is never handed to a repo function in a real
+/// build. Gated so it cannot become a second, unaudited insertion path
+/// (`0.91.0`, primitive-coverage follow-up after `0.90.0`'s preparation
+/// review).
+#[cfg(any(test, feature = "test-support"))]
 pub async fn insert_with_plaintext(
     db: &Database,
     id: SigningKeyId,
