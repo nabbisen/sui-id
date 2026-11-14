@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.90.0] — 2026-11-13
+## [0.90.0] — 2026-11-14
 
 **Federation providers are now administered from the admin UI, with a
 "Sign in with …" button on the login page for each one enabled.**

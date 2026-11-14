@@ -40,6 +40,7 @@ ROADMAP.md	39f12d68482659d1745c435af3eb426e697afd7383d1751a002d104edf3f914e	1	An
 ROADMAP.md	3ff17aee5d6f11a9c0b47dbe077c8ede26d6ef622b52bc9aaa7129ab54825d44	1	What this replaced. From 2026-09-10 to 2026-09-22 this work was carried in a roadmap/ directory created by ee48257 , which justified itself 
 ROADMAP.md	40c089706b27d6d15adb13d42149a4f686e2d5c855c703a775cb49719efc16d4	1	R1 Review independence: authoring, implementation and review concentrate in few roles Certain (structural) High — the readiness claim rests 
 ROADMAP.md	4682dafde0a54772dd01c44edfaa1bae0eeb258438b0e65da112a67a074e164a	1	Owner and approver @nabbisen Yes
+ROADMAP.md	478b2edc255b26cf3931e29081d2830bc809a422b17fd74f62aabb639f1408dd	1	096-B1 stage 14 (the live run against a real upstream) is deferred ( @nabbisen : "Authorized.
 ROADMAP.md	49dbfcab44b8ec3a2978613ef519cb233fb5c91c5e0ab44211be15c4f749b3bd	1	Recording a proposal as an owner ruling removes the owner's decision without their knowledge.
 ROADMAP.md	4c13be87c9cd301126e224cb8a1f947e693bb723402b21dcd2f85f83df07e5d9	1	This is recorded, not resolved. It reads against the owner decision of 2026-08-26 above, which routes a design to the role that must build a
 ROADMAP.md	51d83c78c92ecb1ab8f6f8bc8b4f55f9eb9186270f7a3d2cd902f480365d5473	1	None of those clauses was an owner decision.
@@ -515,6 +516,7 @@ rfcs/handoffs/096-upstream-oidc-federation/096-b1-stage-plan-2026-10-09.md	2b05b
 rfcs/handoffs/096-upstream-oidc-federation/096-b1-stage-plan-2026-10-09.md	401e8e3afb90f58479b8ec5a6e2484179a5eb9f927fb0c693216652e75e51880	1	Authorized. @nabbisen , 2026-10-09: "the 096-B1 stage plan is authorized." This document is the authorized stage order. It is not a request 
 rfcs/handoffs/096-upstream-oidc-federation/096-b1-stage-plan-2026-10-09.md	a2548f09932be45cfc361d77bbdcfb7e71f36bf68948ba88fc585da5dfa8ca5f	1	The decision on it was taken 2026-10-11 ( @nabbisen : "Your recommendation is accepted.") — emit must attempt is built here, before F05, and
 rfcs/handoffs/096-upstream-oidc-federation/096-b1-stage-plan-2026-10-09.md	df8de9143bd311b09ae6bb0add6f875457cbacbab7ba90b816792ee39e304c72	1	Amended again 2026-10-12, and authorized. @nabbisen , 2026-10-12: "Approved." — on [ five-open-decisions-reviewed-2026-10-12.md ](five-open-
+rfcs/handoffs/096-upstream-oidc-federation/096-b1-stage14-live-run-runbook-2026-11-12.md	5cb6cff154399edb6c65061018299e2c93667504283120fa978fb51385d27d5b	1	@nabbisen : "Authorized.
 rfcs/handoffs/096-upstream-oidc-federation/096-b2-a4-correction-2026-11-11.md	d4b1a86dd9fac68f53d468c5832ebda6b9442f620e86e38bc082e2eb6668e604	1	@nabbisen : "Your recommendation is accepted."
 rfcs/handoffs/096-upstream-oidc-federation/096-b2-c17-consumes-the-capability-decision-2026-11-11.md	1bfe765f882b825cf0e2da98c6b8ac2be630e86914ddf7674fc9fbccfdb4a2a5	1	@nabbisen : "Approved." , on §3 as revised.
 rfcs/handoffs/096-upstream-oidc-federation/096-b2-login-screen-buttons-decision-2026-11-12.md	ac39e07a38790e6e8d30e46905a00c88b02164b2caedc9e411e03c22dc6cba9b	1	@nabbisen : "Both your recommendations are accepted."

@@ -5,7 +5,7 @@
 principle, not a source: inventories were removed in v4 and each section
 that held one now names where the authoritative copy lives.*
 
-> **Stale as of v0.90.0 (2026-11-13).** This document reflects the v0.77.0
+> **Stale as of v0.90.0 (2026-11-14).** This document reflects the v0.77.0
 > codebase and the workspace is thirteen minor versions past it, which is
 > eleven more than `contracts/doc-authority.toml`'s tolerance allows — RFC 098 rule 5
 > makes this banner the sanctioned state for a lagging document, and it is

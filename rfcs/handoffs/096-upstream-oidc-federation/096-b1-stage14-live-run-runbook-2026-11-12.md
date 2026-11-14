@@ -1,8 +1,22 @@
 # 096-B1 stage 14 — the live run against Google: a runbook
 
-> ## Whose turn it is: **yours.** The commit is named in §1.
-> It runs after 0.90.0's preparation lands, on that exact commit, and before
-> the tag. Decided 2026-11-12, on the 096-B2 completion assessment §5.2.
+> ## Deferred 2026-11-14, to `0.91.0`'s cycle.
+> `@nabbisen`: *"Authorized. Defer it. However, it should be controlled properly in
+> the schedule."* `0.90.0` ships without it. **It now runs on `0.91.0`'s prepared
+> commit, before `0.91.0`'s tag**, and that tag waits for its record unless a
+> further deferral is recorded. M4-B cannot close, and M6 cannot enter, without
+> it (ROADMAP, cycle L's row). **§1's commit below is superseded**: the architect
+> writes `0.91.0`'s prepared commit there when it lands.
+>
+> **Prepare before the slot comes**, so the run is not blocked on setup:
+> - the Google OAuth client of §2, with its client ID ready to hand over
+>   (the secret stays with you);
+> - if the architect is to drive the admin-console steps, the Claude in Chrome
+>   extension, installed, running, and signed in to the same account.
+>
+> Even in a split run, three parts stay yours: creating the client, starting
+> the server with the secret in your own terminal, and the two Google
+> sign-ins (steps 7 and 10).
 
 **What it proves.** RFC 096 `:1088-1089` asks for *"one representative
 public upstream integration using owner-supplied test credentials outside
