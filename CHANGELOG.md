@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The Kani proof harnesses in `authz.rs` are removed.** Nothing ran
+  them, and the authorization tests already check the same five
+  properties on every CI run. Those tests now also fail to build, or fail,
+  if a role or action is added without being tested.
+
 ## [0.90.0] — 2026-11-14
 
 **Federation providers are now administered from the admin UI, with a

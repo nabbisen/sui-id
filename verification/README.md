@@ -75,9 +75,8 @@ position.**
      able to fail.
 
    **A proof that nobody runs is removed, not kept**, through an RFC, with
-   its lane. That is the lesson of RFC 086's Kani harnesses
-   (`crates/sui-id-core/src/identity/authz.rs:197`), which nothing in the
-   repository runs.
+   its lane. That is the lesson of RFC 086's Kani harnesses: a pilot never
+   adopted, which nothing ran. They were removed in `0.91.0` (item 9).
 5. **Who does what:**
    - the architect proposes a target, with a prototype that has actually
      been run;

@@ -207,7 +207,6 @@ tempfile                    = "3.13"
 [workspace.lints.rust]
 unsafe_code     = "forbid"
 unused_must_use = "deny"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
 
 [workspace.lints.clippy]
 unwrap_used     = "warn"

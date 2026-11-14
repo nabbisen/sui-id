@@ -19,54 +19,101 @@ use crate::authz::{Action, Decision, authorize};
 use Decision::Permit;
 use Role::{Admin, Auditor, User};
 
-// ── Action enumeration (test-only) ───────────────────────────────────────────
+// ── Every Action and every Role, from one list each (0.91.0 S3) ──────────────
 //
-// A hand-maintained list of every Action variant used for exhaustive iteration.
-// All variants with embedded booleans appear twice (true + false).
+// Each macro below takes its list once and generates two things from it:
+// the function the tests iterate (`all_actions()`, `all_roles()`), and a
+// `match` over that same list with no wildcard arm. So the list cannot fall
+// behind its enum:
+// - a new variant that is not listed is a non-exhaustive match (E0004), and
+//   the build fails;
+// - listing it is what makes the tests iterate it, since both come from the
+//   same tokens;
+// - a variant with a `bool` must be listed with both values, or the match is
+//   non-exhaustive;
+// - an entry listed twice is an unreachable pattern, which `-D warnings`
+//   refuses.
+// These replace a hand-kept list that a new variant could silently skip.
 
-fn all_actions() -> Vec<Action> {
-    use Action::*;
-    vec![
-        AdminReadUsers,
-        AdminReadClients,
-        AdminReadAudit,
-        AdminReadDashboard,
-        AdminReadSettings,
-        AdminReadSigningKeys,
-        AdminWriteUsers,
-        AdminWriteClients,
-        AdminWriteSettings,
-        AdminRotateSigningKey,
-        AdminRotateClientSecret,
-        AdminResetUserMfa,
-        AdminForceLogout,
-        AdminChangeUserRole {
-            target_is_last_admin: false,
-        },
-        AdminChangeUserRole {
-            target_is_last_admin: true,
-        },
-        AdminDisableUser {
-            target_is_last_admin: false,
-        },
-        AdminDisableUser {
-            target_is_last_admin: true,
-        },
-        AdminDeleteUser {
-            target_is_last_admin: false,
-        },
-        AdminDeleteUser {
-            target_is_last_admin: true,
-        },
-        SelfReadSecurity,
-        SelfWriteSecurity,
-        SelfRevokeOwnSessions,
-        SelfRevokeConsent,
-    ]
+macro_rules! every_action {
+    ($($v:ident $({ $f:ident : $b:literal })?),+ $(,)?) => {
+        fn all_actions() -> Vec<Action> {
+            use Action::*;
+            vec![$($v $({ $f: $b })?),+]
+        }
+
+        /// Compiled, never called: it fails to build if `every_action!`'s
+        /// list misses a value of `Action`.
+        #[allow(dead_code)]
+        fn every_action_is_listed(a: Action) {
+            use Action::*;
+            match a {
+                $($v $({ $f: $b })? => {})+
+            }
+        }
+    };
 }
 
-fn all_roles() -> Vec<Role> {
-    vec![Admin, Auditor, User]
+every_action! {
+    AdminReadUsers,
+    AdminReadClients,
+    AdminReadAudit,
+    AdminReadDashboard,
+    AdminReadSettings,
+    AdminReadSigningKeys,
+    AdminWriteUsers,
+    AdminWriteClients,
+    AdminWriteSettings,
+    AdminRotateSigningKey,
+    AdminRotateClientSecret,
+    AdminResetUserMfa,
+    AdminForceLogout,
+    AdminChangeUserRole { target_is_last_admin: false },
+    AdminChangeUserRole { target_is_last_admin: true },
+    AdminDisableUser { target_is_last_admin: false },
+    AdminDisableUser { target_is_last_admin: true },
+    AdminDeleteUser { target_is_last_admin: false },
+    AdminDeleteUser { target_is_last_admin: true },
+    SelfReadSecurity,
+    SelfWriteSecurity,
+    SelfRevokeOwnSessions,
+    SelfRevokeConsent,
+}
+
+macro_rules! every_role {
+    ($($v:ident),+ $(,)?) => {
+        fn all_roles() -> Vec<Role> {
+            vec![$($v),+]
+        }
+
+        /// Compiled, never called: it fails to build if `every_role!`'s list
+        /// misses a value of `Role`.
+        #[allow(dead_code)]
+        fn every_role_is_listed(r: Role) {
+            match r {
+                $($v => {})+
+            }
+        }
+    };
+}
+
+every_role! { Admin, Auditor, User }
+
+/// The counts, measured 2026-11-14: 20 `Action` variants, three of them
+/// carrying a `bool`, so 23 values; and 3 roles. A change to either is a
+/// change to the authorization table, so this says so in the test output.
+#[test]
+fn the_lists_have_the_measured_sizes() {
+    assert_eq!(
+        all_actions().len(),
+        23,
+        "Action values changed: update the expected matrix below"
+    );
+    assert_eq!(
+        all_roles().len(),
+        3,
+        "Role values changed: update the expected matrix below"
+    );
 }
 
 // ── Expected matrix (hand-written "second copy") ──────────────────────────────

@@ -5,7 +5,7 @@
 **Not dispatched**: the build waits for M7, the real-environment soak.
 
 > **Also in this folder, and not RFC 146's build:** `0.91.0` S3, the Kani
-> harnesses' removal, dispatched 2026-11-14 —
+> harnesses' removal, dispatched and landed 2026-11-14 —
 > [`0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md`](./0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md).
 
 ## Where it stands, 2026-11-14

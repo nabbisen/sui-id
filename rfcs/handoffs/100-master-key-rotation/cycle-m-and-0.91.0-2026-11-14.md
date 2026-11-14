@@ -6,12 +6,16 @@
 >    [`../146-totp-step-selection-is-proved/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md`](../146-totp-step-selection-is-proved/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md).
 > 3. **Stage 14's date** is the owner's. No date is set yet, so the tag waits for it.
 >
-> **One question, before S3 lands.** Point 4 of the approved position on formal
-> verification says *a proof that nobody runs is removed, not kept, through an
-> RFC*, and names these harnesses as its example (`verification/README.md:76-80`).
-> Point 9 makes their disposition *a separate, small decision*. §5 did not
-> mention point 4. The architect reads decision 2 as that point-9 decision, and
-> proposes no RFC. If you meant point 4 to govern, S3 waits for one.
+> **The question before S3 landed: settled 2026-11-14** (`@nabbisen`: *"Agreed.
+> Authorized."*). Point 4 of the approved position on formal verification says
+> *a proof that nobody runs is removed, not kept, through an RFC*, and named
+> these harnesses as its example. Point 9 makes their disposition *a separate,
+> small decision*. RFC 086 says a pilot is adopted only by a follow-up RFC
+> (`rfcs/done/086-formal-model-checking-pilot.md:92, :109`), and none was
+> written, so the harnesses were never adopted. Point 9 governs, and no RFC is
+> written. Point 4's example sentence is reworded to say so, and its rule is
+> unchanged. **S3 landed the same day**, reviewed, with one architect fold-in —
+> `.git-exclude/reviewed/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md`.
 
 **Proposed.** 2026-11-14, by the architect, on `@nabbisen`'s *"Scope 0.91
 carefully."*, after `0.90.0` was published (`44d442d`).
@@ -65,7 +69,7 @@ start in `0.92.0`.
 |---|---|---|---|
 | **S1** | **Two rotation fixes** (RFC 100 refresh, item 4): `sync_all` and a directory fsync for the staged key and after both renames; rotation refuses an environment-supplied key, before opening the database | **Dispatched** 2026-11-14 — [`0.91.0-stage-1-two-rotation-fixes-2026-11-14.md`](0.91.0-stage-1-two-rotation-fixes-2026-11-14.md) | small |
 | **S2** | **Write primitives with no direct test**: delete `users::set_last_login` (no caller), gate `signing_keys::insert_with_plaintext` to tests, and, for ten primitives with no direct test, a boundary and a mutation test for each WHERE clause | **Dispatched** 2026-11-14 — [`../094-transactional-audit/primitive-coverage-after-0.90.0-2026-11-14.md`](../094-transactional-audit/primitive-coverage-after-0.90.0-2026-11-14.md) | small to medium |
-| **S3** | **The Kani harnesses, and the guard the tests lack** — see §5. On your decision 2 | not dispatched | small |
+| **S3** | **The Kani harnesses, and the guard the tests lack** — see §5. On your decision 2 | **Landed** 2026-11-14 | small |
 | **S4** | **One false comment**: `keyring.rs:36-41` says the variable is scrubbed, then that it is deliberately left set. Nothing removes it. sui-id spawns no child process outside tests, so only the comment is wrong | folded into S1's review by the architect | trivial |
 | **P** | **`0.91.0`'s preparation**: version, CHANGELOG, the full local matrix. Dispatched to the dev team, as the mechanical half of every release is | after S1–S4 | small |
 | **S14** | **096-B1 stage 14, the live run against Google**, on P's commit — [runbook](../096-upstream-oidc-federation/096-b1-stage14-live-run-runbook-2026-11-12.md) | **deferred here**; preparation listed in the runbook | your time |
