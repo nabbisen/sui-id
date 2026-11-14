@@ -1,5 +1,8 @@
 # 096-B1 stage 14 — the live run against Google: a runbook
 
+> ## Its slot has come: `0.91.0`'s prepared commit is **`a0a6c1a`** (2026-11-15).
+> §1 names it. The date is the owner's.
+>
 > ## Deferred 2026-11-14, to `0.91.0`'s cycle.
 > `@nabbisen`: *"Authorized. Defer it. However, it should be controlled properly in
 > the schedule."* `0.90.0` ships without it. **It now runs on `0.91.0`'s prepared
@@ -47,22 +50,25 @@ hostile-provider evidence"* (`:1093-1094`). That is 096-A's corpus, and
 
 ## 1 — the commit
 
-0.90.0's preparation landed as
-**`1955bc5305d06e575cac344e233c3f97bf4d14e6`** (2026-11-13). `main` is one
-commit past it: the commit that wrote this hash here, which changes
-nothing but this file. So check out the exact commit, detached, and build
-that from a clean tree:
+`0.91.0`'s preparation landed as `461443c`, and a test-only fix after it as
+**`a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad`** (2026-11-15). That is the commit
+to run. `main` is one commit past it: the commit that wrote this hash here,
+which changes nothing but this file. So check out the exact commit, detached,
+and build that from a clean tree:
 
 ```sh
 cd <your sui-id checkout>
 git status --short                                   # must print nothing
 git fetch origin
-git checkout --detach 1955bc5305d06e575cac344e233c3f97bf4d14e6
-git log -1 --format=%H    # must print 1955bc5305d06e575cac344e233c3f97bf4d14e6
+git checkout --detach a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad
+git log -1 --format=%H    # must print a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad
 cargo build --release -p sui-id --locked
+target/release/sui-id --version                      # must print: sui-id 0.91.0
 ```
 
 Afterwards, `git checkout main` returns you to the branch.
+
+*(Superseded: `0.90.0`'s `1955bc5`, named here before the deferral.)*
 
 ## 2 — a Google OAuth client
 
