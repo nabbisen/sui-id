@@ -30,6 +30,7 @@ ROADMAP.md	2a29ae17a5167459bb933a6e2f0fa114c30c4452df38af543f9ca0f24a9448c0	1	R2
 ROADMAP.md	2d4ab9968741d00b73c18bdf3c32d69f3d6cb9508934906d06fc3574002da5e4	1	On 2026-07-28 the owner authorized the programme to run two lanes : a second implementer was assigned and increased security-review capacity
 ROADMAP.md	2e91785c43a36f69cbf8b936ee0e1aeab1b1e2681008ae6a4abdeecbcbac2e92	1	Cut authorized 2026-10-18 — @nabbisen : "Authorized." 0.80.0 ruled on 2026-10-19: publishing follows every tag, and the earlier unpublished 
 ROADMAP.md	3020eded07c19c334137809bde2ec4452e08da628c4f96b495921fec478089da	1	Acceptance @nabbisen
+ROADMAP.md	32da4cc1b7382c69ec03f9e4f2fc6b056630b0647e2b2ac2f1a9a679e76b0ab4	1	The project's position on formal verification (what it is for, what qualifies a target, what each target must carry, when to widen, and the 
 ROADMAP.md	3351aec715f3ba49395145f7af82e742bc1233506da4da1df6facb4916f22f56	1	Every statement in this repository that the owner made that ruling traces to documents written by the architect role that proposed it: this 
 ROADMAP.md	36060284344212921053b00aa09fd5934b9a264236165a241f43611f1ab7e726	1	Like the withdrawn 2026-07-28 attribution above, the 2026-09-09 ruling reaches this repository only through a document written by the archit
 ROADMAP.md	37692ff773e22abcdf35fd135db74942198b0333042d4c2d0419f2b8d8c962d3	1	(At least four meaningfully exercised weeks and every workload criterion pass; @nabbisen and the RFC 129 D2 external reviewer accept the evi
@@ -844,5 +845,6 @@ rfcs/proposed/144-legible-to-older-eyes.md	874edb9b41d7b7c8d1211a597c52d7ff33065
 scripts/check-rfc-integrity.py	be0fdf1bc3fa1c5876e0c11bd8946dde02d7dd5fcd4d11883f0c5cfa5fbb1f3a	1	Deliberately no inspection of who reviewed or whether the value equals "N/A" -- see condition 9's docstring entry above for why not, and do 
 scripts/tests/test_owner_attributions.py	f6bbaf57737fffc7e4f6cd6c1d3631ab46a6042d0b2b20a71787c16b621e45a7	1	@nabbisen ruled on <date has no "owner ruling" in it: the pattern the RFC's first draft used does not match it.
 scripts/tests/test_rfc_integrity.py	852caa87d4b4409213729ac94457f87a85e2f42f0a028e75f14275891bea72e5	1	The gate must accept all three today, unless @nabbisen rules otherwise on self-review -- that ruling is not this gate's to make, so these te
+verification/README.md	06e050a8d32336e7ef9a5a6b93ec3107f6aa83a577c7be6e9b39a38a4139cffe	1	Its second was the architect's proposal for the rest, approved 2026-11-14 ( @nabbisen : "Approved." ).
 verification/README.md	18c44a0aadabe8fd645be248921f75f4d6b41014ba2eec130c99fffb1eea3c15	1	Raised by @nabbisen , 2026-11-14, on accepting RFC 146: "I wonder if it is better for us to update documentation to define what is verus's p
 verification/verus-scoping-note-2026-11-14.md	6cad115125f1d9d7ddcd6d3036499a96c23b99fc320e35a92995d8d0f068d6e0	1	@nabbisen : "Authorized." The RFC is written:

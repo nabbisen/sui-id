@@ -1062,6 +1062,10 @@ decided on the note.
 One target, TOTP step selection, proved and run (0.56 s; three planted bugs
 refused). **Decided 2026-11-14** (`@nabbisen`: *"Authorized."*): write the RFC now and
 build after the soak, with no freeze exception. Written as [RFC 146](rfcs/accepted/146-totp-step-selection-is-proved.md).
+**The project's position on formal verification** (what it is for, what
+qualifies a target, what each target must carry, when to widen, and the exit)
+is in [`verification/README.md`](verification/README.md), approved 2026-11-14
+(`@nabbisen`: *"Approved."*).
 
 **What is actually being decided — corrected 2026-09-25.** The architect first
 put this to `@nabbisen` as three windows and a date. That was the wrong

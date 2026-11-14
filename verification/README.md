@@ -20,10 +20,10 @@ better for us to update documentation to define what is verus's position
 and how verus is used in the project from view of long term development and
 maintenance."*
 
-This section has two parts, and the difference matters. **Decided** is
-what an accepted RFC or a quoted ruling already settles, with the
-citation. **Proposed** is the architect's proposal for the rest, **not yet
-approved**. Until it is, treat it as a recommendation, not a rule.
+Its first part was settled by accepted RFCs and earlier rulings, cited
+there. Its second was the architect's proposal for the rest, **approved
+2026-11-14** (`@nabbisen`: *"Approved."*). **Both parts are now the project's
+position.**
 
 ### Decided
 
@@ -40,7 +40,7 @@ approved**. Until it is, treat it as a recommendation, not a rule.
   building it (ROADMAP, *"After K: a scoping note on formal verification"*).
   RFC 146's build waits for M7, the soak.
 
-### Proposed (architect, 2026-11-14) — awaiting approval
+### The rest: proposed by the architect, approved 2026-11-14
 
 1. **Its position.** Formal verification is an assurance layer for a few
    small kernels, where one security property must hold for every input.
