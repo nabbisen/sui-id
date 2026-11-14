@@ -50,6 +50,7 @@ residual risk carried into RFC 097 — it may not be silently skipped.
 | [`implementation.md`](./implementation.md) | Ordered build stages, file/DB surfaces, platform refusals |
 | [`crash-matrix.md`](./crash-matrix.md) | Every injection point and its required outcome |
 | [`verification.md`](./verification.md) | Evidence contract and closure criteria |
+| [`release-0.91.0-preparation-2026-11-15.md`](./release-0.91.0-preparation-2026-11-15.md) | **Dispatched 2026-11-15**: `0.91.0`'s preparation, the mechanical half |
 | [`crash-injection-harness-design-2026-11-14.md`](./crash-injection-harness-design-2026-11-14.md) | **Proposed 2026-11-14, for approval**: the harness, the last implementation prerequisite. Three failure modes; its prototype found K07 is not durable on return |
 | [`0.91.0-stage-1-addendum-the-reseal-is-not-durable-on-return-2026-11-14.md`](./0.91.0-stage-1-addendum-the-reseal-is-not-durable-on-return-2026-11-14.md) | **Dispatched 2026-11-14**: stage 1's part A2, a checkpoint inside K07 |
 | [`cycle-m-and-0.91.0-2026-11-14.md`](./cycle-m-and-0.91.0-2026-11-14.md) | **Proposed 2026-11-14**: `0.91.0`'s scope. This RFC's build is planned for `0.92.0`, after the harness approval. §4 says what the harness must add: a power-loss mode |
