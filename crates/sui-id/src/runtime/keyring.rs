@@ -33,12 +33,9 @@ pub fn resolve(key_file: &Path) -> Result<ResolvedKey> {
         let key = MasterKey::from_base64(env_value.trim()).with_context(|| {
             format!("environment variable {ENV_VAR} did not contain a valid 32-byte base64 key")
         })?;
-        // Scrub the env var so child processes don't inherit it.
-        // SAFETY: Only main process at startup; setting env in single-threaded init.
-        // Note: std::env::remove_var is technically unsafe in multi-threaded contexts,
-        // but we run this before any threads are spawned.
-        // We deliberately leave it set so an admin can confirm the source via `env`,
-        // but operators are expected to scope it tightly via the deployment system.
+        // The variable is left set: nothing here removes it. sui-id spawns
+        // no child process outside tests, so none inherits it. Operators
+        // are expected to scope it tightly in the deployment system.
         return Ok(ResolvedKey {
             key,
             origin: KeyOrigin::Env,
@@ -70,6 +67,13 @@ pub fn resolve(key_file: &Path) -> Result<ResolvedKey> {
 /// separate crate from this library target, so the rotation command's
 /// use of this to stage the new master key needs full visibility, not
 /// just crate-local.
+///
+/// `0.91.0` stage 1, part A: returns only after the file's own bytes and
+/// its directory entry are both synced to disk — before this, the file
+/// was merely `write_all`'d, which a power loss can still lose (the data
+/// may sit in the page cache, and the directory entry that names it may
+/// not have reached disk at all). Every caller (rotation's staging write,
+/// and `resolve`'s first-start generation below) gets the same guarantee.
 pub fn write_key_file(path: &Path, body: &str) -> Result<()> {
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -88,5 +92,31 @@ pub fn write_key_file(path: &Path, body: &str) -> Result<()> {
         .with_context(|| format!("failed to create key file {}", path.display()))?;
     f.write_all(body.as_bytes())?;
     f.write_all(b"\n")?;
+    f.sync_all()
+        .with_context(|| format!("failed to sync key file {} to disk", path.display()))?;
+    sync_parent_dir(path)
+        .with_context(|| format!("failed to sync the directory holding {}", path.display()))?;
     Ok(())
 }
+
+/// Fsync the directory holding `path`, so a create or rename inside it
+/// (the directory *entry*, not the file's own bytes — `File::sync_all`
+/// on the file covers only the latter) survives a crash. `pub`, for the
+/// same cross-target reason as [`write_key_file`]: the rotation command
+/// in the binary calls this after its own renames, which happen in
+/// `cli.rs`, not here.
+pub fn sync_parent_dir(path: &Path) -> Result<()> {
+    let parent = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => Path::new("."),
+    };
+    let dir = std::fs::File::open(parent)
+        .with_context(|| format!("failed to open directory {} to sync it", parent.display()))?;
+    dir.sync_all()
+        .with_context(|| format!("failed to sync directory {}", parent.display()))
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+#[path = "keyring/tests.rs"]
+mod tests;

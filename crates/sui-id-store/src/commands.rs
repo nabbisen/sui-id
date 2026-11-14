@@ -6765,37 +6765,78 @@ pub async fn reseal_master_key(
     new_key_bytes.zeroize();
 
     let context = AuthorizedCommandContext::<K07>::for_system_actor(None);
-    db.class_a(context, move |tx: &mut ClassATx<'_, K07>| {
-        let signing_keys = crate::repos::signing_keys::reseal_all(tx.tx(), &old_key, &new_key)?;
-        let refresh_tokens = crate::repos::refresh_tokens::reseal_all(tx.tx(), &old_key, &new_key)?;
-        let (user_totp_secrets, user_totp_recovery_codes) =
-            crate::repos::user_totp::reseal_all(tx.tx(), &old_key, &new_key)?;
-        let user_webauthn_credentials =
-            crate::repos::user_webauthn_credentials::reseal_all(tx.tx(), &old_key, &new_key)?;
-        let smtp_config = crate::repos::smtp_config::reseal_all(tx.tx(), &old_key, &new_key)?;
-        let email_outbox_rows =
-            crate::repos::email_outbox::reseal_all(tx.tx(), &old_key, &new_key)? as u64;
-        let report = RotationReport {
-            signing_keys,
-            refresh_tokens,
-            user_totp_secrets,
-            user_totp_recovery_codes,
-            user_webauthn_credentials,
-            smtp_config,
-            email_outbox_rows,
-        };
-        let event = K07Event::Resealed {
-            signing_keys: report.signing_keys,
-            refresh_tokens: report.refresh_tokens,
-            user_totp_secrets: report.user_totp_secrets,
-            user_totp_recovery_codes: report.user_totp_recovery_codes,
-            user_webauthn_credentials: report.user_webauthn_credentials,
-            smtp_config: report.smtp_config,
-            email_outbox_rows: report.email_outbox_rows,
-        };
-        Ok((report, event))
+    let audited = db
+        .class_a(
+            context,
+            move |tx: &mut ClassATx<'_, K07>| -> StoreResult<(RotationReport, K07Event)> {
+                let signing_keys =
+                    crate::repos::signing_keys::reseal_all(tx.tx(), &old_key, &new_key)?;
+                let refresh_tokens =
+                    crate::repos::refresh_tokens::reseal_all(tx.tx(), &old_key, &new_key)?;
+                let (user_totp_secrets, user_totp_recovery_codes) =
+                    crate::repos::user_totp::reseal_all(tx.tx(), &old_key, &new_key)?;
+                let user_webauthn_credentials =
+                    crate::repos::user_webauthn_credentials::reseal_all(
+                        tx.tx(),
+                        &old_key,
+                        &new_key,
+                    )?;
+                let smtp_config =
+                    crate::repos::smtp_config::reseal_all(tx.tx(), &old_key, &new_key)?;
+                let email_outbox_rows =
+                    crate::repos::email_outbox::reseal_all(tx.tx(), &old_key, &new_key)? as u64;
+                let report = RotationReport {
+                    signing_keys,
+                    refresh_tokens,
+                    user_totp_secrets,
+                    user_totp_recovery_codes,
+                    user_webauthn_credentials,
+                    smtp_config,
+                    email_outbox_rows,
+                };
+                let event = K07Event::Resealed {
+                    signing_keys: report.signing_keys,
+                    refresh_tokens: report.refresh_tokens,
+                    user_totp_secrets: report.user_totp_secrets,
+                    user_totp_recovery_codes: report.user_totp_recovery_codes,
+                    user_webauthn_credentials: report.user_webauthn_credentials,
+                    smtp_config: report.smtp_config,
+                    email_outbox_rows: report.email_outbox_rows,
+                };
+                Ok((report, event))
+            },
+        )
+        .await?;
+
+    // `0.91.0` stage 1, addendum A2: the transaction above has committed,
+    // but WAL with `synchronous=NORMAL` (`db.rs:43-44`) only guarantees a
+    // commit survives a killed process, not a power loss, until the next
+    // checkpoint -- so run one here, before this function returns, which
+    // is this command's own durability contract: "committed and durable
+    // when this returns." `cli.rs`'s only production caller renames the
+    // key files immediately after, and must never be able to run ahead
+    // of this.
+    //
+    // `TRUNCATE`, not `FULL`: it leaves the `-wal` file at zero bytes on
+    // success, which a test can observe directly, and still syncs the
+    // WAL before it and the database file after it -- the property this
+    // call exists for.
+    db.with_conn(|conn| {
+        let (busy, _log, _checkpointed): (i64, i64, i64) =
+            conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })?;
+        // An in-memory database (every test here) is not in WAL mode;
+        // the pragma returns `(0, -1, -1)` there, which this treats as
+        // success -- there is no WAL to checkpoint.
+        if busy != 0 {
+            return Err(StoreError::RotationNotDurable);
+        }
+        Ok(())
     })
-    .await
+    .await?;
+
+    Ok(audited)
 }
 
 // ── C08 — set a dev-mode client's secret hash ────────────────────────────

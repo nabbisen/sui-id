@@ -14,6 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   properties on every CI run. Those tests now also fail to build, or fail,
   if a role or action is added without being tested.
 
+### Fixed
+
+- **Rotating the master key now syncs the new key to disk, and its
+  directory, before re-sealing, and makes the re-seal itself durable
+  before the key files are renamed.** It also syncs the directory after
+  each rename. Before, a power loss during or just after a rotation could
+  leave the database sealed under a key that never reached the disk
+  (from `0.87.1`, which moved the staging before the re-seal without
+  syncing it). It could also roll the re-seal back after the new key file
+  was already in place, since the database's write-ahead log was not
+  checkpointed first. **One window remains until RFC 100 ships**: a
+  failure or power loss between the two renames can leave nothing at the
+  configured key path. Do not start sui-id until the staged key is moved
+  there. The command's error and the operator guide's *Recovering a
+  rotation that stopped partway* both say so.
+- **`admin rotate-key` refuses when the key comes from
+  `SUI_ID_MASTER_KEY`.** Before, it rotated the key file, which the server
+  then ignored, so the next start used a key that no longer opened the
+  database.
+
 ### Tests and CI
 
 - **A pre-migration backup test no longer fails when the clock's second

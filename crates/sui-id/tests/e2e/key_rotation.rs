@@ -69,6 +69,18 @@ mod ordering {
         fn run(&self, args: &[&str], cfg: &Path) -> Output {
             Command::new(BIN).args(args).arg(cfg).output().expect("run")
         }
+        /// Same as [`Home::run`], with `SUI_ID_MASTER_KEY` set on the
+        /// **child process only** (`Command::env`) -- never
+        /// `std::env::set_var` in the test process itself, which would
+        /// leak into every other test in this binary.
+        fn run_with_master_key_env(&self, args: &[&str], cfg: &Path, key_b64: &str) -> Output {
+            Command::new(BIN)
+                .args(args)
+                .arg(cfg)
+                .env("SUI_ID_MASTER_KEY", key_b64)
+                .output()
+                .expect("run")
+        }
         fn raw(&self) -> rusqlite::Connection {
             rusqlite::Connection::open(self.db()).expect("raw")
         }
@@ -295,6 +307,109 @@ mod ordering {
             &cfg,
         );
         assert_eq!(out2.status.code(), Some(1), "{}", stderr(&out2));
+    }
+
+    /// `0.91.0` stage 1, part B — a key that came from `SUI_ID_MASTER_KEY`
+    /// must not be rotated: the command would write the new key to the
+    /// *file*, which a start with the variable still set would ignore,
+    /// stranding the server on the old key against a database rotation
+    /// had already re-sealed. The variable here carries the *same* key
+    /// already at the configured path, so the only thing this test can
+    /// be failing on is the origin check -- not an unrelated wrong-key
+    /// refusal from `database::open`.
+    /// `0.91.0` stage 1, A2, the operator's side: when something else holds
+    /// the database open (here a raw read transaction, as a running server
+    /// would), K07 commits but cannot be made durable. The command must say
+    /// where each key is and what to do. It must not invite a second
+    /// rotation, which would start from the old key, which no longer opens
+    /// the database.
+    #[test]
+    fn a_reseal_that_cannot_be_made_durable_says_where_the_keys_are() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+        let old_key = std::fs::read_to_string(h.key()).expect("key");
+
+        let holder = h.raw();
+        holder
+            .execute_batch("BEGIN; SELECT * FROM signing_keys;")
+            .expect("hold a read transaction, as a running server would");
+        let out = h.run(&["admin", "rotate-key", "--yes", "--config"], &cfg);
+        holder.execute_batch("ROLLBACK;").ok();
+        drop(holder);
+
+        assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+        let err = stderr(&out);
+        let staged = h.staged_key().display().to_string();
+        let active = h.key().display().to_string();
+        for must in [
+            "now sealed under the NEW key",
+            staged.as_str(),
+            active.as_str(),
+            "stop sui-id",
+            "do not run the rotation again",
+        ] {
+            assert!(err.contains(must), "stderr must contain {must:?}: {err}");
+        }
+        assert!(h.staged_key().exists(), "the new key is still staged");
+        assert_eq!(
+            std::fs::read_to_string(h.key()).expect("old key still in place"),
+            old_key,
+            "the key files were not touched"
+        );
+        assert!(
+            h.audit_note("admin.master_key.resealed").is_some(),
+            "the re-seal did commit"
+        );
+    }
+
+    #[test]
+    fn rotation_refuses_when_the_old_key_came_from_the_environment() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+        let key_body = std::fs::read_to_string(h.key()).expect("key");
+
+        let out = h.run_with_master_key_env(
+            &["admin", "rotate-key", "--yes", "--config"],
+            &cfg,
+            key_body.trim(),
+        );
+        assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+        assert!(
+            stderr(&out).contains("SUI_ID_MASTER_KEY"),
+            "the refusal must name the variable: {}",
+            stderr(&out)
+        );
+
+        assert!(
+            !h.staged_key().exists(),
+            "nothing was staged -- the refusal runs before the database opens"
+        );
+        assert_eq!(
+            std::fs::read_to_string(h.key()).expect("key still there"),
+            key_body,
+            "the key file's bytes are unchanged"
+        );
+        assert!(
+            h.audit_note("admin.master_key.resealed").is_none(),
+            "no re-seal was attempted"
+        );
+
+        // An ordinary command still runs against the configured key FILE,
+        // with no environment variable this time. (`unlock-user` decrypts
+        // nothing, so this is not evidence about the sealed rows; that
+        // nothing was re-sealed is shown above by the absent audit row.)
+        let out2 = h.run(
+            &["admin", "unlock-user", "--username", "nobody", "--config"],
+            &cfg,
+        );
+        assert_eq!(out2.status.code(), Some(1), "{}", stderr(&out2));
+        assert!(
+            !stderr(&out2).contains("refusing"),
+            "the original key file must still open the database: {}",
+            stderr(&out2)
+        );
     }
 }
 

@@ -470,6 +470,13 @@ pub(crate) async fn run_admin_issue_recovery_link(args: &[String]) -> Result<()>
 /// transaction committed; a disk error there was permanent, total loss
 /// of every sealed column. See
 /// `rfcs/handoffs/094-transactional-audit/urgent-master-key-ordering-2026-11-03.md`.
+/// **`0.91.0` stage 1, part A (2026-11-14): "durable" now means synced,
+/// not merely written.** Before, nothing called `sync_all` on the
+/// staged key file or its directory, nor on either rename below — a
+/// power loss could still lose a "durable" key that had only reached
+/// the page cache. `write_key_file` now syncs the file and its
+/// directory before it returns, and each rename below is followed by
+/// its own directory sync.
 ///   1. Print a summary of what will happen and prompt
 ///      "type yes to continue:". Skip with `--yes` for non-
 ///      interactive use.
@@ -477,23 +484,29 @@ pub(crate) async fn run_admin_issue_recovery_link(args: &[String]) -> Result<()>
 ///      database — a previous rotation may not have completed, and
 ///      that file may be the only copy of the key the database is
 ///      already using.
-///   3. Open DB under the OLD key.
+///   3. Open DB under the OLD key. Refuses first if that key came from
+///      `SUI_ID_MASTER_KEY` (`0.91.0` stage 1, part B) — rotation writes
+///      the key *file*, which a start with that variable still set
+///      would ignore, leaving the server unable to open a database
+///      this command had already re-sealed.
 ///   4. Obtain the new key (generate, or read `--new-key`) and stage
 ///      it at `<key_file>.new`, created atomically with owner-only
 ///      permissions (`create_new` + mode `0600`, never a `chmod`
-///      after the fact). This is the only durable copy of a generated
-///      key until step 7.
+///      after the fact), then synced to disk along with its directory.
+///      This is the only durable copy of a generated key until step 7.
 ///   5. Re-seal every encrypted column under the new key, and record
 ///      `admin.master_key.resealed` (K07), in one transaction
 ///      (RFC 094 cycle J stage 4). Failure: rollback, no audit row;
 ///      the staged key and the old key file are both untouched, and a
 ///      re-run is a clean retry.
-///   6. Rename old key file to `.bak.<timestamp>`.
-///   7. Rename `<key_file>.new` to the configured path. Steps 6 and 7
-///      are renames within one directory, which allocate nothing and
-///      are far less likely to fail than a write — and if either does,
-///      the new key is still recoverable from `<key_file>.new` or
-///      `.bak.<timestamp>`.
+///   6. Rename old key file to `.bak.<timestamp>`, then sync that
+///      directory.
+///   7. Rename `<key_file>.new` to the configured path, then sync that
+///      directory again. Steps 6 and 7 are renames within one
+///      directory, which allocate nothing and are far less likely to
+///      fail than a write — and if either the rename or its directory
+///      sync does, the new key is still recoverable from
+///      `<key_file>.new` or `.bak.<timestamp>`.
 ///   8. Print a report of how many rows were re-sealed in each
 ///      table.
 pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
@@ -590,6 +603,26 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     // the server's startup logic).
     let resolved_old =
         sui_id::keyring::resolve(&cfg.storage.key_file).context("loading old master key")?;
+
+    // `0.91.0` stage 1, part B: refuse before the database is even
+    // opened if the old key came from the environment. Only `resolve`
+    // knows the origin, so this check can only run after it -- and it
+    // must run before `database::open`, so a refusal touches nothing.
+    if resolved_old.origin == sui_id::keyring::KeyOrigin::Env {
+        bail!(
+            "refusing to rotate: the current master key came from the \
+            SUI_ID_MASTER_KEY environment variable, not the key file at \
+            {}. Rotation only writes the key *file* -- with the \
+            variable still set, the server would ignore that file on \
+            its next start and keep using the old key, which would no \
+            longer open a database this command had already re-sealed. \
+            Unset SUI_ID_MASTER_KEY and point key_file at a file \
+            holding the current key before rotating here, or rotate \
+            the key in whatever deployment system sets the variable.",
+            cfg.storage.key_file.display()
+        );
+    }
+
     let db = sui_id::database::open(
         &cfg.storage.db_path,
         resolved_old.key,
@@ -612,7 +645,9 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     };
 
     // Stage the new key at a sibling path, created atomically with
-    // owner-only permissions, BEFORE the re-seal commits. This is the
+    // owner-only permissions, BEFORE the re-seal commits, and synced to
+    // disk along with its directory before `write_key_file` returns
+    // (`0.91.0` stage 1, part A) -- not merely written. This is the
     // only durable copy of a generated key until the final rename
     // below — if anything after this point fails, the key survives at
     // `staged_path` and the operator can finish the rotation by hand.
@@ -622,11 +657,31 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
         .with_context(|| format!("staging new key at {}", staged_path.display()))?;
 
     // Re-seal everything atomically: the re-seal and its audit record
-    // (`admin.master_key.resealed`, K07) now commit in one transaction.
-    let report = sui_id_store::commands::reseal_master_key(&db, &new_key)
-        .await
-        .context("rotating sealed columns under the new key")?
-        .into_inner();
+    // (`admin.master_key.resealed`, K07) now commit in one transaction,
+    // and the transaction is durable before this call returns
+    // (`0.91.0` stage 1, addendum A2) -- WAL with `synchronous=NORMAL`
+    // (`sui-id-store/src/db.rs:43-44`) otherwise only guarantees the
+    // commit survives a killed process, not a power loss, until the
+    // next checkpoint.
+    let report = match sui_id_store::commands::reseal_master_key(&db, &new_key).await {
+        // The re-seal committed, but another connection kept it from being
+        // made durable. This is not retryable (a second rotation would start
+        // from the old key, which no longer opens the database), so say
+        // exactly where each key is and what to do.
+        Err(e @ sui_id_store::StoreError::RotationNotDurable) => {
+            return Err(anyhow::Error::new(e).context(format!(
+                "the database is now sealed under the NEW key, which is at {staged}; {active} \
+                 still holds the old key. Something else has the database open: stop sui-id \
+                 (rotation runs offline), then move {staged} to {active} by hand before \
+                 starting anything. Do not delete {staged}, and do not run the rotation again",
+                staged = staged_path.display(),
+                active = old_path.display(),
+            )));
+        }
+        r => r
+            .context("rotating sealed columns under the new key")?
+            .into_inner(),
+    };
 
     // Rename the old key file. Done AFTER the transaction
     // commits so a failure in re-sealing does not leave the
@@ -647,6 +702,27 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     };
     std::fs::rename(&old_path, &bak_path)
         .with_context(|| format!("renaming {} -> {}", old_path.display(), bak_path.display()))?;
+    // `0.91.0` stage 1, part A: the rename above is only a directory
+    // entry change until this directory's own fsync lands. Both renames
+    // in this function share one directory (the key file's own), so one
+    // helper, called after each. A failure here must not claim success:
+    // the rename itself succeeded, but its durability didn't, and the
+    // new key is still only at `staged_path` -- this rename has not run
+    // yet.
+    sui_id::keyring::sync_parent_dir(&old_path).with_context(|| {
+        format!(
+            "syncing the directory holding {} after archiving the old key to {} -- the new \
+             key is still at {}, not yet in place, and nothing is at {}. Move {} to {} by hand \
+             before starting sui-id or running any sui-id command: with no file there, it \
+             would generate a new, unrelated key",
+            old_path.display(),
+            bak_path.display(),
+            staged_path.display(),
+            old_path.display(),
+            staged_path.display(),
+            old_path.display()
+        )
+    })?;
 
     // Move the already-durable staged key into place. A rename
     // within one directory, which allocates nothing and is far less
@@ -654,9 +730,24 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     // at `staged_path`, recoverable by hand.
     std::fs::rename(&staged_path, &old_path).with_context(|| {
         format!(
-            "renaming {} -> {}",
+            "renaming {} -> {}. The database is sealed under the key at {}, and nothing is at \
+             {}. Move it there by hand before starting sui-id or running any sui-id command: \
+             with no file there, it would generate a new, unrelated key",
+            staged_path.display(),
+            old_path.display(),
             staged_path.display(),
             old_path.display()
+        )
+    })?;
+    // Same helper, same reason -- except this rename already landed the
+    // new key at `old_path`, so a failure here says that instead.
+    sui_id::keyring::sync_parent_dir(&old_path).with_context(|| {
+        format!(
+            "syncing the directory holding {} after moving the new key into place -- the new \
+             key is already at {}, archived old key at {}",
+            old_path.display(),
+            old_path.display(),
+            bak_path.display()
         )
     })?;
 

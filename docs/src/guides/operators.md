@@ -132,6 +132,15 @@ the new one, and exits. Use it when:
 rotation isn't supported — see the v0.26.0 CHANGELOG entry for the
 rationale.
 
+**Rotation refuses if the current key came from `SUI_ID_MASTER_KEY`**
+(`0.91.0`). Rotation always writes the new key to the key *file* — if the
+variable is still set when the server next starts, it takes priority
+over the file (see resolution order above) and the server runs with the
+*old* key, which no longer opens a database this command has already
+re-sealed. Unset the variable and point `key_file` at a file holding the
+current key before rotating here, or rotate the key wherever the
+deployment system that sets the variable manages it.
+
 A typical run looks like:
 
 ```sh
@@ -211,29 +220,45 @@ skipped. Applying this table to a pre-v0.87.2 `rotated` row would
 misdiagnose a **complete** rotation as a half-finished one. Check the
 release that was running at the time before concluding otherwise.
 
-> ### Recovering a rotation that stopped partway. Corrected twice: 2026-11-03, this section used to end "There is no half-rotated state to recover from", which is not true of a failure *after* the re-seal commits; 2026-11-04, it still described the key-loss window that `0.87.1` had already closed.
+> ### Recovering a rotation that stopped partway. Corrected three times: 2026-11-03, this section used to end "There is no half-rotated state to recover from", which is not true of a failure *after* the re-seal commits; 2026-11-04, it still described the key-loss window that `0.87.1` had already closed; 2026-11-14, it said the new key was "written to disk," when until that date nothing had actually synced it there, and it did not yet say the re-seal itself is made durable before the key files move.
 >
-> **The new key is written to disk before the re-seal commits**, since
-> `0.87.1`. The order is:
+> **The new key is synced to disk, along with its directory, before the
+> re-seal commits**, since `0.87.1` (sync added `0.91.0`). The order is:
 >
 > 1. refuse outright if `<key_file>.new` already exists — before the
 >    database is even opened, because that file may hold the key the
 >    database is already sealed under;
 > 2. stage the new key at `<key_file>.new`, created with owner-only
->    permissions;
+>    permissions, then synced to disk together with its directory;
 > 3. re-seal every encrypted column, and record
->    `admin.master_key.resealed`, in one transaction — **this commits**;
-> 4. rename the old key file to `.bak.<timestamp>`;
-> 5. rename `<key_file>.new` to the configured path.
+>    `admin.master_key.resealed`, in one transaction — **this commits,
+>    and is then checkpointed so the commit itself is durable** before
+>    the command moves on to the key files;
+> 4. rename the old key file to `.bak.<timestamp>`, then sync that
+>    directory;
+> 5. rename `<key_file>.new` to the configured path, then sync that
+>    directory again.
 >
-> **So an ordinary disk error no longer loses the key.** Steps 4 and 5
-> are renames within one directory, and until step 5 completes the new
-> key is still at `<key_file>.new`. Before `0.87.1` the generated key
-> existed only in memory until a single write *after* the commit, and
+> **So an ordinary disk error no longer loses the key, and a power loss
+> can no longer lose the new key or the re-seal.** Steps 4 and 5 are
+> renames within one directory, and until step 5 completes the new key is
+> still at `<key_file>.new`.
+>
+> **A failure or power loss between steps 4 and 5 can still leave nothing
+> at the configured path. Do not start sui-id, or run any `sui-id`
+> command, while that path is empty:** today it would generate a new,
+> unrelated key there, and anything sealed under it could not be read
+> with the key your database needs. Move `<key_file>.new` into place
+> first, as below. RFC 100 removes this hazard; until it ships, the
+> command's own error message says the same. Before `0.87.1` the generated
+> key existed only in memory until a single write *after* the commit, and
 > losing that write made every sealed column permanently undecryptable.
-> **That window is closed.** If you are running `0.87.1` or later you
-> are not exposed to it; if you are running anything earlier, upgrade
-> before rotating.
+> Before `0.91.0`, neither the staged key nor the committed re-seal was
+> actually synced to disk, so "written" and "committed" above did not
+> yet mean what they now mean.
+> **Those windows are closed**: losing the key to a disk error, in
+> `0.87.1`; losing it, or the re-seal, to a power loss, in `0.91.0`.
+> Upgrade to `0.91.0` or later before rotating.
 >
 > **If a rotation stopped partway, here is what to do.** Read
 > "Diagnosing a rotation from the audit log" above first — it tells you
@@ -248,7 +273,12 @@ release that was running at the time before concluding otherwise.
 >   present.** The database is re-sealed under the key in
 >   `<key_file>.new`, and the key files were not fully swapped. **That
 >   staged file is the key your database now needs.** Copy it somewhere
->   durable, then move it to the configured path and start the server.
+>   durable, then move it to the configured path, and only then start the
+>   server. The configured path may hold the old key, or nothing. Either
+>   way, the staged file replaces it. This is also the state after the
+>   command reports that the re-seal *"could not be made durable"*, which
+>   happens when something else, usually a running sui-id, has the
+>   database open.
 >   Do not delete it, and do not re-run the rotation.
 > - **A `resealed` row, no `rotated` row, and no `<key_file>.new`.**
 >   Step 5 completed and only the audit record failed; the command also

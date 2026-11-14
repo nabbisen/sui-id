@@ -7,7 +7,7 @@
 implementation prerequisite is met**: the crash-injection harness was approved
 2026-11-14. The build is planned for `0.92.0`, stage by stage
 ([`implementation.md`](./implementation.md), rewritten 2026-11-14); nothing of it
-is dispatched yet. Only `0.91.0` stage 1, with its part A2, is in flight.
+is dispatched yet. `0.91.0` stage 1, with its part A2, **landed** 2026-11-14.
 
 ## Entry gate
 

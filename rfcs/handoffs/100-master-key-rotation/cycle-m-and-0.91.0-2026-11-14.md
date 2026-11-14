@@ -79,10 +79,10 @@ start in `0.92.0`.
 
 | # | Work | State | Size |
 |---|---|---|---|
-| **S1** | **Two rotation fixes** (RFC 100 refresh, item 4): `sync_all` and a directory fsync for the staged key and after both renames; rotation refuses an environment-supplied key, before opening the database | **Dispatched** 2026-11-14 — [`0.91.0-stage-1-two-rotation-fixes-2026-11-14.md`](0.91.0-stage-1-two-rotation-fixes-2026-11-14.md) | small |
+| **S1** | **Two rotation fixes** (RFC 100 refresh, item 4): `sync_all` and a directory fsync for the staged key and after both renames; rotation refuses an environment-supplied key, before opening the database | **Landed** 2026-11-14, with part A2 — [`0.91.0-stage-1-two-rotation-fixes-2026-11-14.md`](0.91.0-stage-1-two-rotation-fixes-2026-11-14.md) | small |
 | **S2** | **Write primitives with no direct test**: delete `users::set_last_login` (no caller), gate `signing_keys::insert_with_plaintext` to tests, and, for ten primitives with no direct test, a boundary and a mutation test for each WHERE clause | **Dispatched** 2026-11-14 — [`../094-transactional-audit/primitive-coverage-after-0.90.0-2026-11-14.md`](../094-transactional-audit/primitive-coverage-after-0.90.0-2026-11-14.md) | small to medium |
 | **S3** | **The Kani harnesses, and the guard the tests lack** — see §5. On your decision 2 | **Landed** 2026-11-14 | small |
-| **S4** | **One false comment**: `keyring.rs:36-41` says the variable is scrubbed, then that it is deliberately left set. Nothing removes it. sui-id spawns no child process outside tests, so only the comment is wrong | folded into S1's review by the architect | trivial |
+| **S4** | **One false comment**: `keyring.rs:36-41` says the variable is scrubbed, then that it is deliberately left set. Nothing removes it. sui-id spawns no child process outside tests, so only the comment is wrong | **Landed** 2026-11-14, folded into S1's review | trivial |
 | **P** | **`0.91.0`'s preparation**: version, CHANGELOG, the full local matrix. Dispatched to the dev team, as the mechanical half of every release is | after S1–S4 | small |
 | **S14** | **096-B1 stage 14, the live run against Google**, on P's commit — [runbook](../096-upstream-oidc-federation/096-b1-stage14-live-run-runbook-2026-11-12.md) | **deferred here**; preparation listed in the runbook | your time |
 

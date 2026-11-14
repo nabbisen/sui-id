@@ -189,6 +189,24 @@ pub enum StoreError {
     /// cookie must not become a bypass with a different observable shape).
     #[error("the presented browser-binding digest does not match the attempt's own")]
     AttemptBrowserBindingMismatch,
+
+    /// `0.91.0` stage 1, addendum A2: [`crate::commands::reseal_master_key`]'s
+    /// post-commit `PRAGMA wal_checkpoint(TRUNCATE)` reported `busy != 0`
+    /// — another connection held the WAL open, so the already-committed
+    /// re-seal could not be made durable against a power loss before
+    /// this call returned. The re-seal **has** committed; the key files
+    /// have **not** been touched — the checkpoint runs before `cli.rs`
+    /// reaches the renames.
+    ///
+    /// Not retryable: the database is now sealed under the new key, so a
+    /// second rotation would start from the wrong old key. The caller
+    /// (`cli.rs`) names the files and what to do.
+    #[error(
+        "the master-key re-seal committed, but could not be made durable against a \
+         power loss: another connection holds the database open. The database is now \
+         sealed under the new key. The key files were not touched."
+    )]
+    RotationNotDurable,
 }
 
 /// Why U37 refused to issue a recovery link (RFC 103 D5, D6, D8).

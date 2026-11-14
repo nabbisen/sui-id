@@ -248,3 +248,89 @@ async fn k07_reseals_every_one_of_the_six_tables() {
     assert_eq!(report.email_outbox_rows, 1, "email_outbox not re-sealed");
     assert_eq!(report.total(), 7, "all seven sealed columns accounted for");
 }
+
+// ── `0.91.0` stage 1, addendum A2 — the reseal is durable on return ───────
+//
+// `fresh_db()` above is `Database::open_in_memory`, which is not in WAL
+// mode at all -- it cannot exercise a checkpoint. These two open a real
+// **file** database instead, the same way
+// `federation_provider.rs`'s `c17_reads_guard_at_only_after_it_holds_the_
+// write_lock` does, so there is a real `-wal` file to observe.
+
+fn wal_path_for(db_path: &std::path::Path) -> std::path::PathBuf {
+    let mut name = db_path.as_os_str().to_owned();
+    name.push("-wal");
+    std::path::PathBuf::from(name)
+}
+
+#[tokio::test]
+async fn k07_leaves_the_wal_checkpointed_to_zero_bytes_on_return() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("a2-reseal.db");
+    let db = Database::open(&path, MasterKey::generate()).expect("open file db");
+    seed_a_signing_key(&db).await;
+
+    let new_key = MasterKey::generate();
+    crate::commands::reseal_master_key(&db, &new_key)
+        .await
+        .expect("reseal");
+
+    let wal_len = std::fs::metadata(wal_path_for(&path))
+        .map(|m| m.len())
+        .unwrap_or(0);
+    assert_eq!(
+        wal_len, 0,
+        "the -wal file must be checkpointed to zero bytes (or absent) once \
+         reseal_master_key has returned Ok"
+    );
+}
+
+/// The `busy` branch: a second, independent connection holds a read
+/// transaction open on the same file across the call, so SQLite cannot
+/// complete `wal_checkpoint(TRUNCATE)` -- measured directly, not assumed:
+/// without the held transaction this same body observes `busy = 0` and
+/// the call succeeds (every other test in this file proves that side).
+#[tokio::test]
+async fn k07_refuses_as_not_durable_when_another_connection_holds_the_wal_open() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("a2-busy.db");
+    let db = Database::open(&path, MasterKey::generate()).expect("open file db");
+    seed_a_signing_key(&db).await;
+
+    // A second, raw connection to the same file, with an open read
+    // transaction -- not through `Database`, which serializes every
+    // access onto one connection and could not hold this open
+    // independently of the call under test.
+    let second = rusqlite::Connection::open(&path).expect("second connection");
+    second
+        .execute_batch("BEGIN; SELECT * FROM signing_keys;")
+        .expect("open a read transaction on the second connection");
+
+    let new_key = MasterKey::generate();
+    let result = crate::commands::reseal_master_key(&db, &new_key).await;
+    let Err(err) = result else {
+        panic!("busy checkpoint must surface as an error");
+    };
+    let text = err.to_string();
+    for must in [
+        "re-seal committed",
+        "now sealed under the new key",
+        "key files were not touched",
+    ] {
+        assert!(text.contains(must), "error must say {must:?}: {text}");
+    }
+    assert!(
+        !text.to_lowercase().contains("retry"),
+        "a second rotation would start from the wrong key, so the error must not invite one: {text}"
+    );
+
+    second.execute_batch("ROLLBACK;").ok();
+
+    // And the reseal really did commit, despite the checkpoint refusing:
+    // the audit row is there.
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("admin.master_key.resealed"),
+        "the transaction committed even though the checkpoint did not"
+    );
+}
