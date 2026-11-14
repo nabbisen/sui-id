@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.91.0] — 2026-11-15
+
+**Master-key rotation is now durable against a power loss, except
+between its two renames, and refuses a key that came from
+`SUI_ID_MASTER_KEY`.** The Kani proof harnesses in `authz.rs` are
+removed, and `sui-id-store` loses `users::set_last_login` and gates
+`signing_keys::insert_with_plaintext` behind `test-support`. A flaky
+backup test is also fixed.
+
 ### Changed
 
 - **The Kani proof harnesses in `authz.rs` are removed.** Nothing ran

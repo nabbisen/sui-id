@@ -56,6 +56,26 @@ before upgrading across more than one or two of them.
 
 ## Version-specific notes
 
+### v0.91.x
+
+**No migration and no configuration change.** Upgrading from `0.90.x`
+runs no migration, so no pre-migration snapshot is taken.
+
+**`sui-id admin rotate-key` now refuses when the current key came from
+`SUI_ID_MASTER_KEY`** — see the operator guide's [*Rotating the master
+key*](operators.md#rotating-the-master-key).
+
+**Rotation is now durable against a power loss, except between its two
+renames** — see the operator guide's [*Recovering a rotation that
+stopped
+partway*](operators.md#recovering-a-rotation-that-stopped-partway-corrected-three-times-2026-11-03-this-section-used-to-end-there-is-no-half-rotated-state-to-recover-from-which-is-not-true-of-a-failure-after-the-re-seal-commits-2026-11-04-it-still-described-the-key-loss-window-that-0871-had-already-closed-2026-11-14-it-said-the-new-key-was-written-to-disk-when-until-that-date-nothing-had-actually-synced-it-there-and-it-did-not-yet-say-the-re-seal-itself-is-made-durable-before-the-key-files-move),
+which says what to do and what not to do.
+
+**`sui-id-store`'s public API loses `users::set_last_login`, and
+`signing_keys::insert_with_plaintext` now needs the `test-support`
+feature.** Relevant only if you build against the crate directly, not
+through the `sui-id` binary.
+
 ### v0.90.x
 
 **Federated sign-in through every configured provider stops on upgrade,

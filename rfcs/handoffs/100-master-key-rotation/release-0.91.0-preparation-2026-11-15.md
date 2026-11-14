@@ -1,6 +1,10 @@
 # `0.91.0` — release preparation
 
-> ## Whose turn it is: **the implementation role's.**
+> ## Landed 2026-11-15. One architect fold-in: the Quick Start's `VERSION=` is held
+> back to the cut. See the review —
+> `.git-exclude/reviewed/release-0.91.0-preparation-2026-11-15.md`.
+>
+> ## Whose turn it was: **the implementation role's.**
 > This is the mechanical half of the release. These stay with the architect
 > and the owner: the tag, the publish, the `Security audit` readings, the live
 > run (096-B1 stage 14), and **the RFC and ROADMAP records**.
