@@ -205,10 +205,21 @@ async fn verify_totp_code_with_wrong_code_does_not_touch_session() {
 
     let session_id = fresh_session(&db, &clock, uid).await;
 
-    // Pass a code that's almost certainly wrong (a fixed value
-    // that's unlikely to coincide with the real one — and even
-    // if it did, the next pass would still be wrong).
-    let result = verify_totp_code(&db, &clock, uid, session_id, "000000", "/me/security/mfa").await;
+    // A code no window accepts for this secret: a fixed "wrong" value is
+    // right for some secret at some time (`000000` was, for another fixed
+    // secret, at 2026-11-14 22:20:30 UTC). The server accepts `now ± 1`, and
+    // its `now` may be a step later than this one's.
+    let now_step = chrono::Utc::now().timestamp() / 30;
+    let mut accepted = Vec::new();
+    for step in now_step - 1..=now_step + 2 {
+        accepted.push(crate::totp::code_for_step(secret, step).await);
+    }
+    let wrong = (0..1_000_000u32)
+        .step_by(111_111)
+        .find(|c| !accepted.contains(c))
+        .map(|c| format!("{c:06}"))
+        .expect("four accepted codes cannot cover ten candidates");
+    let result = verify_totp_code(&db, &clock, uid, session_id, &wrong, "/me/security/mfa").await;
     assert!(matches!(
         result,
         Err(crate::errors::CoreError::InvalidCredentials)

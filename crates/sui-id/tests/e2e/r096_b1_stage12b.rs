@@ -197,7 +197,8 @@ async fn a_wrong_federated_second_factor_advances_the_same_lock_counter_a_wrong_
     let before = mfa_failure_count(&state, setup.user_id).await;
     assert_eq!(before, 0, "no failure recorded yet");
 
-    let resp = post_mfa_code(&state, &setup, "000000", &admin_csrf).await;
+    let wrong = a_code_no_window_accepts(&setup.totp_secret).await;
+    let resp = post_mfa_code(&state, &setup, &wrong, &admin_csrf).await;
     assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
 
     let after = mfa_failure_count(&state, setup.user_id).await;

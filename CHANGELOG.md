@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 between its two renames, and refuses a key that came from
 `SUI_ID_MASTER_KEY`.** The Kani proof harnesses in `authz.rs` are
 removed, and `sui-id-store` loses `users::set_last_login` and gates
-`signing_keys::insert_with_plaintext` behind `test-support`. A flaky
-backup test is also fixed.
+`signing_keys::insert_with_plaintext` behind `test-support`. Two flaky
+tests are also fixed.
 
 ### Changed
 
@@ -59,6 +59,10 @@ backup test is also fixed.
   two-minute window. `sui-id-store` gains
   `backup::pre_migration_snapshot_path_at`, the same name for a given
   instant.
+- **Tests no longer send `000000` as a TOTP code that must be wrong.** For
+  one test's fixed secret it was the right code at 2026-11-14 22:20:30 UTC,
+  and that test failed then. Nine sites now ask for a code that no accepted
+  step takes.
 
 ## [0.90.0] — 2026-11-14
 

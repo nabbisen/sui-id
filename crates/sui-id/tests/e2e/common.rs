@@ -645,3 +645,23 @@ pub async fn enroll_mfa_with_password(
     );
     (secret_b32, codes)
 }
+
+/// A six-digit TOTP code that no window accepts for `secret`: not the code
+/// for any step from one before now to two after. The server accepts
+/// `now ± 1`, and its `now` may be one step later than this one's, so that
+/// span covers every step the check can land on. A fixed "wrong" code such
+/// as `000000` is not wrong for every secret and time: with
+/// `b"0123456789ABCDEF"` it was the right code at 2026-11-14 22:20:30 UTC,
+/// and a test that sent it as a wrong one failed then.
+pub async fn a_code_no_window_accepts(secret: &[u8]) -> String {
+    let now = chrono::Utc::now().timestamp() / 30;
+    let mut accepted = Vec::new();
+    for step in now - 1..=now + 2 {
+        accepted.push(sui_id_core::totp::code_for_step(secret, step).await);
+    }
+    (0..1_000_000u32)
+        .step_by(111_111)
+        .find(|c| !accepted.contains(c))
+        .map(|c| format!("{c:06}"))
+        .expect("four accepted codes cannot cover ten candidates")
+}

@@ -396,7 +396,12 @@ async fn r102_l02_append_failure_changes_nothing_and_looks_like_a_wrong_code() {
     // The ordinary wrong-code response, from a working instance.
     let control = mfa_admin().await;
     let control_pending = pending_for(&control).await;
-    let ordinary = challenge(&control.state, &control_pending, "000000").await;
+    let ordinary = challenge(
+        &control.state,
+        &control_pending,
+        &a_code_no_window_accepts(&control.secret).await,
+    )
+    .await;
     assert_eq!(ordinary.status, StatusCode::UNAUTHORIZED);
 
     let a = mfa_admin().await;
@@ -611,7 +616,12 @@ async fn r102_l07_four_wrong_codes_then_the_right_one_signs_in() {
     let a = mfa_admin().await;
     let pending = pending_for(&a).await;
     for _ in 0..4 {
-        let r = challenge(&a.state, &pending, "000000").await;
+        let r = challenge(
+            &a.state,
+            &pending,
+            &a_code_no_window_accepts(&a.secret).await,
+        )
+        .await;
         assert_eq!(r.status, StatusCode::UNAUTHORIZED);
     }
     assert_eq!(mfa_failures(&a.state, a.user).await, 4);
@@ -629,19 +639,29 @@ async fn r102_l07_five_wrong_codes_lock_the_account_across_pending_rows() {
     // password: the count carries over (A8).
     let first = pending_for(&a).await;
     for _ in 0..2 {
-        challenge(&a.state, &first, "000000").await;
+        challenge(&a.state, &first, &a_code_no_window_accepts(&a.secret).await).await;
     }
     let second = pending_for(&a).await;
     assert_eq!(pending_rows(&a.state, a.user).await, 2);
     for _ in 0..2 {
-        challenge(&a.state, &second, "000000").await;
+        challenge(
+            &a.state,
+            &second,
+            &a_code_no_window_accepts(&a.secret).await,
+        )
+        .await;
     }
     assert_eq!(
         mfa_failures(&a.state, a.user).await,
         4,
         "a new pending row does not reset the count"
     );
-    challenge(&a.state, &second, "000000").await;
+    challenge(
+        &a.state,
+        &second,
+        &a_code_no_window_accepts(&a.secret).await,
+    )
+    .await;
 
     assert_eq!(mfa_failures(&a.state, a.user).await, 5);
     assert_eq!(events(&a.state, "auth.mfa.lockout").await, 1);
@@ -685,7 +705,12 @@ async fn r102_u08_unlock_after_an_mfa_lockout_leaves_the_next_wrong_code_at_coun
     let a = mfa_admin().await;
     let pending = pending_for(&a).await;
     for _ in 0..5 {
-        challenge(&a.state, &pending, "000000").await;
+        challenge(
+            &a.state,
+            &pending,
+            &a_code_no_window_accepts(&a.secret).await,
+        )
+        .await;
     }
     assert_eq!(mfa_failures(&a.state, a.user).await, 5);
     assert_eq!(events(&a.state, "auth.mfa.lockout").await, 1);
@@ -711,7 +736,7 @@ async fn r102_u08_unlock_after_an_mfa_lockout_leaves_the_next_wrong_code_at_coun
 
     // The next wrong code is the first, not the sixth.
     let fresh = pending_for(&a).await;
-    let r = challenge(&a.state, &fresh, "000000").await;
+    let r = challenge(&a.state, &fresh, &a_code_no_window_accepts(&a.secret).await).await;
     assert_eq!(r.status, StatusCode::UNAUTHORIZED);
     assert_eq!(mfa_failures(&a.state, a.user).await, 1, "count 1");
     assert_eq!(
