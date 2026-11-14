@@ -27,6 +27,7 @@ ROADMAP.md	25a346cb68d8409c2ad9772051dda7bda7bd1fe3099479b3c1ac26c4d1b32088	1	##
 ROADMAP.md	2636ad08eb9e597ede73bccdc24e0b3cd3011bd3659d1b66c1144846611b195a	1	R4 MSRV 1.95 leaves four releases of headroom below current stable ( 1.99.0, re-measured 2026-10-01 ; was three against 1.98.1 on 2026-09-16
 ROADMAP.md	26de88e14f6fa11f02c4846c6a1a577eaf8cb96761082e7c37663009ee51ade0	1	The owner and independent reviewer decide whether a narrower change resets a targeted exercise or the complete four-week window.
 ROADMAP.md	2a29ae17a5167459bb933a6e2f0fa114c30c4452df38af543f9ca0f24a9448c0	1	R2 Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary Certain (by design) High if misrepresented; lo
+ROADMAP.md	2aa4a470557f91a255769eeb4690c3ba5274d12a4a97c8db3bbd40ceecda9754	1	Authorized 2026-11-11 ( @nabbisen : "All your recommendations and directions are accepted." ).
 ROADMAP.md	2d4ab9968741d00b73c18bdf3c32d69f3d6cb9508934906d06fc3574002da5e4	1	On 2026-07-28 the owner authorized the programme to run two lanes : a second implementer was assigned and increased security-review capacity
 ROADMAP.md	2e91785c43a36f69cbf8b936ee0e1aeab1b1e2681008ae6a4abdeecbcbac2e92	1	Cut authorized 2026-10-18 — @nabbisen : "Authorized." 0.80.0 ruled on 2026-10-19: publishing follows every tag, and the earlier unpublished 
 ROADMAP.md	3020eded07c19c334137809bde2ec4452e08da628c4f96b495921fec478089da	1	Acceptance @nabbisen
@@ -65,7 +66,6 @@ ROADMAP.md	90273563132b9632fdcaa2d6243a1cf0e859c2f6e0ac78a3a0efa4e291cc43e2	1	09
 ROADMAP.md	92e87f0d49a150a6963709d59e47d782889e1336a93d3eedfb51fcdb52347651	1	They must: because owner-requested self-review is legitimate, a gate that rejected every self-review would reject work this ruling permits.
 ROADMAP.md	98ceb61a86f24277ce9291924a6e17133bb443462bede8d98ec302a9c90aff71	1	Lane B is authorized to run concurrently with Lane A once the overlap rule's conditions are met: all designs are Accepted or in re-review af
 ROADMAP.md	a9bbc3d5025b4c0528bdbca925b2a6d6b32f670b9b1391a0c5e6ca7c07a456e4	1	RFC 115's three open questions stay open: they are design forks for @nabbisen , and the design review is asked for its view on each as an in
-ROADMAP.md	ad20cb1ceadcc985f89fb7e39cc64be43a3434e14c8dabb5cddf379dceb15a84	1	L — federation administration (RFC 096-B2) v0.90.0 Authorized 2026-11-11 ( @nabbisen : "All your recommendations and directions are accepted
 ROADMAP.md	b47cd980c89ef41abd8de0e517a02478a2c05f57670c73373d4075e5a12650b1	1	This schedule is the architect's proposal. It is recorded here so it can be argued with; it becomes a plan when @nabbisen authorizes it.
 ROADMAP.md	b896eddb59d1bc16048f69a92af1c552c0e99023d5a710c6021e4b4c4096611c	1	Correction, 2026-08-26 — this entry was previously wrong about its own provenance. The version written on 2026-07-30 in 1e59e3d recorded a t
 ROADMAP.md	ba516c67d0d3dd1fdb14f601de2a4b446ec1230d87e5baf7c7738d4e0d691338	1	117 2026-09-24 [ rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md ](rfcs/handoffs/117-verifiable-owner-decisions/design

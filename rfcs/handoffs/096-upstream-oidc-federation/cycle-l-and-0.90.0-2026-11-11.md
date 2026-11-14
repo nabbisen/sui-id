@@ -11,6 +11,15 @@
 >
 > ## Stage 0 done 2026-11-11: the stage plan, with four design amendments for you —
 > [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md).
+>
+> ## Released and published 2026-11-14
+> Tag `0.90.0` at `44d442d`, annotated and signed. Level B `43539676127` (28 jobs,
+> 0 skipped) and `Security audit` `43539678886`, both on that commit. Publish run
+> `43545234825`: six crates, and the GitHub Release with three assets.
+> **096-B1 stage 14 is not in it**: deferred to `0.91.0`'s cycle (`@nabbisen`:
+> *"Authorized. Defer it. However, it should be controlled properly in the
+> schedule."*), and controlled as ROADMAP cycle L's row says —
+> [`096-b1-stage14-live-run-runbook-2026-11-12.md`](096-b1-stage14-live-run-runbook-2026-11-12.md).
 
 **Proposed.** 2026-11-11, by the architect, after `0.89.0` (cycle K) was published.
 **Why now.** Scheduling is the architect's to propose and yours to authorize.
