@@ -1,6 +1,6 @@
 # RFC 100 implementation stages
 
-**Governing RFC:** [RFC 100](../../proposed/100-master-key-rotation-recovery.md)
+**Governing RFC:** [RFC 100](../../accepted/100-master-key-rotation-recovery.md)
 
 Build in this order. Each stage is independently reviewable, and **recovery
 lands before the thing it recovers** — never build a write path whose crash

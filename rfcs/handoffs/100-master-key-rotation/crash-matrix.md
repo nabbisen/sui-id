@@ -1,6 +1,6 @@
 # RFC 100 crash-injection matrix
 
-**Governing RFC:** [RFC 100](../../proposed/100-master-key-rotation-recovery.md)
+**Governing RFC:** [RFC 100](../../accepted/100-master-key-rotation-recovery.md)
 
 Normative for implementation and closure. Every row must be entered
 deterministically — construct the state directly rather than racing a real

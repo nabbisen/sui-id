@@ -2,7 +2,7 @@
 
 > ## Decided 2026-11-14: §6's recommendation, authorized.
 > `@nabbisen`: *"Authorized."* The RFC is written:
-> [RFC 146](../rfcs/proposed/146-totp-step-selection-is-proved.md),
+> [RFC 146](../rfcs/accepted/146-totp-step-selection-is-proved.md),
 > Proposed. Its build waits for the soak, with no freeze exception.
 
 **Written.** 2026-11-14, by the architect.

@@ -396,7 +396,7 @@ multi-tenancy, to any schedule, or to any particular answer. The freeze in
    compromised deployment key exposes every tenant's data at rest, which
    undercuts the isolation §5 buys on the signing side. Per-tenant master
    keys multiply the rotation and custody story that [RFC
-   100](./100-master-key-rotation-recovery.md) is settling for a single key;
+   100](../accepted/100-master-key-rotation-recovery.md) is settling for a single key;
    RFC 100's Non-goals records that it assumes one key per deployment. This
    is a question for whoever schedules tenancy, and **not** a requirement on
    RFC 100.

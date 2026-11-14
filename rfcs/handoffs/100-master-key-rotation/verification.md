@@ -1,6 +1,6 @@
 # RFC 100 verification and closure
 
-**Governing RFC:** [RFC 100](../../proposed/100-master-key-rotation-recovery.md)
+**Governing RFC:** [RFC 100](../../accepted/100-master-key-rotation-recovery.md)
 
 ## Evidence contract
 

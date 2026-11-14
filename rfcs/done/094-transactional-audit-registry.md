@@ -1088,7 +1088,7 @@ constraint and K01 test prove exactly one active key after success.
 Offline master-key rotation, its journal, atomic file publication, old-key
 custody, and startup crash recovery are **not** part of this RFC. They were
 removed by the 2026-07-28 amendment and are owned by
-[RFC 100](../proposed/100-master-key-rotation-recovery.md).
+[RFC 100](../accepted/100-master-key-rotation-recovery.md).
 
 The split is by subject matter, not size. Every other part of this RFC answers
 one question: does a mutation and its audit record commit or roll back together?

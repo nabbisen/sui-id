@@ -489,7 +489,7 @@ Repeat for every inventory row:
 **Master-key rotation is not part of RFC 094.** The 2026-07-28 scope amendment
 moved `K04`, `K05`, the rotation journal, atomic key-file publication, startup
 crash recovery, and old-key custody to
-[RFC 100](../../proposed/100-master-key-rotation-recovery.md). Do not implement
+[RFC 100](../../accepted/100-master-key-rotation-recovery.md). Do not implement
 them in this milestone; RFC 100 carries its own checklist and crash-injection
 matrix.
 

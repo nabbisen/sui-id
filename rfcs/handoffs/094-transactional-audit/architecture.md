@@ -180,7 +180,7 @@ exactly one active key after success.
 
 **Master-key rotation is out of scope for RFC 094.** The 2026-07-28 scope
 amendment moved it, together with `K04` and `K05`, to
-[RFC 100](../../proposed/100-master-key-rotation-recovery.md): the rotation
+[RFC 100](../../accepted/100-master-key-rotation-recovery.md): the rotation
 journal, atomic key-file publication, startup crash recovery, and old-key
 custody are a filesystem-atomicity problem with their own threat model, and are
 reviewed there. RFC 100's database phases consume the Class-A seam this RFC

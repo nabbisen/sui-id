@@ -191,7 +191,7 @@ session-cap, event, and chain state.
 **Removed 2026-07-28 — master-key rotation.** `K04` (master-key database
 reseal phase) and `K05` (master-key activation completion) were removed from
 this inventory by the RFC 094 scope amendment and are owned by
-[RFC 100](../../proposed/100-master-key-rotation-recovery.md). Their database
+[RFC 100](../../accepted/100-master-key-rotation-recovery.md). Their database
 phases consume the Class-A seam established by RFC 094, which is why RFC 100
 depends on M2a. `K06` was reworded accordingly: it is subordinate to `S10` or
 `K01` only, and RFC 100 re-establishes its own subordination when its commands

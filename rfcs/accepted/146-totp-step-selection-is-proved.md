@@ -1,12 +1,15 @@
 # RFC 146 — TOTP step selection is proved, not only tested
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-14
+**Approved by.** `@nabbisen`, 2026-11-14: *"RFC 100 and 146 are accepted."*, after reviewing it himself.
 **Security review.** Required
 **Design prerequisites.** None.
 **Implementation prerequisites.** This RFC Accepted, and M7 (the real-environment soak) complete. The build waits for the soak, with no feature-freeze exception: `@nabbisen`, 2026-11-14, on the [scoping note](../../verification/verus-scoping-note-2026-11-14.md)'s §6 recommendation: *"Authorized."*
 **Closure prerequisites.** `totp::verify` decides its step only through `select_step`, which is pure and computes nothing but the step; the copy in `verification/verus/select_step.rs` proves §D2's three properties under the pinned Verus version, recorded with its output; a CI lane fails when the two bodies differ, and its negative fixture proves it does; every existing TOTP test passes unchanged, and a property test shows the old and new `verify` agree on every input it draws; and each of the scoping note's three planted bugs is refused by the proof, recorded.
 **Tracks.** Security assurance, formal verification: the first target, and the only one until it has paid for itself.
 **Touches.** `crates/sui-id-core/src/authn/totp.rs`, `crates/sui-id-core/src/authn/totp/tests.rs`, `verification/verus/select_step.rs` (new), `verification/README.md`, `xtask/` (the drift check), `.github/workflows/ci.yml` and `contracts/gate-inputs.toml` (its lane), `docs/src/contributing/` (how to re-prove).
+**Independent design review.** [Design review record, 2026-11-14](../handoffs/146-totp-step-selection-is-proved/design-review-2026-11-14.md). By `@nabbisen`, who did not author this RFC.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/146-totp-step-selection-is-proved/README.md`](../handoffs/146-totp-step-selection-is-proved/README.md)

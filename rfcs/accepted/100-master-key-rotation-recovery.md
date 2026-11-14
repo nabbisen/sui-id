@@ -1,15 +1,18 @@
 # RFC 100 — Master-Key Rotation Crash Recovery
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-14
+**Approved by.** `@nabbisen`, 2026-11-14: *"RFC 100 and 146 are accepted."*, after reviewing it himself.
 **Security review.** Required
 **Design prerequisites.** RFC 094 Accepted in its amended form with master-key
 rotation removed to this RFC; the filesystem-atomicity threat delta
 independently reviewed.
 **Implementation prerequisites.** RFC 094 M2a Implemented — this RFC's `K04`/`K05`
 database phases use that Class-A transaction seam; this RFC Accepted; the
-crash-injection harness approved. **As of 2026-11-14 the first is met**:
+crash-injection harness approved. **As of 2026-11-14 the first two are met**:
 RFC 094 closed in `v0.88.0`, and its seam carries a reseal command already
-(K07; see *Refresh against the code as built*). The other two are open.
+(K07; see *Refresh against the code as built*); this RFC was accepted
+2026-11-14. **The harness approval is open.**
 **Closure prerequisites.** Every transition prefix in the recovery table either
 resumes idempotently or returns cleanly to `OldReady`; no prefix yields mixed
 ciphertext, a missing active key, or an overstated audit record; independent
@@ -20,6 +23,7 @@ adversarial closure review accepts the durable evidence. **Consolidated 2026-10-
 recovery, `master_key_rotation` schema, `sui-id-store` encrypted-column reseal,
 audit registry entries `admin.master_key.database_resealed` and
 `admin.master_key.activated`, operator documentation.
+**Independent design review.** [Design review record, 2026-11-14](../handoffs/100-master-key-rotation/design-review-2026-11-14.md). By `@nabbisen`, who did not author this RFC or its refresh.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** Independent architecture reviewer acting as
 requirements architect, 2026-07-28.

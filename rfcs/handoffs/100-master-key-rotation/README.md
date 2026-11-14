@@ -1,11 +1,11 @@
 # RFC 100 developer handoff
 
-**Governing RFC:** [RFC 100](../../proposed/100-master-key-rotation-recovery.md) — Proposed
+**Governing RFC:** [RFC 100](../../accepted/100-master-key-rotation-recovery.md) — **Accepted 2026-11-14** ([design review record](./design-review-2026-11-14.md))
 **Milestone:** M2c — master-key rotation recovery
 **Audience:** implementer assigned after RFC 100 is Accepted
-**Status:** Planning companion; inherits the governing RFC's current status —
-Proposed, pending independent design review and acceptance. Implementation is
-blocked until then.
+**Status:** Planning companion. The RFC is **Accepted** (2026-11-14). Implementation
+is still blocked on one prerequisite: **the crash-injection harness approved**.
+Only `0.91.0` stage 1 (below), dispatched ahead of acceptance, is in flight.
 
 ## Entry gate
 
@@ -13,10 +13,12 @@ All of:
 
 1. RFC 100 Accepted after independent design review — **by a reviewer who did
    not author it**; the RFC records that its author should not be its security
-   reviewer.
+   reviewer. **Met 2026-11-14.**
 2. RFC 094 **M2a** Implemented. `K04` and `K05` are Class-A database commands and
    consume that transaction seam; they cannot be built before it exists.
-3. Crash-injection harness approved.
+   **Met** (RFC 094 closed in `v0.88.0`; the RFC's refresh makes K07 the
+   database phase, so `K04` is not built).
+3. Crash-injection harness approved. **Open.**
 
 ## Why this is separate from RFC 094
 
