@@ -17,13 +17,17 @@
 > unchanged. **S3 landed the same day**, reviewed, with one architect fold-in —
 > `.git-exclude/reviewed/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md`.
 
-> ## D1 written 2026-11-14, for your approval —
+> ## D1 approved, and D2 done, 2026-11-14 (`@nabbisen`: 1. *"Approved."* 2. *"Accepted."*)
+> The harness meets RFC 100's last implementation prerequisite, and RFC 100 is
+> amended (non-material). D2 rewrote `implementation.md` and updated
+> `crash-matrix.md` and `verification.md`. RFC 100's build is planned for `0.92.0`.
+>
+> ## D1 written 2026-11-14 —
 > [`crash-injection-harness-design-2026-11-14.md`](crash-injection-harness-design-2026-11-14.md).
 > Its prototype found that **K07's commit is not durable when it returns** (WAL
 > with `synchronous=NORMAL`), which stage 1's premise had wrong. **Stage 1 gains
 > part A2**, dispatched the same day —
 > [`0.91.0-stage-1-addendum-the-reseal-is-not-durable-on-return-2026-11-14.md`](0.91.0-stage-1-addendum-the-reseal-is-not-durable-on-return-2026-11-14.md).
-> D2 waits for D1's approval, so the crash matrix names the approved modes.
 
 **Proposed.** 2026-11-14, by the architect, on `@nabbisen`'s *"Scope 0.91
 carefully."*, after `0.90.0` was published (`44d442d`).

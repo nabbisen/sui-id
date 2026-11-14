@@ -1,6 +1,10 @@
 # RFC 100 crash-injection matrix
 
 **Governing RFC:** [RFC 100](../../accepted/100-master-key-rotation-recovery.md)
+**Updated 2026-11-14** (cycle M, D2): three failure modes, per the
+[approved harness](./crash-injection-harness-design-2026-11-14.md); the
+as-built names (K07, `admin.master_key.resealed`, `admin.master_key.rotated`),
+per RFC 100's refresh; K07's and K05's durability, per its prefix 4.
 
 Normative for implementation and closure. Every row must be entered
 deterministically — construct the state directly rather than racing a real
@@ -14,8 +18,8 @@ rotation — and every row must be observed, not reasoned about.
   database;
 - **M3** no externally published key artifact exists before the authenticated
   journal entry that binds its exact path;
-- **M4** `admin.master_key.database_resealed` asserts only that the database
-  phase committed; only `admin.master_key.activated` asserts completion;
+- **M4** `admin.master_key.resealed` asserts only that the database phase
+  committed; only `admin.master_key.rotated` asserts completion;
 - **M5** the old key is retained only by an explicit reviewable disposition;
 - **M6** any fingerprint, ownership, permission, symlink, sentinel or state
   mismatch fails closed before service readiness and preserves all files.
@@ -30,7 +34,7 @@ rotation — and every row must be observed, not reasoned about.
 | `Intent`/`NextTempVerified`, `next.write` or `next.ready` present | Re-read fingerprint, encoding, owner and mode; complete no-replace publication and directory fsync and advance, or delete the bound temporary and clean to `OldReady` |
 | `NextPublished`, partial `backup.write` | Revalidate `next.ready`; delete or rewrite only the bound partial backup temporary; resume or clean to `OldReady` |
 | `NextPublished`/`BackupTempVerified`, backup temp or final present | Verify old fingerprint and sentinel, owner and mode; complete publication and fsync and advance, or clean per the bound disposition |
-| `BackupPublished`/`Prepared`, DB and active both old | K04 did not commit. Validate all artifacts, then resume K04 **or** remove `next.ready`, journal and workspace. Backup follows the bound disposition and is **never guessed from its filename** |
+| `BackupPublished`/`Prepared`, DB and active both old | K07 did not commit, or its commit did not survive (prefix 4). Validate all artifacts, then resume K04 **or** remove `next.ready`, journal and workspace. Backup follows the bound disposition and is **never guessed from its filename** |
 | DB new and pending, active old, `next.ready` new | Verify fingerprints and sentinel, atomically activate `next.ready`, fsync, then run K05 |
 | DB new and pending, active new | Replacement completed before the crash: run K05 idempotently |
 | DB new and complete, active new | Normal startup; remove only matching stale journal metadata |
@@ -38,8 +42,10 @@ rotation — and every row must be observed, not reasoned about.
 
 ## Injection points
 
-Inject short writes **and** process termination at each. Both failure modes,
-independently.
+Inject **all three failure modes** at each, independently: a short write;
+process termination; and a power loss, which loses everything not yet synced
+(the Simulated adapter enumerates every state it can leave, and each is
+materialized and started against).
 
 **Preparation**
 1. workspace creation, before and after parent fsync
@@ -51,16 +57,17 @@ independently.
 7. `backup.write` and its publication, same points as 5–6
 
 **Database and activation**
-8. K04 — before chain-head read; after reseal before append; after hash before insert; after insert before commit; at commit
+8. K07 — before chain-head read; after reseal before append; after hash before insert; after insert before commit; at commit; **after commit, before the checkpoint that makes it durable**
 9. active-file replacement — before, during, after; and before the directory fsync
-10. K05 — append and commit
+10. K05 — append and commit; **after commit, before the checkpoint**
 
 ## Required outcomes
 
-- **Every pre-K04 prefix** either idempotently resumes or cleanly returns to
+- **Every pre-K07 prefix** (including one whose K07 commit a power loss rolled
+  back) either idempotently resumes or cleanly returns to
   `OldReady`. A workspace containing only a partial unpublished intent is always
   safely cleanable.
-- **Every post-K04 prefix** reaches `Complete`.
+- **Every post-K07 prefix**, K07 durable, reaches `Complete`.
 - **No prefix** produces mixed ciphertext, a missing active key, or an audit
   record claiming more than committed.
 - At every prefix the service either starts against a consistent database or

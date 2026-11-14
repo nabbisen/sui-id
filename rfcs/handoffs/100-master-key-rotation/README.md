@@ -3,9 +3,11 @@
 **Governing RFC:** [RFC 100](../../accepted/100-master-key-rotation-recovery.md) — **Accepted 2026-11-14** ([design review record](./design-review-2026-11-14.md))
 **Milestone:** M2c — master-key rotation recovery
 **Audience:** implementer assigned after RFC 100 is Accepted
-**Status:** Planning companion. The RFC is **Accepted** (2026-11-14). Implementation
-is still blocked on one prerequisite: **the crash-injection harness approved**.
-Only `0.91.0` stage 1 (below), dispatched ahead of acceptance, is in flight.
+**Status:** Planning companion. The RFC is **Accepted** (2026-11-14), and **every
+implementation prerequisite is met**: the crash-injection harness was approved
+2026-11-14. The build is planned for `0.92.0`, stage by stage
+([`implementation.md`](./implementation.md), rewritten 2026-11-14); nothing of it
+is dispatched yet. Only `0.91.0` stage 1, with its part A2, is in flight.
 
 ## Entry gate
 
@@ -18,7 +20,8 @@ All of:
    consume that transaction seam; they cannot be built before it exists.
    **Met** (RFC 094 closed in `v0.88.0`; the RFC's refresh makes K07 the
    database phase, so `K04` is not built).
-3. Crash-injection harness approved. **Open.**
+3. Crash-injection harness approved. **Met 2026-11-14** —
+   [`crash-injection-harness-design-2026-11-14.md`](./crash-injection-harness-design-2026-11-14.md).
 
 ## Why this is separate from RFC 094
 

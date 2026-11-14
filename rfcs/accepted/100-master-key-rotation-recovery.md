@@ -9,10 +9,11 @@ rotation removed to this RFC; the filesystem-atomicity threat delta
 independently reviewed.
 **Implementation prerequisites.** RFC 094 M2a Implemented — this RFC's `K04`/`K05`
 database phases use that Class-A transaction seam; this RFC Accepted; the
-crash-injection harness approved. **As of 2026-11-14 the first two are met**:
+crash-injection harness approved. **All three are met as of 2026-11-14**:
 RFC 094 closed in `v0.88.0`, and its seam carries a reseal command already
 (K07; see *Refresh against the code as built*); this RFC was accepted
-2026-11-14. **The harness approval is open.**
+2026-11-14; and the harness was approved 2026-11-14 (`@nabbisen`:
+*"Approved."*), as designed in [`crash-injection-harness-design-2026-11-14.md`](../handoffs/100-master-key-rotation/crash-injection-harness-design-2026-11-14.md).
 **Closure prerequisites.** Every transition prefix in the recovery table either
 resumes idempotently or returns cleanly to `OldReady`; no prefix yields mixed
 ciphertext, a missing active key, or an overstated audit record; independent
@@ -23,6 +24,10 @@ adversarial closure review accepts the durable evidence. **Consolidated 2026-10-
 recovery, `master_key_rotation` schema, `sui-id-store` encrypted-column reseal,
 audit registry entries `admin.master_key.database_resealed` and
 `admin.master_key.activated`, operator documentation.
+**Amended.** 2026-11-14, **non-material** (`@nabbisen`: *"Accepted."*, on the
+[harness design](../handoffs/100-master-key-rotation/crash-injection-harness-design-2026-11-14.md)'s §7): the *Test plan* adds a third failure mode, the
+loss of everything not yet synced; the refresh's prefix 1 is corrected, and a
+fourth prefix is added. No design decision changed.
 **Independent design review.** [Design review record, 2026-11-14](../handoffs/100-master-key-rotation/design-review-2026-11-14.md). By `@nabbisen`, who did not author this RFC or its refresh.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** Independent architecture reviewer acting as
@@ -80,8 +85,9 @@ against them, and four changes to the design that the measurements imply.
 
 **The crash prefixes this leaves open today**, in the order rotation runs:
 1. **After K07 commits, before the staged key reaches the disk.** The
-   database's commit is durable; the key may still be only in the page
-   cache. A power loss here **makes every sealed column unreadable**, short of
+   key may still be only in the page cache, while the database's commit may
+   already be on disk. *(Corrected 2026-11-14: this said the commit is
+   durable. Until a checkpoint it is not, which is prefix 4.)* A power loss here **makes every sealed column unreadable**, short of
    restoring the pre-rotation backup the command tells the operator to take
    (which opens with the old key). The `v0.87.1` fix
    closed the disk-full case, where the write fails before the reseal, but
@@ -95,6 +101,15 @@ against them, and four changes to the design that the measurements imply.
    earlier state: prefix 2's, or the old key at `key_file` over a database
    already resealed under the new one. That is a wrong-key start, which
    nothing detects today (the table's *Detecting the wrong key* row).
+4. **After K07 commits, before a checkpoint** (added 2026-11-14, found by the
+   harness prototype). Connections run WAL with `synchronous=NORMAL`
+   (`sui-id-store/src/db.rs:43-44`). In that mode a commit *"might roll back
+   following a power loss"* (SQLite, `PRAGMA synchronous`) until the next
+   checkpoint. Once the new key is renamed into place and synced, a power loss
+   can roll the reseal back, leaving the database under the old key with the
+   new key active. Another wrong-key start. **In this RFC's build,
+   `DbCommitted` means durable, not only committed**, and the same applies to
+   K05.
 
 None of these is attacker-reachable. Rotation is an offline command the
 operator runs, which is why this RFC exists rather than a security advisory.
@@ -129,7 +144,8 @@ The motivation's *"not crash-safe"* stands. These prefixes make it specific.
    above, and is required by the design anyway:
    - `write_key_file` calls `sync_all` and fsyncs the parent directory;
      rotation fsyncs the directory after each rename. That closes prefixes 1
-     and 3. It also makes `cli.rs`'s *"the only durable copy"* (`:484`, `:616`)
+     and 3. With a checkpoint inside K07 before it returns (stage 1's part
+     A2, added 2026-11-14), it closes prefix 4 too. It also makes `cli.rs`'s *"the only durable copy"* (`:484`, `:616`)
      true.
    - Rotation refuses when the key's origin is `Env`, before opening the
      database.
@@ -297,7 +313,8 @@ backup records timestamp and operator identity.
 
 ## Test plan
 
-Inject short writes and process termination at: workspace creation; every
+Inject short writes, process termination, and the loss of everything not yet
+synced (a power loss; the [harness](../handoffs/100-master-key-rotation/crash-injection-harness-design-2026-11-14.md), §2 and §4) at: workspace creation; every
 initial and update temporary write; file fsync; readback verification;
 no-replace and replace publication; directory fsync; each journal transition;
 K04 mutation, append and commit; active replacement; and K05 append and commit.
@@ -372,5 +389,5 @@ These are proposals, not decisions.
   acceptance; not `0.90.0`, so the tagged tree stays the one the live run
   tests. `@nabbisen`, 2026-11-14: *"You recommendation is accepted."*
   Dispatched: [`../handoffs/100-master-key-rotation/0.91.0-stage-1-two-rotation-fixes-2026-11-14.md`](../handoffs/100-master-key-rotation/0.91.0-stage-1-two-rotation-fixes-2026-11-14.md).
-- **The crash-injection harness**, whose approval is an implementation
-  prerequisite.
+- **The crash-injection harness: approved.** `@nabbisen`, 2026-11-14:
+  *"Approved."* — [`crash-injection-harness-design-2026-11-14.md`](../handoffs/100-master-key-rotation/crash-injection-harness-design-2026-11-14.md).

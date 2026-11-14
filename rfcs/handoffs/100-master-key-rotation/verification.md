@@ -14,8 +14,10 @@ Additional to this RFC:
   construction" without an executed test does not close.
 - **State is constructed directly.** Racing a real rotation to reach a prefix is
   not deterministic and is not accepted as evidence for that row.
-- **Both failure modes per injection point** — short write and process
-  termination — are exercised independently.
+- **All three failure modes per injection point**: short write, process
+  termination, and power loss (the
+  [approved harness](./crash-injection-harness-design-2026-11-14.md)).
+  Each is exercised independently. Updated 2026-11-14 from two.
 - **Fingerprints, never key material, appear in evidence.** No log, test output,
   journal, audit record, or review package may contain key bytes.
 
@@ -25,12 +27,13 @@ Additional to this RFC:
    applicable injection point.
 2. No prefix produces mixed ciphertext, a missing active key, or an overstated
    audit record.
-3. `K04` and `K05` use the RFC 094 Class-A seam with observed rollback evidence
-   for injected append and commit failures.
-4. `admin.master_key.database_resealed` is proven not to imply completion: a
-   test asserts that a crash between K04 and activation leaves an audit trail
+3. K07 (RFC 100's `K04`) and K05 use the RFC 094 Class-A seam, with observed
+   rollback evidence for injected append and commit failures, and **each is
+   durable before anything relies on it** (prefix 4).
+4. `admin.master_key.resealed` is proven not to imply completion: a
+   test asserts that a crash between K07 and activation leaves an audit trail
    that correctly describes a pending activation.
-5. CLI success is proven unreachable before K05 commits.
+5. CLI success is proven unreachable before K05 is durable.
 6. Old-key custody is recorded before `Complete`; a retained backup is never a
    startup candidate; removal records timestamp and operator identity.
 7. Platform and provider refusals occur before any file is created.

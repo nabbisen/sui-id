@@ -1,5 +1,12 @@
 # RFC 100 — the crash-injection harness, for approval
 
+> ## Approved 2026-11-14. `@nabbisen`: 1. *"Approved."* 2. *"Accepted."*
+> 1. **The harness**, as §4 and §6 give it. RFC 100's last implementation
+>    prerequisite is met.
+> 2. **§7's two sentences**, recorded as a non-material amendment in RFC 100's
+>    header. The handoff (`implementation.md`, `crash-matrix.md`,
+>    `verification.md`) was brought up to both the same day (cycle M, D2).
+
 **Proposed.** 2026-11-14, by the architect. This is cycle M's D1.
 **What it is for.** RFC 100's last implementation prerequisite, *"the
 crash-injection harness approved"* (RFC 100 `:10-15`). With it approved, the
