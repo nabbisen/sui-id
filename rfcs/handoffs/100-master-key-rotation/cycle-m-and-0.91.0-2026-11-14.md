@@ -17,6 +17,14 @@
 > unchanged. **S3 landed the same day**, reviewed, with one architect fold-in —
 > `.git-exclude/reviewed/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md`.
 
+> ## D1 written 2026-11-14, for your approval —
+> [`crash-injection-harness-design-2026-11-14.md`](crash-injection-harness-design-2026-11-14.md).
+> Its prototype found that **K07's commit is not durable when it returns** (WAL
+> with `synchronous=NORMAL`), which stage 1's premise had wrong. **Stage 1 gains
+> part A2**, dispatched the same day —
+> [`0.91.0-stage-1-addendum-the-reseal-is-not-durable-on-return-2026-11-14.md`](0.91.0-stage-1-addendum-the-reseal-is-not-durable-on-return-2026-11-14.md).
+> D2 waits for D1's approval, so the crash matrix names the approved modes.
+
 **Proposed.** 2026-11-14, by the architect, on `@nabbisen`'s *"Scope 0.91
 carefully."*, after `0.90.0` was published (`44d442d`).
 **Whose turn.** Yours, for the three decisions in §6. Until then, the architect
