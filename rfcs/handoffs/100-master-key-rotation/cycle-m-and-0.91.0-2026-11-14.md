@@ -90,7 +90,7 @@ start in `0.92.0`.
 | **P** | **`0.91.0`'s preparation**: version, CHANGELOG, the full local matrix. Dispatched to the dev team, as the mechanical half of every release is | **Landed** 2026-11-15 — [`release-0.91.0-preparation-2026-11-15.md`](release-0.91.0-preparation-2026-11-15.md) | small |
 | **S14** | **096-B1 stage 14, the live run against a real upstream**: Duende's public demo since 2026-11-15, not Google. On P's commit — [runbook](../096-upstream-oidc-federation/096-b1-stage14-live-run-runbook-2026-11-12.md) | **Deferred again 2026-11-15**, before step 2 (step 1 passed on `a0a6c1a`). Its new slot: cycle N's prepared commit, set 2026-11-15 | your time |
 
-**At the cut** (the architect's commit before the tag, after stage 14's record):
+**At the cut** (the architect's commit before the tag; stage 14 was deferred, so its record is not awaited). *Done 2026-11-15: the date was already the tag's day, and the Quick Start's `VERSION=` is bumped:*
 - set the `CHANGELOG` date to the tag's day;
 - bump the Quick Start's `VERSION=` (`docs/src/getting-started/quick-start.md:27`)
   to `0.91.0`. It is held back from P so that `main` does not send a reader
