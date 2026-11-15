@@ -1,6 +1,8 @@
 # RFC 149 — The admin console is organised around what an operator does
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-15
+**Approved by.** `@nabbisen`, 2026-11-15: *"All accepted and authorized."*, on the architect's review of its mockup questions.
 **Security review.** Required
 **Design prerequisites.** RFC 144 Accepted. Its five rules are the floor any
 palette here must meet.
@@ -23,6 +25,7 @@ console.
 `crates/sui-id-web/src/components/**`, `crates/sui-id-web/src/tokens.rs`,
 `crates/sui-id-i18n/src/locale/*.rs`, `crates/sui-id/src/http/router.rs`, and
 the client handlers' form parsing.
+**Independent design review.** [Design review record, 2026-11-15](../handoffs/149-the-console-follows-the-operator/design-review-2026-11-15.md), by the architect at `@nabbisen`'s request (*"Review them carefully by yourself with my fundamental philosophy."*), `ROADMAP.md` §S1c's owner-invoked exception.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/149-the-console-follows-the-operator/README.md`](../handoffs/149-the-console-follows-the-operator/README.md)
@@ -166,7 +169,7 @@ and the setup wizard's steps.
 >    token's `scope` claim today (`oidc/tokens.rs:146`), which is how an
 >    operator's own API can authorize.
 >
-> The RFC itself is not yet accepted.
+> **The RFC was accepted the same day.**
 
 1. **Grouped sidebar, or grouped top bar?** The architect recommends the
    **sidebar**. Six groups with labels fit there without hiding anything,

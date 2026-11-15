@@ -18,7 +18,7 @@
 > `.git-exclude/reviewed/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md`.
 
 > ## Stage 14 deferred again, 2026-11-15 (`@nabbisen`: *"Deferred, because we have a lot of work around fuctions and UI/UX."*)
-> So `0.91.0` is tagged without it. Its slot moves on, and is not yet set.
+> So `0.91.0` is tagged without it. Its new slot is cycle N's prepared commit.
 > M4-B stays open until it runs.
 >
 > ## D1 approved, and D2 done, 2026-11-14 (`@nabbisen`: 1. *"Approved."* 2. *"Accepted."*)
@@ -88,7 +88,7 @@ start in `0.92.0`.
 | **S3** | **The Kani harnesses, and the guard the tests lack** — see §5. On your decision 2 | **Landed** 2026-11-14 | small |
 | **S4** | **One false comment**: `keyring.rs:36-41` says the variable is scrubbed, then that it is deliberately left set. Nothing removes it. sui-id spawns no child process outside tests, so only the comment is wrong | **Landed** 2026-11-14, folded into S1's review | trivial |
 | **P** | **`0.91.0`'s preparation**: version, CHANGELOG, the full local matrix. Dispatched to the dev team, as the mechanical half of every release is | **Landed** 2026-11-15 — [`release-0.91.0-preparation-2026-11-15.md`](release-0.91.0-preparation-2026-11-15.md) | small |
-| **S14** | **096-B1 stage 14, the live run against a real upstream**: Duende's public demo since 2026-11-15, not Google. On P's commit — [runbook](../096-upstream-oidc-federation/096-b1-stage14-live-run-runbook-2026-11-12.md) | **Deferred again 2026-11-15**, before step 2 (step 1 passed on `a0a6c1a`). New slot not yet set; the architect proposes cycle N's prepared commit | your time |
+| **S14** | **096-B1 stage 14, the live run against a real upstream**: Duende's public demo since 2026-11-15, not Google. On P's commit — [runbook](../096-upstream-oidc-federation/096-b1-stage14-live-run-runbook-2026-11-12.md) | **Deferred again 2026-11-15**, before step 2 (step 1 passed on `a0a6c1a`). Its new slot: cycle N's prepared commit, set 2026-11-15 | your time |
 
 **At the cut** (the architect's commit before the tag, after stage 14's record):
 - set the `CHANGELOG` date to the tag's day;

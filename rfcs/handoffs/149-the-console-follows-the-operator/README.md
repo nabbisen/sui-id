@@ -1,17 +1,14 @@
 # RFC 149 — handoff
 
-**RFC.** [`../../proposed/149-the-console-follows-the-operator.md`](../../proposed/149-the-console-follows-the-operator.md)
-**Status.** **Proposed: build-prohibited** under RFC 000. Nothing here is
-dispatched. The RFC is for acceptance only once the mockups below have
-been reviewed. Under the operator-experience track, nothing is built until
-the track's schedule and every one of its RFCs exist.
+**RFC.** [`../../accepted/149-the-console-follows-the-operator.md`](../../accepted/149-the-console-follows-the-operator.md)
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Not yet dispatched: its build is cycle P's, authorized 2026-11-15.
 
 ## 2026-11-15: the mockups' questions answered
 
 By the architect, at the owner's request:
 [`design-review-2026-11-15.md`](design-review-2026-11-15.md). The answers are
 the grouped sidebar, palette B (light warning raised to `#9D6600`), and
-custom scopes kept. The RFC is not yet accepted.
+custom scopes kept. **The RFC was accepted 2026-11-15.**
 
 ## The mockups
 

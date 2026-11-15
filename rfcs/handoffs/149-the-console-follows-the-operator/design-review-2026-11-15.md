@@ -1,6 +1,6 @@
 # RFC 149 — the design review record, 2026-11-15
 
-**RFC.** [`../../proposed/149-the-console-follows-the-operator.md`](../../proposed/149-the-console-follows-the-operator.md)
+**RFC.** [`../../accepted/149-the-console-follows-the-operator.md`](../../accepted/149-the-console-follows-the-operator.md)
 **Reviewer.** **The architect, at `@nabbisen`'s request**: *"Review them carefully
 by yourself with my fundamental philosophy."*, on the RFC's three mockup
 questions. That is `ROADMAP.md` §S1c's owner-invoked exception, as for
@@ -75,4 +75,4 @@ already places it in layer 2, and refuses a near-miss of a standard scope
 - RFC 149 §8 records these three answers.
 - `mockups/palettes.html` shows B's raised warning value.
 
-**It does not accept the RFC**, which remains Proposed.
+**It does not accept the RFC.** The RFC was accepted the same day, on this review (`@nabbisen`: *"All accepted and authorized."*).
