@@ -141,12 +141,25 @@ jobs:
         with:
           toolchain: stable
 
+      # For scripts/wait-for-crate-download.py, below.
+      - name: Install Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
       # RFC 141 §4: six explicit sequential steps, in the dependency
       # order docs/src/contributing/release-process.md documents --
       # not a loop over a list, so the order is readable as six lines
       # rather than inferred from data. `cargo publish` waits for the
-      # crate to reach the index before returning, so the next step's
-      # dependency resolution needs no hand-tuned sleep.
+      # crate to reach the index before returning -- but **not** for the
+      # download CDN (static.crates.io), which the next crate's own
+      # verification fetches from. `0.91.0`'s publish (run 43708004082)
+      # stopped on exactly that: a cached 404 for sui-id-shared 0.91.0,
+      # seconds after it was published. So after each crate another one
+      # depends on, a step waits until the CDN serves it, at the exact URL
+      # cargo fetches (scripts/wait-for-crate-download.py). No hand-tuned
+      # sleep: it polls, and fails with the URL and status if the CDN
+      # never answers.
 
       # 1. Foundation: shared types (no internal deps)
       - name: Authenticate with crates.io (sui-id-shared)
@@ -157,6 +170,10 @@ jobs:
         run: cargo publish -p sui-id-shared
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth-shared.outputs.token }}
+      - name: Wait until sui-id-shared is downloadable
+        run: python3.14 scripts/wait-for-crate-download.py --crate sui-id-shared --version "$VERSION"
+        env:
+          VERSION: ${{ inputs.tag }}
 
       # 2. Foundation: i18n (no internal deps)
       - name: Authenticate with crates.io (sui-id-i18n)
@@ -167,6 +184,10 @@ jobs:
         run: cargo publish -p sui-id-i18n
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth-i18n.outputs.token }}
+      - name: Wait until sui-id-i18n is downloadable
+        run: python3.14 scripts/wait-for-crate-download.py --crate sui-id-i18n --version "$VERSION"
+        env:
+          VERSION: ${{ inputs.tag }}
 
       # 3. Storage: depends on sui-id-shared
       - name: Authenticate with crates.io (sui-id-store)
@@ -177,6 +198,10 @@ jobs:
         run: cargo publish -p sui-id-store
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth-store.outputs.token }}
+      - name: Wait until sui-id-store is downloadable
+        run: python3.14 scripts/wait-for-crate-download.py --crate sui-id-store --version "$VERSION"
+        env:
+          VERSION: ${{ inputs.tag }}
 
       # 4. Domain logic: depends on sui-id-shared, sui-id-store, sui-id-i18n
       - name: Authenticate with crates.io (sui-id-core)
@@ -187,6 +212,10 @@ jobs:
         run: cargo publish -p sui-id-core
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth-core.outputs.token }}
+      - name: Wait until sui-id-core is downloadable
+        run: python3.14 scripts/wait-for-crate-download.py --crate sui-id-core --version "$VERSION"
+        env:
+          VERSION: ${{ inputs.tag }}
 
       # 5. UI: depends on sui-id-shared, sui-id-store, sui-id-i18n
       - name: Authenticate with crates.io (sui-id-web)
@@ -197,6 +226,10 @@ jobs:
         run: cargo publish -p sui-id-web
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth-web.outputs.token }}
+      - name: Wait until sui-id-web is downloadable
+        run: python3.14 scripts/wait-for-crate-download.py --crate sui-id-web --version "$VERSION"
+        env:
+          VERSION: ${{ inputs.tag }}
 
       # 6. Binary crate: depends on all five
       - name: Authenticate with crates.io (sui-id)

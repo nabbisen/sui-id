@@ -81,12 +81,25 @@ is not something to depend on.
    intended shape (RFC 141 §2), deferred as a future improvement.
 4. **Six publishes**, written as six named steps in the order below,
    each preceded by its own token mint. `cargo publish` waits for the
-   crate to reach the index before returning, so no step sleeps.
+   crate to reach the **index** before returning, but **not** for the
+   download CDN that the next crate's verification fetches from. So after
+   each of the first five, `scripts/wait-for-crate-download.py` polls the
+   exact URL cargo will fetch, until it answers. It never sleeps a fixed
+   time, and fails with the URL and status if the CDN never answers.
+   *(Added in `0.91.1`, after `0.91.0`'s publish stopped on a cached 404 for
+   a crate published seconds before.)*
 5. **A partial-publish report, on failure**, naming exactly which
    crates already reached the registry. That is the state `cargo yank`
    cannot undo and the one a retry must not repeat — retry from the
    next crate, never from the first. Also says, now, that no GitHub
-   Release was created.
+   Release was created. **The workflow cannot itself resume from the
+   next crate**: a re-run starts again at `sui-id-shared`, which then
+   already exists. So a stopped publish is finished one of two ways:
+   - **by the manual loop below**, from the next crate, which needs the
+     workstation token while Trusted-Publishing-only mode is off;
+   - **or by a patch release that supersedes it**, published whole through
+     the workflow, with the stopped version recorded in `CHANGELOG.md` as
+     *never published in full; superseded* (as `0.91.0` was, by `0.91.1`).
 6. **`github-release` — creates the Release** (RFC 143 stage 3), after
    `publish` succeeds, in the `release` environment, with `contents:
    write` and nothing else. Downloads the artifacts `build-artifacts`

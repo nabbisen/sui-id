@@ -7,14 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.91.0] — 2026-11-15
+## [0.91.1] — 2026-11-15
 
 **Master-key rotation is now durable against a power loss, except
 between its two renames, and refuses a key that came from
 `SUI_ID_MASTER_KEY`.** The Kani proof harnesses in `authz.rs` are
 removed, and `sui-id-store` loses `users::set_last_login` and gates
 `signing_keys::insert_with_plaintext` behind `test-support`. Two flaky
-tests are also fixed.
+tests are also fixed, and the release workflow no longer races crates.io's
+download CDN. **This is `0.91.0`'s content**: `0.91.0` was never published in
+full (see its entry below).
 
 ### Changed
 
@@ -63,6 +65,26 @@ tests are also fixed.
   one test's fixed secret it was the right code at 2026-11-14 22:20:30 UTC,
   and that test failed then. Nine sites now ask for a code that no accepted
   step takes.
+
+- **The publish workflow waits for each crate to be downloadable before
+  the next one.** `cargo publish` waits for the registry index, but the next
+  crate's verification downloads from crates.io's CDN, which can still
+  answer 404 for a crate published seconds before. `0.91.0`'s publish
+  stopped on exactly that. A new step, `scripts/wait-for-crate-download.py`,
+  polls the exact URL cargo fetches after each of the first five crates,
+  and fails with that URL and its status if the CDN never answers.
+
+## [0.91.0] — 2026-11-15
+
+> **Never published in full; superseded by 0.91.1.** Tagged 2026-11-15 at
+> `c5b95ee`. Its publish (run 43708004082) stopped after `sui-id-shared` and
+> `sui-id-i18n` 0.91.0 reached crates.io: `sui-id-store`'s verification then
+> got a cached 404 from crates.io's download CDN for the just-published
+> `sui-id-shared`. The other four crates, and the GitHub Release, were never
+> published. Rather than finish it from a long-lived workstation token, the
+> same changes ship as `0.91.1`, through the workflow, with that race fixed.
+> **Its changes are listed under 0.91.1.** Depend on `0.91.1`, not on the two
+> stray `0.91.0` crates.
 
 ## [0.90.0] — 2026-11-14
 
