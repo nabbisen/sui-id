@@ -156,6 +156,18 @@ and the setup wizard's steps.
 
 ## 8 — questions for the owner, answered from the mockups
 
+> **Answered 2026-11-15, by the architect at `@nabbisen`'s request**
+> (*"Review them carefully by yourself with my fundamental philosophy."*;
+> [`../handoffs/149-the-console-follows-the-operator/design-review-2026-11-15.md`](../handoffs/149-the-console-follows-the-operator/design-review-2026-11-15.md)):
+> 1. **the grouped sidebar**;
+> 2. **palette B**, with its light-mode warning raised to `#9D6600`
+>    (4.52:1);
+> 3. **additional scopes are kept**, guarded as in §4. They reach the access
+>    token's `scope` claim today (`oidc/tokens.rs:146`), which is how an
+>    operator's own API can authorize.
+>
+> The RFC itself is not yet accepted.
+
 1. **Grouped sidebar, or grouped top bar?** The architect recommends the
    **sidebar**. Six groups with labels fit there without hiding anything,
    and on a narrow screen it folds into one menu button.

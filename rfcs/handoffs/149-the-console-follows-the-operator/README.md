@@ -6,7 +6,14 @@ dispatched. The RFC is for acceptance only once the mockups below have
 been reviewed. Under the operator-experience track, nothing is built until
 the track's schedule and every one of its RFCs exist.
 
-## The mockups, for the owner's review
+## 2026-11-15: the mockups' questions answered
+
+By the architect, at the owner's request:
+[`design-review-2026-11-15.md`](design-review-2026-11-15.md). The answers are
+the grouped sidebar, palette B (light warning raised to `#9D6600`), and
+custom scopes kept. The RFC is not yet accepted.
+
+## The mockups
 
 Open each file in a browser, straight from disk. They are static: no
 script, and no network.
