@@ -3,6 +3,15 @@
 **RFC.** [`../../accepted/144-legible-to-older-eyes.md`](../../accepted/144-legible-to-older-eyes.md)
 **Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Not yet dispatched: its build is scheduled in the ROADMAP's cycles N–P, authorized 2026-11-15.
 
+## 2026-11-16: built with palette B's values
+
+RFC 149 §6 chose palette **B**, computed to the same five rules. So the
+refresh's table of values (palette A's) is **not** what is built: `0.92.0`
+builds RFC 144 with palette B's values, so the colours change only once
+(`@nabbisen`: *"Yes to all."*, on cycle N's §5, decision 2). B's values and their
+derivation: [`../149-the-console-follows-the-operator/README.md`](../149-the-console-follows-the-operator/README.md).
+The rules, the gate and every other decision of the refresh are unchanged.
+
 ## 2026-11-15: refreshed toward the stricter standard, and accepted the same day
 
 On your decision 3 (*"Seems the stricter are preferred … review them

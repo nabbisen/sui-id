@@ -2,7 +2,13 @@
 
 **Proposed.** 2026-11-15, by the architect, on `@nabbisen`'s *"Scope 0.92
 carefully."*, after `0.91.1` was published (`d62424e`).
-**Whose turn.** Yours, for §5. Nothing is dispatched until you answer.
+> ## Decided 2026-11-16 (`@nabbisen`: *"Yes to all."*)
+> All three of §5, as recommended: the reordering of §2; RFC 144 with palette
+> B's values; and F4's upgrade rule. The ROADMAP's rows N, O and P are
+> rewritten to match. **RFC 100 stage 0 is dispatched at once**, and RFCs 147
+> and 144 once Track D's two RFCs exist.
+
+**Whose turn.** The architect's (Track D's RFCs) and the dev team's (stage 0).
 **Measured on.** `bab70c9`.
 **What already stands.** Cycle N is **authorized** (ROADMAP, *Release
 cycles*). Its row lists:

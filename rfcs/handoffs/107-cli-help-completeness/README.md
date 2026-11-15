@@ -1,5 +1,13 @@
 # `sui-id --help` names every subcommand the binary accepts
 
+> ## 2026-11-16: its remaining closure item moves into RFC 148
+> `setup` is still missing from `--help`'s usage list. RFC 148's registry
+> generates the dispatch, the help and the reference from one declaration,
+> and `clap` does the parsing. That meets all three of this RFC's closure
+> conditions, so **RFC 107 closes with RFC 148, in `0.93.0`**, instead of
+> being fixed by hand first and then replaced (cycle N's §5, decided
+> 2026-11-16).
+
 **Authorized by.** [RFC 107](../../accepted/107-cli-help-completeness.md),
 **Accepted 2026-10-18**. That supersedes the 2026-09-16 authorization under
 `ROADMAP.md` §Non-RFC work packages, which is the line this handoff was

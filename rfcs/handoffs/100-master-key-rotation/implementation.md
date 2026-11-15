@@ -85,8 +85,8 @@ RFC 100's refresh, changes 2 and 3:
   sealed.** With a sentinel present, a missing key file fails closed.
 
 **Upgrade: the one design point to measure first.** An existing database has
-no sentinel. Proposed (the architect's, to be confirmed in this stage's
-dispatch):
+no sentinel. **Confirmed 2026-11-16** (`@nabbisen`: *"Yes to all."*, on cycle N's §5,
+decision 3); first proposed by the architect:
 - If any row of the six tables K07 reseals exists, the database **has been
   sealed**. The active key must then open one of those rows before the
   sentinel is written. If it cannot, refuse to start, because the key is
