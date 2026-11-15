@@ -4,7 +4,7 @@
 **Security review.** Required
 **Design prerequisites.** None.
 **Implementation prerequisites.** None.
-**Closure prerequisites.** Every foreground/background **pair a component actually composes** clears WCAG 2.1 AA (4.5:1) in both modes — a token has no ratio, a pair does, and `--danger-default` clears AA on white while failing on `--danger-subtle`; the contrast assertion in `crates/sui-id-web/src/tokens/tests.rs` covers component stylesheets and not only `TOKENS_CSS`, with no token excluded from it on the grounds that it is decorative; the border token used on interactive controls clears 3:1 (WCAG 1.4.11); the type scale is expressed in `rem` so a reader's own browser font size is honoured, with a test that fails if a `px` font size returns; interactive controls clear 44×44 CSS px; and `prefers-contrast: more` is honoured and asserted by the same gate that asserts `prefers-reduced-motion`.
+**Closure prerequisites.** *(Raised 2026-11-15 to the stricter standard; see the refresh section.)* Every foreground/background **pair a component actually composes** clears WCAG 2.1 **AAA (7:1; 4.5:1 for large text)** in both modes, and every control boundary and the focus ring clear 3:1 — a token has no ratio, a pair does, and `--danger-default` clears AA on white while failing on `--danger-subtle`; the contrast assertion in `crates/sui-id-web/src/tokens/tests.rs` covers component stylesheets and not only `TOKENS_CSS`, with no token excluded from it on the grounds that it is decorative; the border token used on interactive controls clears 3:1 (WCAG 1.4.11); the type scale is expressed in `rem` so a reader's own browser font size is honoured, with a test that fails if a `px` font size returns; interactive controls clear 44×44 CSS px; and `prefers-contrast: more` is honoured and asserted by the same gate that asserts `prefers-reduced-motion`. **And (2026-11-15):** no `placeholder` attribute carries guidance, asserted by a test that fails on any `placeholder=` in a page; and every page that shows the navigation renders the account menu, asserted by a test over every `show_nav=true` page.
 **Tracks.** UI/UX accessibility. §5 and §6 carry open questions.
 **Touches.** `crates/sui-id-web/src/tokens.rs`, `crates/sui-id-web/src/tokens/tests.rs`, `crates/sui-id-web/src/components/forms.rs`, `crates/sui-id-web/src/components/buttons.rs`, `crates/sui-id-web/src/components/chrome.rs`, `crates/sui-id-web/src/components/setup.rs`.
 **Independent design review.** [Design review record, 2026-11-04](../handoffs/144-legible-to-older-eyes/design-review-2026-11-04.md). **By the architect, at `@nabbisen`'s request** — *"Review it carefully by yourself with my fundamental philosophy"* — `ROADMAP.md` §S1c's owner-invoked exception, and the record says he asked. **The architect wrote this RFC and is not independent of it**; the review's central finding is that this RFC's own §1 diagnosis was too narrow.
@@ -184,6 +184,132 @@ an older reader, whether the setup flow's order matches expectation,
 whether error recovery reads as reassuring — **cannot be answered by
 reading source**. Contrast and size are measurable; comprehension is
 observed. That work is a different kind and is not scoped here.
+
+## Refresh, 2026-11-15: toward the stricter standard
+
+**Asked.** `@nabbisen`, on the operator-experience assessment's decision 3:
+*"Seems the stricter are preferred, for easiness to view and read is very
+important. However, review them carefully with my fundamental
+philosophy."* His philosophy has two halves: clean, safe, robust and
+sophisticated; **and** an interface its users cannot misunderstand. Both
+are applied below. Every figure was computed on `7c35c42`'s tokens: WCAG
+2.x relative luminance, against **both** page surfaces in each mode
+(`--surface-default` and `--surface-elevated`), the lower ratio reported.
+The method, the script and its full output are in [`../handoffs/144-legible-to-older-eyes/aaa-measurement-2026-11-15.md`](../handoffs/144-legible-to-older-eyes/aaa-measurement-2026-11-15.md).
+
+### R — five rules, in place of AA's one
+
+1. **All text reaches 7:1** (WCAG 1.4.6, AAA), in both modes; text 24px
+   and up, or 18.66px bold, reaches 4.5:1. That includes button labels,
+   badges, captions and the footer, and nothing is exempt on a claim about
+   its use, the defect §1 found.
+2. **Meaning is never carried by colour alone** (WCAG 1.4.1). Every status
+   has a word, and a tinted surface with a coloured border or icon: the
+   convention `components/banners.rs` already follows (§1a).
+3. **A semantic colour is used as text only where the text is itself the
+   signal**: links, the current navigation item, and field errors. So only
+   **accent** and **danger** are ever text, and those two are also the only
+   button fills (`--fg-on-accent`, `--fg-on-danger`: one user each).
+   Warning, success and info are **never text and never fills**, only
+   borders, icons and tints.
+4. **Every control boundary and the focus ring reach 3:1** (WCAG 1.4.11).
+   WCAG has no stricter level for non-text, and none is invented here.
+5. **`prefers-contrast: more`** (§5) raises control borders to 4.5:1, and
+   draws a solid border wherever a tint alone marks a state.
+
+### The values
+
+Hue is kept; only OKLab lightness moves (chroma falls only where sRGB's
+gamut forces it).
+
+| Token | Light now | Light, proposed | Dark now | Dark, proposed |
+|---|---|---|---|---|
+| `--accent-default` | `#6956C0`: text 5.24, label on it 5.69 | **`#5741AA`**: 7.06 / 7.66 | `#A89BFF`: 6.29 / 7.41 | **`#B2A6FF`**: 7.00 / 8.25 |
+| `--danger-default` | `#BE3F3F`: 4.87 / 5.29 | **`#A12127`**: 7.00 / 7.60 | `#FF6B6B`: 5.41 / 6.37 | **`#FF938F`**: 7.02 / 8.27 |
+| `--fg-muted` | `#5F5A66`: 6.16 | **`#56515D`**: 7.09 | `#B8B2C4`: 7.30 | unchanged |
+| control border (§2) | `#D6D1DE`: 1.38 | **`#918C98`**: 3.02 | `#3A3445`: 1.26 | **`#736D80`**: 3.02 |
+| `--warning-default`, `--success-default`, `--info-default` | 4.59–4.91 as non-text | **unchanged**: rule 3 makes them non-text, where 3:1 applies | 6.24–8.13 | **unchanged** |
+
+Body text is already **15.60:1** light and **13.09:1** dark, and does not
+move. *(These figures are lower than some in §1–§6, which measured against
+`--surface-default` alone. The refresh takes the lower of the two surfaces,
+because text sits on cards as well as on the page. For example, dark
+`--fg-muted` is 8.59:1 on the page and 7.30:1 on a card.)*
+
+### Measured against the first half: clean, robust, sophisticated
+
+- **One rule set, no exemptions.** The gate asserts rule 1 over every pair
+  a component composes (§1's widening), and rule 4 over every boundary. A
+  token cannot be excused as *"not a text carrier"* again, because the gate
+  no longer takes a token's word for it.
+- **Fewer moving parts than AA.** Rule 3 means only two semantic colours
+  carry text, so only two had to move for text. Warning stays **amber**. At
+  7:1 as text it would have turned brown (`#714D00`) and stopped looking
+  like a warning. Not making it text is what keeps it readable as a
+  warning.
+- **The cost, stated:** in light mode, accent and danger become deeper and
+  less vivid, and the semantic colours sit nearer to body text (OKLab ΔE
+  0.315 → 0.229). Rule 2 is what makes that safe: a status is read from
+  its word and its surface, not from the hue of its letters.
+- **In dark mode**, danger becomes a lighter red (`#FF938F`), which reads as
+  less alarming by hue alone. Rule 2 again carries the meaning.
+- **This sets a floor, not a look.** Your assessment's A9, that the palette
+  is unsophisticated, is a design question this RFC does not settle. A
+  palette refresh belongs to the operator-experience track's
+  visual-structure RFC, designed with mockups you review. It must satisfy
+  these five rules, which the gate will then hold it to.
+
+### Measured against the second half: nothing to misunderstand
+
+- **The colours are easier to tell apart, not harder.** The closest pair
+  of semantic colours, accent and info, moves from ΔE **0.094 → 0.119**
+  (light) and **0.074 → 0.082** (dark). Darkening accent alone separated
+  it from info.
+- **Placeholders are removed, not darkened** (§6's first question). A
+  placeholder at 7:1 looks like text someone has already typed, which is a
+  way to misunderstand a form. And it vanishes the moment typing begins,
+  when an uncertain reader most wants it. Six exist. **Two carry guidance
+  that matters** and that disappears as the user types: the SMTP password's
+  *"(only enter to change)"* and *"(leave blank if no authentication)"*
+  (`pages/settings/email.rs:45-48`). Four are examples (*"e.g. auth.login"*,
+  *"e.g. YubiKey 5C"*, …). **Decision proposed:** every one becomes visible
+  hint text under its field (`field__hint`, which reaches 7:1 under rule 1
+  and stays while typing), and the `placeholder` attribute is not used.
+  §1's placeholder token is then no longer needed.
+- **Sign-out lives in the account menu, on every page** (§6's second
+  question). Measured 2026-11-15: **38 of 39 pages** never received RFC
+  074's menu, and render a bare *Sign out* directly after *Settings*
+  (`layout.rs:171-207`). That is the misplacement the owner found, and
+  *"increasing the risk of users pressing the wrong buttons"* is his own
+  word for its cost. **This RFC's §6 claimed the menu as already right; it
+  was right on the dashboard only. That claim was the architect's, and
+  unmeasured.**
+  **Decision proposed:** the account menu (`username ▾` → *My account*,
+  *Sign out*) on every page, set apart from the main navigation, because it
+  is about identity, not a place to go. After signing out, a page that says
+  plainly *you are signed out*, which answers the shared-machine worry §6
+  raised: certainty comes from that confirmation, not from a button within
+  reach.
+
+### What else moves, so the rules hold
+
+- `.badge--ok`, `--warn` and `--danger` are coloured text on the page
+  surface (`components/badges.rs:37-39`). They take the banner convention:
+  a tinted fill, text in `--fg-default`, and a coloured border.
+- `components/banners.rs:149` and `components/confirm.rs:28` set success as
+  text. Under rule 3 they move to `--fg-default`.
+- `--fg-subtle` (2.71 light) is never text again. The footer version and the
+  setup wizard's upcoming step (§1) use `--fg-muted`.
+- **Type and density together** (§3, and the assessment's A8): body
+  `1rem`; caption `0.875rem` (14px, up from 13px); table cells padded
+  `--space-2` (8px), not `--space-3` (16px), vertically. An audit row then
+  stands at about **44px**, which is also §4's target size, instead of
+  about 57px. The text is larger, and more rows fit on the screen.
+
+### What stays open
+
+No question remains open in this RFC once the refresh is accepted. §5's and
+§6's questions are answered above, as proposals.
 
 ## Alternatives rejected
 

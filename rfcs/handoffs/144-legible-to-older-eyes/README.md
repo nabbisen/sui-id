@@ -4,6 +4,20 @@
 **Status.** **Proposed — build-prohibited** under RFC 000, which bars
 implementation before acceptance. Nothing here is dispatched.
 
+## 2026-11-15: refreshed toward the stricter standard, for your acceptance again
+
+On your decision 3 (*"Seems the stricter are preferred … review them
+carefully with my fundamental philosophy"*), the RFC gains *Refresh,
+2026-11-15*:
+- AAA (7:1) for all text, under five rules;
+- the placeholders removed in favour of visible hints;
+- the account menu on every page;
+- type and table density changed together.
+
+**It changes the design you accepted on 2026-11-04**, so that acceptance
+does not cover it. Its measurement:
+[`aaa-measurement-2026-11-15.md`](aaa-measurement-2026-11-15.md).
+
 ## Where acceptance stands, 2026-11-04
 
 **`@nabbisen` accepted the design** — his word: *"Accepted."*
