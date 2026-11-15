@@ -120,6 +120,26 @@ Urgent security fixes, remediation-enabling refactors, dependency/security
 maintenance, and repairs required to keep approved gates executable are
 controlled exceptions to the feature freeze.
 
+**The operator's experience: a track before M6, authorized 2026-11-15.**
+The admin console and the first run were measured on 2026-11-15, and four
+decisions were put in that assessment's §6. They were answered as follows:
+- **1 and 2**: *"On item 1 and 2, your recommendations are accepted."* So:
+  - operator-experience work runs **before M6** as a track beside the
+    remediation: repairs, legibility and structure first, and missing
+    features chosen one at a time, each needing its own exception;
+  - the repairs (Track A) count as **repairs under this freeze's
+    exception**.
+- **3**, on RFC 144: *"Seems the stricter are preferred, for easiness to
+  view and read is very important. However, review them carefully with my
+  fundamental philosophy."*
+- **4**, on order: *"Any of them is accepted. However, the schedule and
+  RFCs must be preapred on all of them first. Design-first."*
+
+So nothing in the track is built until its schedule and every one of its
+RFCs exist. The assessment moves into git with the track's first RFC, in
+that RFC's handoff. Until then it is the architect's working file,
+`.git-exclude/tasks/architect/operator-experience-assessment-2026-11-15.md`.
+
 ### Corrective releases during v0 — revised 2026-08-26
 
 This paragraph previously read: *"A narrowly scoped corrective v0.x release may

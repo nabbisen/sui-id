@@ -116,9 +116,9 @@ every step has a second, independent record.
 |---|---|---|
 | 1 | The startup log | one `WARN` naming the provider and saying to visit `/admin/federation-providers` and press "Check and enable" |
 | 2 | Open the setup URL the architect gives you, and create the admin | the admin console |
-| 3 | **Admin → Federation providers** | one row: Duende demo, Disabled, Requires review, "—" for the check column, "No" linked users |
-| 4 | **Check only** | "Every check passed." |
-| 5 | **Check and enable** | "The provider was checked and enabled.", and the row Enabled, Validated, with a time |
+| 3 | **Admin → Federation providers** | one row: Duende demo, Disabled, Requires review, "—" for the check column, "No" linked users, and one button, **Check and enable** |
+| 4 | **Check and enable**, which opens a confirm page. There, **Check only** | "Every check passed." *(Corrected 2026-11-15: *Check only* is on this page, not in the row.)* |
+| 5 | On the same confirm page, **Check and enable** | "The provider was checked and enabled.", and the row Enabled, Validated, with a time |
 | 6 | Sign out. Open the login page | a **"Sign in with Duende demo"** button |
 | 7 | Press it, and sign in at the demo as `alice` / `alice` | back at sui-id, signed in as a new user, on that user's own security page (`/me/security`) |
 | 8 | Sign in as the admin. **Users →** that user | a *Federated sign-in* section with Duende demo |
@@ -129,15 +129,20 @@ every step has a second, independent record.
 
 ## 6 — the record
 
-The architect writes `.git-exclude/live-runs/096-b1-stage14-<date>.md`:
+The architect keeps the record, while the run is in progress, in
+`.git-exclude/tasks/architect/096-b1-stage14-live-run-<date>.md`. **When the run
+is finished, the record moves into git**, as
+`rfcs/handoffs/096-upstream-oidc-federation/096-b1-stage14-live-run-record-<date>.md`.
+With the Duende demo it holds no secret and no personal data. It contains:
 - the commit, and `sui-id --version`;
 - the table, PASS or FAIL per step, with the page's exact text for a FAIL;
 - the database check for each step;
 - `server.log`'s `WARN` and `ERROR` lines, with any URL containing `code=`
   or `state=`, and any token or cookie, removed.
 
-Then: fixes, if the run finds any, and the gates again. **Nothing from the
-run goes into git** except the architect's summary.
+Then: fixes, if the run finds any, and the gates again. *(Until 2026-11-15,
+this said nothing from the run went into git. That rule existed to keep a
+personal Google email and the client secret out, and the demo has neither.)*
 
 ## 7 — afterwards
 

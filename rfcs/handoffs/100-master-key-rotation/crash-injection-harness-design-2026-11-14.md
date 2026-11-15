@@ -13,10 +13,10 @@ crash-injection harness approved"* (RFC 100 `:10-15`). With it approved, the
 build can be dispatched for `0.92.0`.
 **Whose turn.** Yours, for the two decisions in §8.
 **Measured on.** `7c5cf93`.
-**The prototype.** `.git-exclude/prototypes/rfc100-power-loss-model/`
-(`src/main.rs`, std only, 242 lines), with its output in
-`results-2026-11-14.txt`. It is a model of the filesystem, not the harness,
-built to test this design before proposing it.
+**The prototype.** [`crash-injection-harness-prototype-2026-11-14.md`](crash-injection-harness-prototype-2026-11-14.md):
+its source (std only, 242 lines), how to run it, and its output. It is a
+model of the filesystem, not the harness, built to test this design before
+proposing it.
 
 ## 1 — what the harness must show
 
