@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RFC 149 mockup — the app form, and help in three layers</title>
+<style>
+/* Palette A, light (RFC 144's refresh). */
+:root{--s:#F6F5F9;--e:#FFFFFF;--fg:#1F1B24;--mu:#56515D;--bd:#918C98;--div:#E3DFE8;--ac:#5741AA;--on:#FFFFFF;--dg:#A12127;--in:#3B6EA8}
+*{box-sizing:border-box} body{margin:0;font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--s);color:var(--fg)}
+.note{background:#fff;border-bottom:1px solid var(--div);padding:16px 24px} .note h1{margin:0 0 4px;font-size:22px} .note p{margin:0;max-width:80ch}
+main{max-width:760px;margin:0 auto;padding:24px}
+h2{margin:0 0 4px;font-size:24px} .lede{color:var(--mu);margin:0 0 20px}
+fieldset{border:1px solid var(--bd);border-radius:10px;background:var(--e);padding:16px 20px 20px;margin:0 0 16px}
+legend{font-weight:700;font-size:18px;padding:0 6px}
+.sechead{display:flex;align-items:center;gap:8px}
+details.help{margin:4px 0 8px} details.help summary{list-style:none;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 12px;border:1px solid var(--bd);border-radius:999px;cursor:pointer;color:var(--fg)}
+details.help summary::-webkit-details-marker{display:none}
+details.help .body{border-left:4px solid var(--in);background:color-mix(in srgb,var(--in) 10%,var(--e));padding:10px 14px;border-radius:6px;margin-top:8px}
+label{display:block;font-weight:600;margin:12px 0 4px} .hint{color:var(--mu);font-size:15px;margin:4px 0 0}
+input[type=text],input[type=url]{width:100%;min-height:44px;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--e);color:var(--fg);font:inherit}
+.check{display:flex;align-items:flex-start;gap:10px;min-height:44px;padding:8px 0;border-top:1px solid var(--div)}
+.check input{width:22px;height:22px;margin-top:3px;flex:none} .check b{display:block} .check span{color:var(--mu);font-size:15px}
+.uri{display:flex;gap:8px;align-items:center;margin-top:8px} .uri input{flex:1}
+.btn{min-height:44px;padding:10px 16px;border-radius:6px;border:1px solid var(--bd);background:var(--e);color:var(--fg);font:inherit;cursor:pointer}
+.btn.primary{background:var(--ac);border-color:var(--ac);color:var(--on)}
+.err{color:var(--dg);font-size:15px;margin:4px 0 0} input.bad{border:2px solid var(--dg)}
+.actions{display:flex;gap:8px;justify-content:flex-end}
+.layer{font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--mu);text-transform:uppercase}
+</style></head><body>
+<div class="note"><h1>The app form (RFC 149 §3 and §4)</h1>
+<p>The labels and lines in grey are <b>layer 1</b>: always shown, because without them a reader could make a mistake. The <b>?</b> buttons are <b>layer 2</b>: they open in place on a click, a tap or the keyboard, and close again. There are no hover tooltips. It all works with JavaScript off: <i>Add another</i> submits, and the page returns with one more row.</p></div>
+<main>
+<h2>Add app</h2><p class="lede">An app is a site or service that signs its users in through sui-id.</p>
+
+<fieldset><legend>About the app</legend>
+<label for="n">Name</label><input id="n" type="text" value="Team wiki">
+<p class="hint">Shown to users on the consent screen.</p>
+<label for="h">Homepage</label><input id="h" type="url" value="https://wiki.example.com">
+</fieldset>
+
+<fieldset><legend>Where users return after signing in</legend>
+<details class="help"><summary>? What is a redirect URI</summary><div class="body">After sign-in, sui-id sends the user back only to an address listed here, exactly as written. Add one for each place your app receives the sign-in, for example the live site and a test site. <a href="#">Learn more</a></div></details>
+<div class="uri"><input type="url" aria-label="Redirect URI 1" value="https://wiki.example.com/auth/callback"><button class="btn" type="button">Remove</button></div>
+<div class="uri"><input type="url" class="bad" aria-label="Redirect URI 2" value="wiki.example.com/callback"><button class="btn" type="button">Remove</button></div>
+<p class="err">Redirect URI 2 must start with https:// (http:// is allowed only for localhost, 127.0.0.1 or ::1, while testing).</p>
+<div class="uri"><input type="url" aria-label="Redirect URI 3, empty"><button class="btn" type="button">Remove</button></div>
+<p style="margin:10px 0 0"><button class="btn" type="button">Add another</button></p>
+</fieldset>
+
+<fieldset><legend>What the app may ask for</legend>
+<div class="check"><input type="checkbox" checked disabled id="s1"><label for="s1" style="margin:0;font-weight:400"><b>openid</b><span>Required: identifies the user to the app.</span></label></div>
+<div class="check"><input type="checkbox" checked id="s2"><label for="s2" style="margin:0;font-weight:400"><b>profile</b><span>The user's name and display name.</span></label></div>
+<div class="check"><input type="checkbox" checked id="s3"><label for="s3" style="margin:0;font-weight:400"><b>email</b><span>The user's email address, and whether it is verified.</span></label></div>
+<div class="check"><input type="checkbox" id="s4"><label for="s4" style="margin:0;font-weight:400"><b>offline_access</b><span>Lets the app stay signed in without asking again (a refresh token).</span></label></div>
+<details class="help"><summary>? Additional scopes, for your own API</summary><div class="body">
+<label for="x" style="margin-top:0">Additional scopes</label><input id="x" type="text" class="bad" value="profle">
+<p class="err">"profle" looks like the standard scope "profile". Tick profile above instead, or check the spelling.</p>
+<p class="hint">Only for scopes your own API checks. Separate them with spaces.</p></div></details>
+</fieldset>
+
+<div class="actions"><button class="btn" type="button">Cancel</button><button class="btn primary" type="button">Add app</button></div>
+</main></body></html>

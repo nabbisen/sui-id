@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RFC 149 mockup — two palette directions</title>
+<style>
+/* Values are computed, not chosen by eye: every text pair >= 7:1 against both
+   page surfaces, every boundary >= 3:1 (RFC 144's refresh, its five rules).
+   Source: rfcs/handoffs/149-the-console-follows-the-operator/README.md. */
+.a.light{--s:#F6F5F9;--e:#FFFFFF;--fg:#1F1B24;--mu:#56515D;--bd:#918C98;--ac:#5741AA;--on:#FFFFFF;--dg:#A12127;--wa:#8A6500;--ok:#2F7D5E;--in:#3B6EA8}
+.a.dark {--s:#1A1720;--e:#2A2433;--fg:#F1EEF6;--mu:#B8B2C4;--bd:#736D80;--ac:#B2A6FF;--on:#1A1720;--dg:#FF938F;--wa:#E6B85C;--ok:#5FC49A;--in:#6FA8FF}
+.b.light{--s:#F6F7F9;--e:#FFFFFF;--fg:#1A1D23;--mu:#4D5563;--bd:#8A8F96;--ac:#3949B2;--on:#FFFFFF;--dg:#A51A22;--wa:#B07800;--ok:#2E7D52;--in:#2F77C0}
+.b.dark {--s:#14171C;--e:#1E232B;--fg:#EEF1F5;--mu:#AAB2BF;--bd:#666D79;--ac:#98A8FF;--on:#14171C;--dg:#FF8C8B;--wa:#E8B54A;--ok:#5CC48C;--in:#67C8E8}
+*{box-sizing:border-box} body{margin:0;font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;background:#888;color:#111}
+header.page{padding:16px 24px;background:#fff} header.page h1{margin:0 0 4px;font-size:22px} header.page p{margin:0;max-width:72ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:2px}
+.pane{background:var(--s);color:var(--fg);padding:20px 24px}
+.pane h2{margin:0 0 2px;font-size:18px} .pane .sub{color:var(--mu);margin:0 0 16px;font-size:14px}
+.nav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
+.nav a{padding:10px 12px;min-height:44px;border-radius:6px;color:var(--fg);text-decoration:none}
+.nav a[aria-current]{color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,var(--s));font-weight:600}
+.card{background:var(--e);border:1px solid var(--bd);border-radius:8px;padding:16px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{min-height:44px;padding:10px 16px;border-radius:6px;border:1px solid var(--bd);background:var(--e);color:var(--fg);font:inherit}
+.btn.primary{background:var(--ac);border-color:var(--ac);color:var(--on)} .btn.danger{background:var(--dg);border-color:var(--dg);color:var(--on)}
+.badge{display:inline-block;font-size:14px;padding:2px 10px;border-radius:999px;border:1.5px solid;color:var(--fg)}
+.badge.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,var(--e))}
+.badge.wa{border-color:var(--wa);background:color-mix(in srgb,var(--wa) 16%,var(--e))}
+.badge.dg{border-color:var(--dg);background:color-mix(in srgb,var(--dg) 14%,var(--e))}
+.banner{border-left:4px solid;padding:10px 14px;border-radius:6px;margin:8px 0;color:var(--fg)}
+.banner.in{border-color:var(--in);background:color-mix(in srgb,var(--in) 12%,var(--e))}
+.banner.wa{border-color:var(--wa);background:color-mix(in srgb,var(--wa) 14%,var(--e))}
+.banner.dg{border-color:var(--dg);background:color-mix(in srgb,var(--dg) 12%,var(--e))}
+table{width:100%;border-collapse:collapse;font-size:15px} th{text-align:left;font-size:14px;color:var(--mu);font-weight:600}
+th,td{padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--bd) 45%,var(--e))} tr{height:44px}
+a.link{color:var(--ac)} .err{color:var(--dg);font-size:15px;margin:4px 0 0}
+label{display:block;font-weight:600;margin-top:8px} input{width:100%;min-height:44px;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--e);color:var(--fg);font:inherit}
+input.bad{border-color:var(--dg);border-width:2px} .hint{color:var(--mu);font-size:15px;margin:4px 0 0}
+</style></head><body>
+<header class="page"><h1>Two palette directions, both within RFC 144's rules</h1>
+<p><b>A</b> refines today's palette (purple accent, warm greys). <b>B</b> is calmer (indigo accent, slate greys; info moves to blue so it stays apart from success). In both, all text is at least 7:1 and every boundary at least 3:1, measured against both page surfaces. Status is never carried by colour alone: every badge and banner has its word. Look for: which reads more calmly and more clearly to you, in light and in dark.</p></header>
+<div class="grid">
+<!-- the same fragment four times; only the class differs -->
+<section class="pane a light"><h2>A — refined current</h2><p class="sub">light mode</p>
+<nav class="nav"><a href="#">Overview</a><a href="#" aria-current="page">People</a><a href="#">Applications</a><a href="#">Sign-in</a><a href="#">Security</a></nav>
+<div class="card"><div class="row"><button class="btn primary">Add user</button><button class="btn">Export</button><button class="btn danger">Delete user</button></div>
+<p style="margin:12px 0 0"><span class="badge ok">Active</span> <span class="badge wa">Locked</span> <span class="badge dg">Disabled</span></p></div>
+<div class="banner in"><b>Info.</b> Email is not set up yet, so password reset is off. <a class="link" href="#">Set up email</a></div>
+<div class="banner wa"><b>Warning.</b> One administrator has no second factor.</div>
+<div class="banner dg"><b>This cannot be undone.</b> Deleting removes the user's sign-in for good.</div>
+<div class="card"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Result</th></tr></thead><tbody>
+<tr><td>09:41:07</td><td>admin</td><td>user.created</td><td><span class="badge ok">OK</span></td></tr>
+<tr><td>09:40:52</td><td>admin</td><td>auth.login.failed</td><td><span class="badge dg">Refused</span></td></tr></tbody></table></div>
+<div class="card"><label for="x-a-light">Email</label><input id="x-a-light" class="bad" value="alice@example">
+<p class="err">Enter a full address, such as alice@example.com.</p><p class="hint">Used for password reset and sign-in notices.</p></div>
+</section>
+<section class="pane a dark"><h2>A — refined current</h2><p class="sub">dark mode</p>
+<nav class="nav"><a href="#">Overview</a><a href="#" aria-current="page">People</a><a href="#">Applications</a><a href="#">Sign-in</a><a href="#">Security</a></nav>
+<div class="card"><div class="row"><button class="btn primary">Add user</button><button class="btn">Export</button><button class="btn danger">Delete user</button></div>
+<p style="margin:12px 0 0"><span class="badge ok">Active</span> <span class="badge wa">Locked</span> <span class="badge dg">Disabled</span></p></div>
+<div class="banner in"><b>Info.</b> Email is not set up yet, so password reset is off. <a class="link" href="#">Set up email</a></div>
+<div class="banner wa"><b>Warning.</b> One administrator has no second factor.</div>
+<div class="banner dg"><b>This cannot be undone.</b> Deleting removes the user's sign-in for good.</div>
+<div class="card"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Result</th></tr></thead><tbody>
+<tr><td>09:41:07</td><td>admin</td><td>user.created</td><td><span class="badge ok">OK</span></td></tr>
+<tr><td>09:40:52</td><td>admin</td><td>auth.login.failed</td><td><span class="badge dg">Refused</span></td></tr></tbody></table></div>
+<div class="card"><label for="x-a-dark">Email</label><input id="x-a-dark" class="bad" value="alice@example">
+<p class="err">Enter a full address, such as alice@example.com.</p><p class="hint">Used for password reset and sign-in notices.</p></div>
+</section>
+<section class="pane b light"><h2>B — calm slate</h2><p class="sub">light mode</p>
+<nav class="nav"><a href="#">Overview</a><a href="#" aria-current="page">People</a><a href="#">Applications</a><a href="#">Sign-in</a><a href="#">Security</a></nav>
+<div class="card"><div class="row"><button class="btn primary">Add user</button><button class="btn">Export</button><button class="btn danger">Delete user</button></div>
+<p style="margin:12px 0 0"><span class="badge ok">Active</span> <span class="badge wa">Locked</span> <span class="badge dg">Disabled</span></p></div>
+<div class="banner in"><b>Info.</b> Email is not set up yet, so password reset is off. <a class="link" href="#">Set up email</a></div>
+<div class="banner wa"><b>Warning.</b> One administrator has no second factor.</div>
+<div class="banner dg"><b>This cannot be undone.</b> Deleting removes the user's sign-in for good.</div>
+<div class="card"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Result</th></tr></thead><tbody>
+<tr><td>09:41:07</td><td>admin</td><td>user.created</td><td><span class="badge ok">OK</span></td></tr>
+<tr><td>09:40:52</td><td>admin</td><td>auth.login.failed</td><td><span class="badge dg">Refused</span></td></tr></tbody></table></div>
+<div class="card"><label for="x-b-light">Email</label><input id="x-b-light" class="bad" value="alice@example">
+<p class="err">Enter a full address, such as alice@example.com.</p><p class="hint">Used for password reset and sign-in notices.</p></div>
+</section>
+<section class="pane b dark"><h2>B — calm slate</h2><p class="sub">dark mode</p>
+<nav class="nav"><a href="#">Overview</a><a href="#" aria-current="page">People</a><a href="#">Applications</a><a href="#">Sign-in</a><a href="#">Security</a></nav>
+<div class="card"><div class="row"><button class="btn primary">Add user</button><button class="btn">Export</button><button class="btn danger">Delete user</button></div>
+<p style="margin:12px 0 0"><span class="badge ok">Active</span> <span class="badge wa">Locked</span> <span class="badge dg">Disabled</span></p></div>
+<div class="banner in"><b>Info.</b> Email is not set up yet, so password reset is off. <a class="link" href="#">Set up email</a></div>
+<div class="banner wa"><b>Warning.</b> One administrator has no second factor.</div>
+<div class="banner dg"><b>This cannot be undone.</b> Deleting removes the user's sign-in for good.</div>
+<div class="card"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Result</th></tr></thead><tbody>
+<tr><td>09:41:07</td><td>admin</td><td>user.created</td><td><span class="badge ok">OK</span></td></tr>
+<tr><td>09:40:52</td><td>admin</td><td>auth.login.failed</td><td><span class="badge dg">Refused</span></td></tr></tbody></table></div>
+<div class="card"><label for="x-b-dark">Email</label><input id="x-b-dark" class="bad" value="alice@example">
+<p class="err">Enter a full address, such as alice@example.com.</p><p class="hint">Used for password reset and sign-in notices.</p></div>
+</section>
+</div>
+</body></html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RFC 149 mockup — navigation by task</title>
+<style>
+/* Palette A, light (RFC 144's refresh). Structure, not colour, is under review here. */
+:root{--s:#F6F5F9;--e:#FFFFFF;--fg:#1F1B24;--mu:#56515D;--bd:#918C98;--div:#E3DFE8;--ac:#5741AA;--on:#FFFFFF;--ok:#2F7D5E;--wa:#8A6500}
+*{box-sizing:border-box} body{margin:0;font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;background:#888;color:var(--fg)}
+.note{background:#fff;padding:16px 24px} .note h1{margin:0 0 4px;font-size:22px} .note p{margin:0;max-width:78ch}
+.frame{background:var(--s);margin:2px 0 24px;min-height:560px}
+.caption{background:#222;color:#fff;padding:6px 24px;font-size:14px}
+/* Option 1 — grouped sidebar (recommended) */
+.shell{display:grid;grid-template-columns:248px 1fr;min-height:560px}
+.side{background:var(--e);border-right:1px solid var(--div);padding:16px 12px;display:flex;flex-direction:column}
+.brand{font-weight:700;font-size:18px;padding:4px 10px 12px}
+.group{margin:10px 0 4px;padding:0 10px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--mu);font-weight:600}
+.side a{display:flex;align-items:center;min-height:44px;padding:0 10px;border-radius:6px;color:var(--fg);text-decoration:none}
+.side a[aria-current]{background:color-mix(in srgb,var(--ac) 12%,var(--e));color:var(--ac);font-weight:600}
+.account{margin-top:auto;border-top:1px solid var(--div);padding-top:12px}
+details.menu summary{list-style:none;min-height:44px;display:flex;align-items:center;padding:0 10px;border-radius:6px;cursor:pointer}
+details.menu summary::-webkit-details-marker{display:none}
+details.menu[open] summary{background:color-mix(in srgb,var(--ac) 8%,var(--e))}
+details.menu .panel{border:1px solid var(--bd);border-radius:8px;margin-top:6px;background:var(--e)}
+details.menu .panel a,details.menu .panel button{display:flex;width:100%;min-height:44px;align-items:center;padding:0 12px;border:0;background:none;font:inherit;color:var(--fg);text-decoration:none;cursor:pointer}
+details.menu .panel button{border-top:1px solid var(--div)}
+main{padding:24px 32px;max-width:960px}
+h2{margin:0 0 4px;font-size:24px} .lede{color:var(--mu);margin:0 0 20px}
+.path{background:var(--e);border:1px solid var(--bd);border-radius:10px;padding:16px 20px}
+.path h3{margin:0 0 4px;font-size:18px} .path .sub{color:var(--mu);margin:0 0 12px;font-size:15px}
+.path ol{list-style:none;margin:0;padding:0} .path li{display:flex;gap:12px;align-items:center;min-height:52px;border-top:1px solid var(--div)}
+.mark{width:28px;height:28px;border-radius:50%;border:2px solid var(--bd);display:grid;place-items:center;font-size:14px;flex:none}
+.done .mark{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 16%,var(--e))}
+.step{flex:1} .step b{display:block} .step span{color:var(--mu);font-size:15px}
+.state{font-size:14px;color:var(--fg);border:1.5px solid var(--ok);border-radius:999px;padding:2px 10px;background:color-mix(in srgb,var(--ok) 14%,var(--e))}
+.btn{min-height:44px;padding:10px 16px;border-radius:6px;border:1px solid var(--ac);background:var(--ac);color:var(--on);font:inherit;text-decoration:none;display:inline-flex;align-items:center}
+.btn.quiet{background:var(--e);color:var(--fg);border-color:var(--bd)}
+/* Option 2 — grouped top bar */
+.top{display:flex;align-items:center;gap:4px;background:var(--e);border-bottom:1px solid var(--div);padding:6px 16px}
+.top .brand{padding:0 12px 0 0}
+.top details{position:relative} .top summary{list-style:none;min-height:44px;display:flex;align-items:center;padding:0 12px;border-radius:6px;cursor:pointer}
+.top summary::-webkit-details-marker{display:none} .top summary::after{content:" ▾";color:var(--mu)}
+.top .drop{position:absolute;top:48px;left:0;min-width:220px;background:var(--e);border:1px solid var(--bd);border-radius:8px;padding:6px;z-index:2}
+.top .drop a{display:flex;min-height:44px;align-items:center;padding:0 10px;color:var(--fg);text-decoration:none;border-radius:6px}
+.top .spacer{flex:1} .top .cur>summary{color:var(--ac);font-weight:600}
+</style></head><body>
+<div class="note"><h1>Navigation by task (RFC 149 §1 and §2)</h1>
+<p>Six groups, in the order an operator meets them, and the account menu set apart at the end, where sign-out cannot be mistaken for <i>Settings</i>. The dashboard opens with the first-run path. Every menu here is <code>&lt;details&gt;</code>, so it opens with a click, a tap or the keyboard, without JavaScript. <b>Option 1 is recommended.</b> Please compare it with option 2 below.</p></div>
+
+<div class="caption">Option 1 — grouped sidebar (recommended)</div>
+<div class="frame"><div class="shell">
+<aside class="side" aria-label="Main navigation">
+  <div class="brand">sui-id</div>
+  <div class="group">Overview</div><a href="#" aria-current="page">Dashboard</a>
+  <div class="group">People</div><a href="#">Users</a>
+  <div class="group">Applications</div><a href="#">Apps</a>
+  <div class="group">Sign-in</div><a href="#">Federation providers</a><a href="#">Sign-in settings</a>
+  <div class="group">Security</div><a href="#">Signing keys</a><a href="#">Sessions and lockout</a><a href="#">Audit log</a>
+  <div class="group">System</div><a href="#">Language</a><a href="#">Email</a><a href="#">Logs</a>
+  <div class="account"><details class="menu" open><summary>admin ▾</summary>
+    <div class="panel"><a href="#">My account</a><button type="button">Sign out</button></div></details></div>
+</aside>
+<main>
+  <h2>Dashboard</h2><p class="lede">What needs your attention, and what to do next.</p>
+  <section class="path" aria-labelledby="p1"><h3 id="p1">Getting started — 1 of 5 done</h3>
+  <p class="sub">Do these in any order. This list folds away when all are done.</p>
+  <ol>
+   <li class="done"><span class="mark" aria-hidden="true">✓</span><span class="step"><b>Protect your administrator account</b><span>A second factor is set up.</span></span><span class="state">Done</span></li>
+   <li><span class="mark" aria-hidden="true">2</span><span class="step"><b>Set up email</b><span>Password reset and account recovery need it.</span></span><a class="btn" href="#">Set up email</a></li>
+   <li><span class="mark" aria-hidden="true">3</span><span class="step"><b>Add your first app</b><span>The site or service that will sign users in through sui-id.</span></span><a class="btn quiet" href="#">Add app</a></li>
+   <li><span class="mark" aria-hidden="true">4</span><span class="step"><b>Review sign-in and session settings</b><span>The defaults are safe; check they suit you.</span></span><a class="btn quiet" href="#">Review</a></li>
+   <li><span class="mark" aria-hidden="true">5</span><span class="step"><b>Add a federation provider</b> <span>Optional: lets users sign in with another identity provider.</span></span><a class="btn quiet" href="#">How to add one</a></li>
+  </ol></section>
+</main></div></div>
+
+<div class="caption">Option 2 — grouped top bar</div>
+<div class="frame">
+<nav class="top" aria-label="Main navigation"><span class="brand">sui-id</span>
+  <details class="cur"><summary>Overview</summary><div class="drop"><a href="#">Dashboard</a></div></details>
+  <details><summary>People</summary><div class="drop"><a href="#">Users</a></div></details>
+  <details><summary>Applications</summary><div class="drop"><a href="#">Apps</a></div></details>
+  <details open><summary>Sign-in</summary><div class="drop"><a href="#">Federation providers</a><a href="#">Sign-in settings</a></div></details>
+  <details><summary>Security</summary><div class="drop"><a href="#">Signing keys</a><a href="#">Sessions and lockout</a><a href="#">Audit log</a></div></details>
+  <details><summary>System</summary><div class="drop"><a href="#">Language</a><a href="#">Email</a><a href="#">Logs</a></div></details>
+  <span class="spacer"></span>
+  <details class="menu"><summary>admin</summary><div class="drop" style="left:auto;right:0"><a href="#">My account</a><a href="#">Sign out</a></div></details>
+</nav>
+<main><h2>Dashboard</h2><p class="lede">The same first-run path as option 1 sits here. Note that every page is now two clicks away, and that the open group hides what is below it.</p></main>
+</div>
+</body></html>
