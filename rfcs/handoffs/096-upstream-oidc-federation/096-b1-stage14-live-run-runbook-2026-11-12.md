@@ -72,14 +72,31 @@ Afterwards, `git checkout main` returns you to the branch.
 
 ## 2 — a Google OAuth client
 
-In Google Cloud Console, create an **OAuth client ID**, type **Web
-application**, with exactly this **Authorized redirect URI**:
+*Rewritten 2026-11-15: the owner could not find the menu the earlier text
+implied. Google moved OAuth clients to **Google Auth Platform**. Its docs also
+say a client secret may be copied only when it is created.*
 
-```text
-http://localhost:8801/auth/federated/callback
-```
+1. Open `https://console.cloud.google.com/auth/clients` (**☰ Menu → Google
+   Auth Platform → Clients**). Select a project, or create a throwaway one.
+2. If it asks you to register or **Get started**: any app name, your email as
+   the support email, **Audience: External** (so the app stays in
+   **Testing**), and your email as the contact.
+3. **Audience → Test users → Add users**: the Google account you will sign in
+   with at steps 7 and 10. In Testing, any other account is refused with
+   *"Access blocked"*.
+4. **Clients → Create client**: application type **Web application**, any
+   name. Under **Authorized redirect URIs → Add URI**, exactly:
 
-Note the **client ID**. The **client secret** stays in the console until §4.
+   ```text
+   http://localhost:8801/auth/federated/callback
+   ```
+
+   Leave **Authorized JavaScript origins** empty. If an AI-agent checkbox is
+   offered, leave it unticked; it cannot be changed later.
+5. **Create.** Then, at once:
+   - **copy the client secret into your password manager.** It may not be
+     shown again; a lost one means adding a new secret;
+   - note the **client ID**. That one may be shared with the architect.
 
 ## 3 — the throwaway configuration
 
