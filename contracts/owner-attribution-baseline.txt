@@ -54,7 +54,6 @@ ROADMAP.md	658706ddbed319e228edf698df963a221a9dca6e3ba4b7ca9a9a2ec92e2d7ac6	1	Cl
 ROADMAP.md	66cebadbafa4da26caab4cd9e8f630bba442002ad34dd60ac6e4e9c09a766195	1	23 RFCs sit in accepted/ and not one has ever moved to done/ . The RFC-completion stage @nabbisen identified on 2026-10-01 (RFC 131's owner 
 ROADMAP.md	68a3e3ed97de6ca9d6583624727828adfc39a44555bbbb185c9180166cba96e7	1	Where no role other than the author can perform a review, the gap is recorded as unreviewed design judgment and the owner rules on it with t
 ROADMAP.md	68f7f61d1d322987878c8ea251c35a35b403b80d9d47c1a6b47224c1985e1328	1	Decided 2026-11-14 ( @nabbisen : "Authorized." ): write the RFC now and build after the soak, with no freeze exception.
-ROADMAP.md	6df3faff703853a9013f786134435cd75e9248a95597830151b4ebd765cd7db5	1	M — the key file reaches the disk, and M4-B closes v0.91.0 Authorized 2026-11-14 ( @nabbisen : "Accepted." , on the scope and on the Kani ha
 ROADMAP.md	6e364cabaa11522c5c854bd5ae883cd048fd57c65b877741fc33ee0d474451fd	1	Cycle D proposed by the architect and authorized by @nabbisen on 2026-10-15, in his words: "Your recommendation is accepted." He also restat
 ROADMAP.md	766450b57c4bb79e356dfd9ac065f79cbec7c49ef087e3ca6fa8ba0c5afad2b6	1	#### S1a — The workflow, ruled by @nabbisen on 2026-10-01
 ROADMAP.md	7ad76e9c59033d37b81b763b1549dd4d58140478893bcafa484220ece91b1f9e	1	M2b — Remaining conversion and authority switch — CLOSED 2026-11-08 — Convert settings, pending settings, federation configuration, client m
@@ -65,6 +64,7 @@ ROADMAP.md	83ef54d5032a1d1a52115c7af4279bb5f9dfa09ce72cac06df84a2da68d122b8	1	Th
 ROADMAP.md	85972bca8cfda9e25847b615a12c3709aae33d07115fcd9c82cad11b804bd37b	1	Owner decision, 2026-08-26. Review is not skipped.
 ROADMAP.md	8f0151094259a8bc85d880cb9104615b5a24981cf3d81397b72d47814e1352a0	1	RFCs 094, 095 and 096 were returned to proposed/ on 2026-07-28 for owner-approved material amendments, and were re-accepted on 2026-08-27.
 ROADMAP.md	90273563132b9632fdcaa2d6243a1cf0e859c2f6e0ac78a3a0efa4e291cc43e2	1	096-B2 accepted 2026-11-12 ( @nabbisen : "Accepted." ), on the [completion assessment](rfcs/handoffs/096-upstream-oidc-federation/096-b2-com
+ROADMAP.md	91eb442f6e3b8b69ef147597c0d2f7f0111b3dbc5c4765e4b9cc09fcd239eba0	1	Authorized 2026-11-14 ( @nabbisen : "Accepted." , on the scope and on the Kani harnesses' removal).
 ROADMAP.md	92e87f0d49a150a6963709d59e47d782889e1336a93d3eedfb51fcdb52347651	1	They must: because owner-requested self-review is legitimate, a gate that rejected every self-review would reject work this ruling permits.
 ROADMAP.md	98ceb61a86f24277ce9291924a6e17133bb443462bede8d98ec302a9c90aff71	1	Lane B is authorized to run concurrently with Lane A once the overlap rule's conditions are met: all designs are Accepted or in re-review af
 ROADMAP.md	a09ba2f3f2a73ddb48b025e1e42c73a68230f0ee4bf71e865b7799ae325cc1bd	1	Track D, decided 2026-11-15 ( @nabbisen : "All accepted and authorized." , on the architect's recommendations): editing a user , in this cyc

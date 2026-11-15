@@ -17,6 +17,15 @@
 > unchanged. **S3 landed the same day**, reviewed, with one architect fold-in —
 > `.git-exclude/reviewed/0.91.0-s3-retire-the-kani-harnesses-2026-11-14.md`.
 
+> ## Released and published 2026-11-15, as `0.91.1`
+> Tag `0.91.1` at `d62424e`, signed. Level B `43713250548` (28 jobs, 0 skipped)
+> and `Security audit` `43713252967`, both on that commit. Publish run
+> `43716663715`: six crates, and the GitHub Release with three assets.
+> **`0.91.0` (tag `c5b95ee`) never published in full**: its publish
+> (`43708004082`) stopped after two crates, on a crates.io CDN race. The same
+> changes shipped as `0.91.1`, with the publish workflow fixed to wait for the
+> CDN. `0.91.0` is recorded in `CHANGELOG.md` as superseded.
+>
 > ## Stage 14 deferred again, 2026-11-15 (`@nabbisen`: *"Deferred, because we have a lot of work around fuctions and UI/UX."*)
 > So `0.91.0` is tagged without it. Its new slot is cycle N's prepared commit.
 > M4-B stays open until it runs.
