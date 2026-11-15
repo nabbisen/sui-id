@@ -2,7 +2,8 @@
 
 > **096-B1 stage 14, the live run against a real upstream, is deferred to
 > `0.91.0`'s cycle** (2026-11-14), and gates `0.91.0`'s tag, M4-B's closure and
-> M6's entry. Its runbook, with what to prepare in advance:
+> M6's entry. **Since 2026-11-15 its upstream is Duende's public demo, not
+> Google**, which needs no setup. Its runbook:
 > [`096-b1-stage14-live-run-runbook-2026-11-12.md`](096-b1-stage14-live-run-runbook-2026-11-12.md).
 
 **Governing RFC:** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md)

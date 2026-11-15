@@ -84,7 +84,7 @@ start in `0.92.0`.
 | **S3** | **The Kani harnesses, and the guard the tests lack** — see §5. On your decision 2 | **Landed** 2026-11-14 | small |
 | **S4** | **One false comment**: `keyring.rs:36-41` says the variable is scrubbed, then that it is deliberately left set. Nothing removes it. sui-id spawns no child process outside tests, so only the comment is wrong | **Landed** 2026-11-14, folded into S1's review | trivial |
 | **P** | **`0.91.0`'s preparation**: version, CHANGELOG, the full local matrix. Dispatched to the dev team, as the mechanical half of every release is | **Landed** 2026-11-15 — [`release-0.91.0-preparation-2026-11-15.md`](release-0.91.0-preparation-2026-11-15.md) | small |
-| **S14** | **096-B1 stage 14, the live run against Google**, on P's commit — [runbook](../096-upstream-oidc-federation/096-b1-stage14-live-run-runbook-2026-11-12.md) | **Ready to run on `a0a6c1a`** (2026-11-15), the prepared commit. The date is the owner's | your time |
+| **S14** | **096-B1 stage 14, the live run against a real upstream**: Duende's public demo since 2026-11-15, not Google. On P's commit — [runbook](../096-upstream-oidc-federation/096-b1-stage14-live-run-runbook-2026-11-12.md) | **Ready to run on `a0a6c1a`** (2026-11-15), the prepared commit. The date is the owner's | your time |
 
 **At the cut** (the architect's commit before the tag, after stage 14's record):
 - set the `CHANGELOG` date to the tag's day;
@@ -186,7 +186,8 @@ this change goes in `verification/README.md`.
    into a scheduled job.
 3. **Stage 14's date** is yours, not the architect's. The run needs the Google
    OAuth client, and, if the architect is to drive the admin steps, the Claude
-   in Chrome extension connected. **When you can, say a date, or say "ready".**
+   in Chrome extension connected. *(Superseded 2026-11-15: the upstream is
+   Duende's public demo, which needs no client; see the runbook's header.)* **When you can, say a date, or say "ready".**
    The tag waits for the run, unless you record a further deferral.
 
 ## 7 — deliberately not in `0.91.0`

@@ -1,171 +1,144 @@
-# 096-B1 stage 14 — the live run against Google: a runbook
+# 096-B1 stage 14 — the live run against a real upstream: a runbook
 
-> ## Its slot has come: `0.91.0`'s prepared commit is **`a0a6c1a`** (2026-11-15).
-> §1 names it. The date is the owner's.
+> ## The upstream is Duende's public demo, not Google (decided 2026-11-15)
+> `@nabbisen`: *"Authorized. Take the way."*, on the architect's proposal to
+> run against `https://demo.duendesoftware.com` instead of Google.
 >
-> ## Deferred 2026-11-14, to `0.91.0`'s cycle.
-> `@nabbisen`: *"Authorized. Defer it. However, it should be controlled properly in
-> the schedule."* `0.90.0` ships without it. **It now runs on `0.91.0`'s prepared
-> commit, before `0.91.0`'s tag**, and that tag waits for its record unless a
-> further deferral is recorded. M4-B cannot close, and M6 cannot enter, without
-> it (ROADMAP, cycle L's row). **§1's commit below is superseded**: the architect
-> writes `0.91.0`'s prepared commit there when it lands.
+> Why the change: Google was the architect's default, picked from the
+> configuration reference's example. Google needs the owner to create a
+> project, a consent screen, a test user and an OAuth client. The demo needs
+> nothing: its client and test users are pre-registered and published.
+> Duende IdentityServer is a certified OpenID Provider (OpenID Foundation).
 >
-> **Prepare before the slot comes**, so the run is not blocked on setup:
-> - the Google OAuth client of §2, with its client ID ready to hand over
->   (the secret stays with you);
-> - if the architect is to drive the admin-console steps, the Claude in Chrome
->   extension, installed, running, and signed in to the same account.
+> **What it gives up:** the claim shapes Google itself sends. The record says
+> *"a certified public OpenID Provider"*, never *"tested with Google"*.
 >
-> Even in a split run, three parts stay yours: creating the client, starting
-> the server with the secret in your own terminal, and the two Google
-> sign-ins (steps 7 and 10).
+> **RFC 096 asks for *"owner-supplied test credentials"*** (`:1088-1089`).
+> The demo's credentials are public, not supplied by the owner. The owner
+> authorized this run with them, on that note. The wording was there to keep
+> secrets out of artifacts, and a demo with public credentials has none.
+>
+> ## Its slot: `0.91.0`'s prepared commit, **`a0a6c1a`** (2026-11-15)
+> Deferred from `0.90.0` on 2026-11-14 (`@nabbisen`: *"Authorized. Defer it.
+> However, it should be controlled properly in the schedule."*). `0.91.0`'s tag
+> waits for this run's record, unless a further deferral is recorded. M4-B
+> cannot close, and M6 cannot enter, without it (ROADMAP, cycle L's row).
 
 **What it proves.** RFC 096 `:1088-1089` asks for *"one representative
-public upstream integration using owner-supplied test credentials outside
-CI, with secrets absent from artifacts."* This is the first time sui-id
-checks a provider against a real upstream, enables it, and signs someone
-in through it. Every run so far used mocks.
+public upstream integration … outside CI, with secrets absent from
+artifacts."* This is the first time sui-id checks a provider against a real
+upstream, enables it, and signs someone in through it. Every run so far used
+mocks.
 
-**What it does not prove.** *"A live happy path does not substitute for
-hostile-provider evidence"* (`:1093-1094`). That is 096-A's corpus, and
-096-C's.
+**What it does not prove.**
+- *"A live happy path does not substitute for hostile-provider evidence"*
+  (`:1093-1094`). That is 096-A's corpus, and 096-C's.
+- Any one large provider's own quirks, Google's or Microsoft's.
 
-## 0 — safety, before anything
+## 0 — safety
 
-- **Use a throwaway instance:** a new directory, with its own database and
-  key file. **Never point this at a sui-id you use.**
-- **The client secret lives only in your terminal's environment.**
-  - Type it with `read -rs`, never on the command line, so it stays out of
-    shell history.
-  - Never write it into a file. The config only *names* the variable.
-  - **Never paste it to the architect, or anywhere else.**
-- **Bind to loopback only**, `127.0.0.1:8801`. Nothing outside your machine
-  can reach it.
-- **Prefer a dedicated test Google account.** Its email becomes a local user
-  in the throwaway database, and nowhere else.
-- **Afterwards,** stop sui-id, delete the directory, and `unset
-  GOOGLE_CLIENT_SECRET`. Keep or delete the Google OAuth client as you wish;
-  it is yours alone.
+- **A throwaway instance only**: its own directory, database and key file,
+  bound to `127.0.0.1:8801`, and deleted afterwards. **Never point a real
+  sui-id at the demo.** Its client credentials are public, so anyone can
+  obtain tokens for its users under that client.
+- **Nothing of the owner's goes to the demo.** The client ID
+  (`interactive.confidential`), the secret (`secret`) and the test user
+  (`alice`/`alice`) are all published by Duende. The demo sees an ordinary
+  browser visit.
+- **Who signs in at the demo: the owner.** The architect does not type a
+  password on a third party's sign-in page.
 
 ## 1 — the commit
 
 `0.91.0`'s preparation landed as `461443c`, and a test-only fix after it as
-**`a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad`** (2026-11-15). That is the commit
-to run. `main` is one commit past it: the commit that wrote this hash here,
-which changes nothing but this file. So check out the exact commit, detached,
-and build that from a clean tree:
+**`a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad`** (2026-11-15). That is the
+commit to run. The architect builds it, detached, in a clean sibling clone:
 
 ```sh
-cd <your sui-id checkout>
-git status --short                                   # must print nothing
-git fetch origin
-git checkout --detach a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad
-git log -1 --format=%H    # must print a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad
-cargo build --release -p sui-id --locked
-target/release/sui-id --version                      # must print: sui-id 0.91.0
+git clone . ../sui-id-stage14
+git -C ../sui-id-stage14 checkout --detach a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad
+cargo build --release -p sui-id --locked --manifest-path ../sui-id-stage14/Cargo.toml
+../sui-id-stage14/target/release/sui-id --version     # must print: sui-id 0.91.0
 ```
 
-Afterwards, `git checkout main` returns you to the branch.
+## 2 — the upstream
 
-*(Superseded: `0.90.0`'s `1955bc5`, named here before the deferral.)*
+Nothing to create. From the demo, measured 2026-11-15:
+- **Discovery:** issuer `https://demo.duendesoftware.com`, with every
+  endpoint on that one origin;
+- **Signing and auth:** RS256; `client_secret_basic`; PKCE S256, which this
+  client requires and sui-id sends;
+- **Redirect URI:** `http://localhost:8801/auth/federated/callback` is
+  accepted. A probe of the authorize endpoint went to its login page, not to
+  an error;
+- **Test users:** its login page says *"use either `bob`/`bob` or
+  `alice`/`alice`"*.
 
-## 2 — a Google OAuth client
+## 3 — the throwaway configuration (the architect's)
 
-*Rewritten 2026-11-15: the owner could not find the menu the earlier text
-implied. Google moved OAuth clients to **Google Auth Platform**. Its docs also
-say a client secret may be copied only when it is created.*
+In `../sui-id-live/`, from `--print-sample-config`, with:
+- `issuer = "http://localhost:8801"`, `listen_addr = "127.0.0.1:8801"`,
+  `cookie_secure = false`;
+- `db_path` and `key_file` inside that directory;
+- `federation_providers = []` deleted, and this block appended:
 
-1. Open `https://console.cloud.google.com/auth/clients` (**☰ Menu → Google
-   Auth Platform → Clients**). Select a project, or create a throwaway one.
-2. If it asks you to register or **Get started**: any app name, your email as
-   the support email, **Audience: External** (so the app stays in
-   **Testing**), and your email as the contact.
-3. **Audience → Test users → Add users**: the Google account you will sign in
-   with at steps 7 and 10. In Testing, any other account is refused with
-   *"Access blocked"*.
-4. **Clients → Create client**: application type **Web application**, any
-   name. Under **Authorized redirect URIs → Add URI**, exactly:
+```toml
+[[federation_providers]]
+slug              = "duende-demo"
+display_name      = "Duende demo"
+issuer            = "https://demo.duendesoftware.com"
+client_id         = "interactive.confidential"
+client_secret_env = "DUENDE_DEMO_SECRET"
+scopes            = "openid email profile"
+provision_mode    = "provision_on_first_login"
+```
 
-   ```text
-   http://localhost:8801/auth/federated/callback
-   ```
+Then `sui-id preview-upgrade --config sui-id.toml`. **Expected:** no
+configuration error.
 
-   Leave **Authorized JavaScript origins** empty. If an AI-agent checkbox is
-   offered, leave it unticked; it cannot be changed later.
-5. **Create.** Then, at once:
-   - **copy the client secret into your password manager.** It may not be
-     shown again; a lost one means adding a new secret;
-   - note the **client ID**. That one may be shared with the architect.
-
-## 3 — the throwaway configuration
+## 4 — start it (the architect's)
 
 ```sh
-mkdir ~/sui-id-live && cd ~/sui-id-live
-<checkout>/target/release/sui-id --print-sample-config > sui-id.toml
+DUENDE_DEMO_SECRET=secret ../sui-id-stage14/target/release/sui-id --config sui-id.toml > server.log 2>&1
 ```
 
-Edit `sui-id.toml`:
-- `issuer = "http://localhost:8801"` (the name must match the redirect URI
-  above exactly);
-- keep `listen_addr = "127.0.0.1:8801"` and `cookie_secure = false`;
-- point `db_path` and `key_file` into this directory;
-- **delete** the line `federation_providers = []`;
-- append the Google block from the configuration reference's example
-  (`docs/src/reference/configuration.md`, "`[[federation_providers]]`"),
-  with your client ID, `client_secret_env = "GOOGLE_CLIENT_SECRET"`, and
-  `provision_mode = "provision_on_first_login"`. Keep its `allowed_origins`
-  exactly as the example gives them: this run checks them too.
+The value is Duende's published demo secret, not a credential of anyone's.
 
-Then, **before starting anything**, run the upgrade guide's own pre-check:
+## 5 — the steps, and who does each
 
-```sh
-<checkout>/target/release/sui-id preview-upgrade --config sui-id.toml
-```
-
-**Expected:** no configuration error.
-
-## 4 — start it
-
-In the same terminal:
-
-```sh
-read -rs GOOGLE_CLIENT_SECRET && export GOOGLE_CLIENT_SECRET
-<checkout>/target/release/sui-id --config sui-id.toml 2>&1 | tee server.log
-```
-
-## 5 — the steps, and what each should show
-
-Record **PASS** or **FAIL** for each, and on a FAIL, the exact text the page
-showed.
+**The owner** clicks in the browser, including both sign-ins at the demo. The
+architect does the clicks instead if the Claude in Chrome extension is
+connected. **The architect** reads `server.log`, and checks each step against
+the database: the provider row, the audit events, and the federation link. So
+every step has a second, independent record.
 
 | # | Do | Expected |
 |---|---|---|
-| 1 | Watch the startup log | one `WARN` naming the provider and saying to visit `/admin/federation-providers` and press "Check and enable" |
-| 2 | Open the printed setup URL, and create the admin | the admin console |
-| 3 | **Admin → Federation providers** | one row: Google, Disabled, Requires review, "—" for the check column, "No" linked users |
+| 1 | The startup log | one `WARN` naming the provider and saying to visit `/admin/federation-providers` and press "Check and enable" |
+| 2 | Open the setup URL the architect gives you, and create the admin | the admin console |
+| 3 | **Admin → Federation providers** | one row: Duende demo, Disabled, Requires review, "—" for the check column, "No" linked users |
 | 4 | **Check only** | "Every check passed." |
 | 5 | **Check and enable** | "The provider was checked and enabled.", and the row Enabled, Validated, with a time |
-| 6 | Sign out. Open the login page | a **"Sign in with Google"** button |
-| 7 | Press it, and sign in with the test Google account | back at sui-id, signed in as a new user, on that user's own security page (`/me/security`) |
-| 8 | Sign in as the admin. **Users →** that user | a *Federated sign-in* section with Google |
+| 6 | Sign out. Open the login page | a **"Sign in with Duende demo"** button |
+| 7 | Press it, and sign in at the demo as `alice` / `alice` | back at sui-id, signed in as a new user, on that user's own security page (`/me/security`) |
+| 8 | Sign in as the admin. **Users →** that user | a *Federated sign-in* section with Duende demo |
 | 9 | **Unlink**. Read the confirm page, then confirm | the page says the unlink cannot be undone, and that open sessions stay valid until the account is disabled |
-| 10 | Sign out, and press "Sign in with Google" again | refused on the login page with "This sign-in could not be linked to a local account automatically. Contact an administrator." It is the same message whether or not a local account exists, by design, so the page cannot be used to learn who has an account |
+| 10 | Sign out, and press "Sign in with Duende demo" again, as `alice` | refused on the login page with "This sign-in could not be linked to a local account automatically. Contact an administrator." It is the same message whether or not a local account exists, by design |
 | 11 | **Federation providers → Disable** | "The provider was disabled."; the login button is gone |
-| 12 | Stop sui-id, remove the Google block from `sui-id.toml`, start again, then **Delete** | the confirm page states how many users' sign-in ends; then the row is gone |
+| 12 | The architect stops sui-id, removes the block, and starts it again. Then **Delete** | the confirm page states how many users' sign-in ends; then the row is gone |
 
-## 6 — what to send back
+## 6 — the record
 
-Into a new file, `.git-exclude/live-runs/096-b1-stage14-<date>.md`:
-- the commit from §1, and `sui-id --version`;
-- the table above, with PASS or FAIL and, for a FAIL, the page's exact text;
-- **from `server.log`, only the lines at `WARN` or `ERROR`**.
+The architect writes `.git-exclude/live-runs/096-b1-stage14-<date>.md`:
+- the commit, and `sui-id --version`;
+- the table, PASS or FAIL per step, with the page's exact text for a FAIL;
+- the database check for each step;
+- `server.log`'s `WARN` and `ERROR` lines, with any URL containing `code=`
+  or `state=`, and any token or cookie, removed.
 
-**Before saving, read every line you paste, and remove:**
-- any URL containing `code=` or `state=`;
-- any token, cookie or secret;
-- your Google account's email address.
+Then: fixes, if the run finds any, and the gates again. **Nothing from the
+run goes into git** except the architect's summary.
 
-The architect reads the file, fixes what it finds, and runs the release gates
-again before the tag. **Nothing from this run goes into git** except the
-architect's summary of it.
+## 7 — afterwards
+
+Stop sui-id, and delete `../sui-id-live/` and `../sui-id-stage14/`.
