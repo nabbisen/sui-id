@@ -1,6 +1,8 @@
 # RFC 148 — One command system a newcomer can find their way through
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-15
+**Approved by.** `@nabbisen`, 2026-11-15: *"All accepted."* Its §6 questions, the same day: *"Your recommendation is accepted."*
 **Security review.** Required
 **Design prerequisites.** None.
 **Implementation prerequisites.** This RFC Accepted, with its §6 questions
@@ -24,6 +26,7 @@ line.
 **Touches.** `crates/sui-id/src/main.rs`, `crates/sui-id/src/cli.rs`,
 `crates/sui-id/src/runtime/config.rs`, `docs/src/reference/` (a generated
 CLI reference), `docs/src/getting-started/quick-start.md`.
+**Independent design review.** [Design review record, 2026-11-15](../handoffs/148-one-command-system/design-review-2026-11-15.md). By `@nabbisen`, who did not author it.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/148-one-command-system/README.md`](../handoffs/148-one-command-system/README.md)
@@ -187,6 +190,10 @@ displayed"*): the first screen is the map, and the detail is one command
 away.
 
 ## 6 — questions for the owner
+
+> **Answered 2026-11-15, all three as recommended** (`@nabbisen`: *"Your
+> recommendation is accepted."*): **`clap`**; the aliases kept **until `1.0`**;
+> and **no prompt** when an explicit `--config` names a missing file.
 
 1. **The parser.** It can be written here, table-driven, from the registry
    of §3. Or it can be [`clap`](https://crates.io/crates/clap), the

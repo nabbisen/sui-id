@@ -1,6 +1,8 @@
 # RFC 147 — What already exists can be found, and says what to do next
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-15
+**Approved by.** `@nabbisen`, 2026-11-15: *"All accepted."*
 **Security review.** Required
 **Design prerequisites.** None.
 **Implementation prerequisites.** This RFC Accepted. Under the
@@ -15,6 +17,7 @@ repairs under the feature freeze's exception, as decided 2026-11-15.
 **Touches.** `crates/sui-id-web/src/pages/{users,clients,signing_keys,federation_providers}.rs`,
 `crates/sui-id-i18n/src/locale/*.rs`, `crates/sui-id/src/main.rs`,
 `crates/sui-id/src/runtime/config.rs`, `sui-id.example.toml`.
+**Independent design review.** [Design review record, 2026-11-15](../handoffs/147-what-exists-can-be-found/design-review-2026-11-15.md). By `@nabbisen`, who did not author it.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/147-what-exists-can-be-found/README.md`](../handoffs/147-what-exists-can-be-found/README.md)

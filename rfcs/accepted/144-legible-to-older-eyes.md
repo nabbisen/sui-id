@@ -1,13 +1,15 @@
 # RFC 144 — The interface is legible to older eyes
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-15
+**Approved by.** `@nabbisen`, 2026-11-15: *"All accepted."* His acceptance of 2026-11-04 (*"Accepted."*) covered the original design; this one covers the 2026-11-15 refresh.
 **Security review.** Required
 **Design prerequisites.** None.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** *(Raised 2026-11-15 to the stricter standard; see the refresh section.)* Every foreground/background **pair a component actually composes** clears WCAG 2.1 **AAA (7:1; 4.5:1 for large text)** in both modes, and every control boundary and the focus ring clear 3:1 — a token has no ratio, a pair does, and `--danger-default` clears AA on white while failing on `--danger-subtle`; the contrast assertion in `crates/sui-id-web/src/tokens/tests.rs` covers component stylesheets and not only `TOKENS_CSS`, with no token excluded from it on the grounds that it is decorative; the border token used on interactive controls clears 3:1 (WCAG 1.4.11); the type scale is expressed in `rem` so a reader's own browser font size is honoured, with a test that fails if a `px` font size returns; interactive controls clear 44×44 CSS px; and `prefers-contrast: more` is honoured and asserted by the same gate that asserts `prefers-reduced-motion`. **And (2026-11-15):** no `placeholder` attribute carries guidance, asserted by a test that fails on any `placeholder=` in a page; and every page that shows the navigation renders the account menu, asserted by a test over every `show_nav=true` page.
 **Tracks.** UI/UX accessibility. §5 and §6 carry open questions.
 **Touches.** `crates/sui-id-web/src/tokens.rs`, `crates/sui-id-web/src/tokens/tests.rs`, `crates/sui-id-web/src/components/forms.rs`, `crates/sui-id-web/src/components/buttons.rs`, `crates/sui-id-web/src/components/chrome.rs`, `crates/sui-id-web/src/components/setup.rs`.
-**Independent design review.** [Design review record, 2026-11-04](../handoffs/144-legible-to-older-eyes/design-review-2026-11-04.md). **By the architect, at `@nabbisen`'s request** — *"Review it carefully by yourself with my fundamental philosophy"* — `ROADMAP.md` §S1c's owner-invoked exception, and the record says he asked. **The architect wrote this RFC and is not independent of it**; the review's central finding is that this RFC's own §1 diagnosis was too narrow.
+**Independent design review.** [Design review record, 2026-11-04](../handoffs/144-legible-to-older-eyes/design-review-2026-11-04.md), by the architect at `@nabbisen`'s request (*"Review it carefully by yourself with my fundamental philosophy"*), `ROADMAP.md` §S1c's owner-invoked exception. **And for the 2026-11-15 refresh:** [design review record, 2026-11-15](../handoffs/144-legible-to-older-eyes/design-review-2026-11-15.md), `@nabbisen`'s acceptance, in his words.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/144-legible-to-older-eyes/README.md`](../handoffs/144-legible-to-older-eyes/README.md)

@@ -1,10 +1,7 @@
 # RFC 147 — handoff
 
-**RFC.** [`../../proposed/147-what-exists-can-be-found.md`](../../proposed/147-what-exists-can-be-found.md)
-**Status.** **Proposed: build-prohibited** under RFC 000. Nothing here is
-dispatched. Under the operator-experience track, nothing is built until the
-track's schedule and every one of its RFCs exist (ROADMAP, *Active plan*,
-2026-11-15).
+**RFC.** [`../../accepted/147-what-exists-can-be-found.md`](../../accepted/147-what-exists-can-be-found.md)
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Not yet dispatched: its build is scheduled in the ROADMAP's cycles N–P, authorized 2026-11-15.
 
 ## Where it came from
 

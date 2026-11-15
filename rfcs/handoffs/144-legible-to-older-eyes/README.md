@@ -1,10 +1,9 @@
 # RFC 144 — handoff
 
-**RFC.** [`../../proposed/144-legible-to-older-eyes.md`](../../proposed/144-legible-to-older-eyes.md)
-**Status.** **Proposed — build-prohibited** under RFC 000, which bars
-implementation before acceptance. Nothing here is dispatched.
+**RFC.** [`../../accepted/144-legible-to-older-eyes.md`](../../accepted/144-legible-to-older-eyes.md)
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Not yet dispatched: its build is scheduled in the ROADMAP's cycles N–P, authorized 2026-11-15.
 
-## 2026-11-15: refreshed toward the stricter standard, for your acceptance again
+## 2026-11-15: refreshed toward the stricter standard, and accepted the same day
 
 On your decision 3 (*"Seems the stricter are preferred … review them
 carefully with my fundamental philosophy"*), the RFC gains *Refresh,
@@ -14,8 +13,8 @@ carefully with my fundamental philosophy"*), the RFC gains *Refresh,
 - the account menu on every page;
 - type and table density changed together.
 
-**It changes the design you accepted on 2026-11-04**, so that acceptance
-does not cover it. Its measurement:
+**It changed the design accepted on 2026-11-04**, so it was put for acceptance
+again, and accepted 2026-11-15 ([record](design-review-2026-11-15.md)). Its measurement:
 [`aaa-measurement-2026-11-15.md`](aaa-measurement-2026-11-15.md).
 
 ## Where acceptance stands, 2026-11-04
