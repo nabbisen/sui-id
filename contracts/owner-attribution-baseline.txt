@@ -82,6 +82,7 @@ ROADMAP.md	d82c728ed5be7a135227fe87a78f0e113122359b0ae2f2e4ffec0885abd7edb6	1	Bl
 ROADMAP.md	d8883e5464c9b01b1f1276029fdbdf1d5580154309dab48030971b42ef6ad2be	1	Changed 2026-11-15 : the upstream is Duende's public demo, a certified OpenID Provider with a published client, so there is no client to pre
 ROADMAP.md	db433267ae333c4f94967bcef196301170d48cc96c8e8fa455964373b2b7348b	1	M3 — Atomic dynamic registration — CLOSED 2026-10-25 — Validate all metadata before consuming authorization; atomic use/client/audit transac
 ROADMAP.md	dd16e9a10736b78b224f43fe486104fc847e923d1d0f98f9c08e1af1e0990a66	1	The architect's self-reviews to date , each to be confirmed against this ruling rather than assumed compliant: RFC 124 ( @nabbisen assigned 
+ROADMAP.md	df89342f77ca813bcc37e73422405091f44a03ced3c776ead5b49ad4028f24fa	1	Stage 14 deferred again 2026-11-15 ( @nabbisen : "Deferred, because we have a lot of work around fuctions and UI/UX." ), so the tag no longe
 ROADMAP.md	e0cc1e28730254b65787af5a6ba09b9bff2b264a9c0c1c6e25e222ea9a9f30eb	1	P — the console follows the operator v0.94.0 Authorized 2026-11-15 ( @nabbisen : "Authorized." ).
 ROADMAP.md	e48726a2966498de86bf8216ccf3cd161bf3681500bce35a105c0dfc6ac665e0	1	119 accepted by @nabbisen 2026-09-26; status held — G11 refuses an Accepted RFC whose security review is Required and which cites no review 
 ROADMAP.md	e722d6a8d555e7825cc2d5cc3977168935095c642fb98fdc51f1e1cf0002d0ed	1	Relabelled K, L and M on 2026-11-08 ( @nabbisen : "Approved." ), contents unchanged, so each letter means one cycle

@@ -1,5 +1,14 @@
 # 096-B1 stage 14 — the live run against a real upstream: a runbook
 
+> ## Deferred again, 2026-11-15, before step 2
+> `@nabbisen`: *"Deferred, because we have a lot of work around fuctions and UI/UX."* Step 1 passed on `a0a6c1a`;
+> steps 2–12 were not run, and the instance was removed. **The new slot is
+> not yet set.** The architect proposes cycle N's prepared commit (`0.92.0`).
+> Until a slot is set and the run is recorded, **M4-B cannot close, so RFC
+> 097 (M5) cannot start, and M6 cannot enter.** `0.91.0`'s tag no longer
+> waits: its condition, a further recorded deferral, is met. **§1's commit
+> is superseded** when the slot is set.
+
 > ## The upstream is Duende's public demo, not Google (decided 2026-11-15)
 > `@nabbisen`: *"Authorized. Take the way."*, on the architect's proposal to
 > run against `https://demo.duendesoftware.com` instead of Google.
