@@ -8,12 +8,12 @@ track's schedule and every one of its RFCs exist (ROADMAP, *Active plan*,
 
 ## Where it came from
 
-The operator-experience assessment of 2026-11-15, the architect's measurement
-of what the owner found using the admin console and the first run. It is the
-architect's working file until the track's first RFC is accepted, and then
-moves here.
+[`operator-experience-assessment-2026-11-15.md`](operator-experience-assessment-2026-11-15.md):
+the architect's measurement, 2026-11-15, of what was found using the admin
+console and the first run. It is the basis for the whole track, RFCs 144,
+147, 148 and 149, and is kept here as the track's first RFC.
 
 ## What exists
 
-Nothing yet beyond the RFC. Its dispatch is written when the track's
-schedule is authorized.
+The RFC and the assessment. The dispatch is written when the track's
+schedule (ROADMAP, cycles N–P) is authorized.
