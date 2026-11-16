@@ -79,7 +79,9 @@ Signing keys should not be empty at all, because one is created at first
 start. If they are, the page should say what that means and what to do.
 **Decision.** Both empty states name the next step. The federation one also
 links to `docs/src/reference/configuration.md`'s `[[federation_providers]]`
-section, at the URL the deployed docs use. The audit log's empty state
+section, at the URL the deployed docs use. *(Corrected 2026-11-16: there is no
+deployed documentation site. The link is the documentation source on GitHub,
+pinned to the binary's own release tag; see N1's dispatch, §3.)* The audit log's empty state
 (`audit.rs:120`) stays as it is: an empty log has no next step.
 **Test.** Every `empty_state(…, None)` call is on a short list in the test,
 each with a written reason. Today that list holds only the audit log. A new

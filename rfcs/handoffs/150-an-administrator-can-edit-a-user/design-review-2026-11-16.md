@@ -11,8 +11,16 @@
   item was to accept RFCs 150 and 151, and RFC 101 as refreshed.
 - On §5 (should a username ever be changeable), in the same message: *"Partially
   agreed. However, it brings limitation: Removed names can not be used in the
-  future. Never once registered. Is it for security ?"* **§5 stays open**, and is
-  answered in the RFC.
+  future. Never once registered. Is it for security ?"* §5 was then answered in
+  the RFC with a proposal.
+- On that proposal (rename allowed, old and deleted names reserved): *"Proceed."*
+  The architect records this as approving the proposal. **If it meant only
+  "carry on", §5 reopens**, and the username is read-only until it is
+  answered.
+
+- On §5's second question (what happens to a retired name), after the
+  architect's options A–E: *"Agreed."*, to option D, reserved by default,
+  released only by an administrator's deliberate action.
 
 ## A correction this record makes
 

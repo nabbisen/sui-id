@@ -12,6 +12,8 @@ console and the first run. It is the basis for the whole track, RFCs 144,
 
 ## What exists
 
+- [`0.92.0-n1-the-repairs-2026-11-16.md`](0.92.0-n1-the-repairs-2026-11-16.md): **dispatched 2026-11-16**, `0.92.0`'s N1.
+
 - [`cycle-n-and-0.92.0-2026-11-15.md`](cycle-n-and-0.92.0-2026-11-15.md):
   `0.92.0` scoped against what it would cost. It proposes a reordering of
   cycles N–P, for decision.

@@ -13,7 +13,7 @@ and language from the user's own page. Each change is one Class-A command
 whose audit record names the old and new value, and is tested with a
 mutation. An email change goes through RFC 101's lifecycle, never a direct
 write. A directory (LDAP) user's name and email are read-only, because the
-directory owns them. The username is read-only unless §5 is answered otherwise; a removed name is never reused.
+directory owns them. An administrator can rename a user, with step-up and an audit record of the old and new name; an old or deleted user's name is reserved, released only by an administrator's own audited, step-up action on one name, and a test fails if any other path frees it.
 **Tracks.** The operator-experience track, Track D: one of two features
 given a freeze exception.
 **Touches.** `crates/sui-id-store/src/commands.rs`,
@@ -70,7 +70,7 @@ does not supply it.
 **Test.** The edit form offers no display-name or email field for an LDAP
 user, and the command refuses one. **Mutation:** let the command accept it.
 
-### 2 — the username, until §5 is answered
+### 2 — the username: renamed, never reused
 
 **Corrected 2026-11-16.** This section first said the username *"is what the
 audit log shows as the actor of everything they did"*. **That was false**:
@@ -93,7 +93,9 @@ What is true:
   every audit record's actor resolvable. It is not a rule anyone set on its
   own.
 
-Until §5 is answered, this RFC builds the username read-only.
+**§5 decides it:** an administrator may rename a user, and every old or deleted
+name stays reserved. The reservation is recorded in a table of retired names,
+checked when a user is created or renamed.
 
 ### 3 — the email goes through RFC 101, and only through RFC 101
 
@@ -116,12 +118,13 @@ pages, confirmations and step-up as they are. The page's layout follows RFC
 
 ## 5 — questions for the owner
 
-1. **Should a username ever be changeable?** *Open.* Asked 2026-11-16:
+1. **Should a username ever be changeable?** **Answered 2026-11-16: as proposed below**
+   (`@nabbisen`: *"Proceed."*, in reply to the proposal). Asked 2026-11-16:
    *"Partially agreed. However, it brings limitation: Removed names can not
    be used in the future. Never once registered. Is it for security ?"*
 
-   **Proposed (the architect's): an administrator may rename a user, and an
-   old name stays reserved.**
+   **Decided: an administrator may rename a user, and an old name stays
+   reserved.** (First proposed by the architect.)
    - A rename is one Class-A command, `admin.user.username.changed`, with
      step-up, because it changes how a person signs in. Its audit record
      names the old and new name.
@@ -144,6 +147,35 @@ pages, confirmations and step-up as they are. The page's layout follows RFC
    the name instead of `sub`. Those would then point at a different person,
    silently. sui-id itself keys on IDs, but an operator's habits and tools
    often key on names.
+
+2. **What happens to a retired name?** **Decided 2026-11-16** (`@nabbisen`:
+   *"Agreed."*, on the architect's option D): a retired name is **reserved by
+   default, and an administrator may release one specific name
+   deliberately.**
+   - **Retired names**: a deleted user's name, held today by `username`'s
+     `UNIQUE` across all rows; and a renamed user's old name, held by the
+     table of retired names of §2.
+   - **Release** is one Class-A command, `admin.username.released`, with
+     step-up, for one name at a time. Its confirmation page states who last
+     held the name (their ID), when it was retired, and plainly that
+     *anything outside sui-id that still refers to this name will then refer
+     to the next user given it*. The audit record names the released name and
+     the retired holder's ID.
+   - **Never automatic.** No time limit releases a name, and nothing else
+     does.
+   - **Why not reuse by default.** Measured on `e27895d`: sign-in finds the
+     account by username (`crates/sui-id-core/src/authn/session.rs:157`), and
+     a wrong password counts toward **that** row's lockout
+     (`crates/sui-id-store/src/repos/users.rs:349`). A reused name lets a
+     former user's old login, or a password manager still holding it, lock
+     the new holder out. And references by name outside sui-id would point
+     at someone else, silently.
+   - **Rejected:** reserving names for ever with no release (a departed
+     person's name could never be given again); freeing them at once (both
+     harms above, unannounced); freeing them after a waiting period (the
+     same harms, later and unannounced); deleting the row (it breaks audit
+     history).
+   - Not for a directory (LDAP) user.
 
 ## Alternatives rejected
 
