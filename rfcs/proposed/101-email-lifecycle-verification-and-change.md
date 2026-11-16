@@ -255,6 +255,44 @@ safe and secure, robust and sophisticated design:
 - **No enumeration.** The forgot-password response is identical whether the account
   exists, and whether its address is verified.
 
+## Refresh, 2026-11-16: measured against the code as it now stands
+
+This RFC was written in September 2026. Since then, federated sign-up
+(RFC 096) and the Class-A seam (RFC 094, closed in `0.88.0`) have shipped,
+and RFC 150 now depends on this RFC for an administrator's email change.
+Measured on `ddcf4b0`:
+
+- **Still true: nothing verifies an address.** `email_verified_at` exists
+  (migration 0020), but nothing writes a value. Setup, an administrator's
+  user creation, and federated sign-up all create a user with
+  `email_verified_at: None` (`crates/sui-id-core/src/setup.rs:171`,
+  `crates/sui-id-core/src/identity/admin/users.rs:51`,
+  `crates/sui-id/src/http/handlers/federation.rs:1384`). So **every
+  `email_verified` claim sui-id issues is `false`.**
+- **Federated users too, even though their upstream vouched.** Federated
+  provisioning requires the upstream's `email_verified = true`, then records
+  the address as unverified. That is **D1 applied correctly**: *"verification
+  is proof of control, and nothing else counts"*. An upstream's claim is not
+  proof that this user controls this address *here*. The refresh records it
+  because it is surprising, not because it is wrong.
+- **Still true: an address can never change.** `users::update_email`
+  (`crates/sui-id-store/src/repos/users.rs:577`) writes an address directly,
+  with no verification and no record, and **only tests call it**. This RFC's
+  build must not use it.
+- **New since this RFC: a directory (LDAP) user's email is not this RFC's.**
+  `upsert_ldap_shadow` (`users.rs:920`) refreshes it from the directory on
+  every sign-in. Verify, change and re-verify apply to local and federated
+  users. A directory user's address is changed in the directory, and is
+  shown as such (RFC 150 §1a).
+- **D5 is now available.** RFC 094's Class-A seam exists, and every mutation
+  here uses it.
+- **§6.3 has a consumer now.** RFC 150 (an administrator edits a user) starts
+  this RFC's administrator-initiated change from the user's page, and writes
+  no email of its own.
+
+**Nothing in the design changes.** D1–D7, and the settled answers in §6,
+stand as written.
+
 ## Alternatives rejected
 
 **Admin-settable verified flag.** Would let an operator typo produce a verified
