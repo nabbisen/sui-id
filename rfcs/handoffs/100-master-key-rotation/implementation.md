@@ -37,7 +37,7 @@ RFC 100's body keeps the names it was written with. Its refresh maps them
 
 ## Stage 0 — the harness, first
 
-**Dispatched 2026-11-16** — [`0.92.0-stage-0-the-harness-2026-11-16.md`](0.92.0-stage-0-the-harness-2026-11-16.md), in cycle N.
+**Dispatched and landed 2026-11-16** — [`0.92.0-stage-0-the-harness-2026-11-16.md`](0.92.0-stage-0-the-harness-2026-11-16.md), in cycle N. Torn writes are modelled, as the design requires.
 
 **Surfaces:** a key-file adapter module in `crates/sui-id` (where rotation
 and `keyring` live); a test-only cargo feature for failpoints; a test-support

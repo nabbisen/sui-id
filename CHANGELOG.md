@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tests and CI
+
+- **A crash-injection harness now checks master-key rotation against a
+  simulated power loss, not only a killed process.** The two models
+  disagree: a kill-only test passes a rotation with no syncs at all, which
+  the power-loss model catches immediately. The harness holds today's
+  rotation to the invariant that some file always holds the key the
+  database is actually sealed under, at every point a crash could land,
+  reproducing the design's own prototype against the real code.
+
 ## [0.91.1] — 2026-11-15
 
 **Master-key rotation is now durable against a power loss, except

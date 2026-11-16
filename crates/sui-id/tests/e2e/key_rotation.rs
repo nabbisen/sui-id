@@ -413,6 +413,227 @@ mod ordering {
     }
 }
 
+// ---------- RFC 100 stage 0 (2026-11-16): the crash-injection
+// harness's Failpoint adapter, through the real binary ----------
+//
+// `SUI_ID_FAILPOINT=<point>:<action>` only exists under the
+// `test-support` feature (`key_adapter::default_adapter`), so this
+// drives it exactly the way `ordering`'s `SUI_ID_MASTER_KEY` tests do:
+// on the **child process only**.
+mod failpoint {
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Output};
+    use sui_id_store::crypto::MasterKey;
+
+    const BIN: &str = env!("CARGO_BIN_EXE_sui-id");
+
+    /// Every point named in the adapter's two call sites
+    /// (`write_key_file_impl`'s `"rotate.stage"` prefix, and
+    /// `rotate_key_files`'s own renames/syncs) — `rfcs/handoffs/
+    /// 100-master-key-rotation/0.92.0-stage-0-the-harness-2026-11-16.md`
+    /// §A/§D5.
+    const POINTS: &[&str] = &[
+        "rotate.stage.create_new",
+        "rotate.stage.write",
+        "rotate.stage.sync_file",
+        "rotate.stage.sync_dir",
+        "rotate.rename.1",
+        "rotate.sync_dir.after_rename.1",
+        "rotate.rename.2",
+        "rotate.sync_dir.after_rename.2",
+    ];
+
+    struct Home {
+        dir: tempfile::TempDir,
+    }
+
+    impl Home {
+        fn new() -> Self {
+            Self {
+                dir: tempfile::tempdir().expect("tempdir"),
+            }
+        }
+        fn db(&self) -> PathBuf {
+            self.dir.path().join("t.sqlite")
+        }
+        fn key(&self) -> PathBuf {
+            self.dir.path().join("t.key")
+        }
+        fn staged_key(&self) -> PathBuf {
+            self.dir.path().join("t.key.new")
+        }
+        fn config(&self) -> PathBuf {
+            let sample = Command::new(BIN)
+                .arg("--print-sample-config")
+                .output()
+                .expect("sample");
+            let mut text = String::from_utf8(sample.stdout).expect("utf8");
+            text = text
+                .replace("./sui-id.sqlite", &self.db().display().to_string())
+                .replace("./sui-id.key", &self.key().display().to_string())
+                .replace("127.0.0.1:8801", "127.0.0.1:18814");
+            let path = self.dir.path().join("cfg.toml");
+            std::fs::write(&path, text).expect("config");
+            path
+        }
+        /// Creates and migrates the database, bootstraps the key file —
+        /// and, unlike `admin unlock-user` alone, seeds one active
+        /// signing key directly, so [`key_opens`] has something real to
+        /// unseal (no HTTP setup wizard runs in this binary-only
+        /// harness).
+        async fn create(&self, cfg: &Path) {
+            let out = self.run(
+                &["admin", "unlock-user", "--username", "nobody", "--config"],
+                cfg,
+            );
+            assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+            assert!(self.db().exists());
+            assert!(self.key().exists());
+
+            let body = std::fs::read_to_string(self.key()).expect("key body");
+            let key = MasterKey::from_base64(body.trim()).expect("key");
+            let mut bytes = *key.as_bytes();
+            let db_key = MasterKey::from_bytes(bytes);
+            use zeroize::Zeroize;
+            bytes.zeroize();
+            let db = sui_id_store::Database::open(&self.db(), db_key).expect("open");
+            sui_id_store::repos::signing_keys::insert_with_plaintext(
+                &db,
+                sui_id_shared::ids::SigningKeyId::new(),
+                "EdDSA",
+                b"a signing private key, for this test only",
+                b"a public key",
+                true,
+            )
+            .await
+            .expect("seed a signing key");
+        }
+        fn run(&self, args: &[&str], cfg: &Path) -> Output {
+            Command::new(BIN).args(args).arg(cfg).output().expect("run")
+        }
+        /// Same as [`Home::run`], with `SUI_ID_FAILPOINT` set on the
+        /// **child process only**.
+        fn run_with_failpoint(&self, args: &[&str], cfg: &Path, spec: &str) -> Output {
+            Command::new(BIN)
+                .args(args)
+                .arg(cfg)
+                .env("SUI_ID_FAILPOINT", spec)
+                .output()
+                .expect("run")
+        }
+        fn bak_files(&self) -> Vec<PathBuf> {
+            std::fs::read_dir(self.dir.path())
+                .expect("read dir")
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_name().to_string_lossy().starts_with("t.key.bak."))
+                .map(|e| e.path())
+                .collect()
+        }
+    }
+
+    fn stderr(o: &Output) -> String {
+        String::from_utf8_lossy(&o.stderr).into_owned()
+    }
+
+    /// A genuine decrypt attempt, not a byte comparison: does the key at
+    /// `key_path` unseal the active signing key in the database at
+    /// `db_path`? The dispatch's §C oracle, reused by §D5.
+    async fn key_opens(key_path: &Path, db_path: &Path) -> bool {
+        let Ok(body) = std::fs::read_to_string(key_path) else {
+            return false;
+        };
+        let Ok(key) = MasterKey::from_base64(body.trim()) else {
+            return false;
+        };
+        let mut bytes = *key.as_bytes();
+        let key_for_db = MasterKey::from_bytes(bytes);
+        use zeroize::Zeroize;
+        bytes.zeroize();
+        let Ok(db) = sui_id_store::Database::open(db_path, key_for_db) else {
+            return false;
+        };
+        match sui_id_store::repos::signing_keys::active(&db).await {
+            Ok(row) => sui_id_store::crypto::open(
+                &key,
+                &row.private_key_enc,
+                sui_id_store::repos::signing_keys::SIGNING_KEY_AAD,
+            )
+            .is_ok(),
+            Err(_) => false,
+        }
+    }
+
+    /// M2: some file in `h`'s directory holds the key the database is
+    /// actually sealed under.
+    async fn m2_holds_on_disk(h: &Home) -> bool {
+        let mut candidates = vec![h.key(), h.staged_key()];
+        candidates.extend(h.bak_files());
+        for path in candidates {
+            if path.exists() && key_opens(&path, &h.db()).await {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// For every listed point, `abort` leaves a directory in which M2
+    /// holds — a kill loses nothing written, so this is a real-process
+    /// confirmation of D1's kill-model finding, not a new claim.
+    #[tokio::test]
+    async fn abort_at_every_point_leaves_m2_holding() {
+        for point in POINTS {
+            let h = Home::new();
+            let cfg = h.config();
+            h.create(&cfg).await;
+            let spec = format!("{point}:abort");
+
+            let out =
+                h.run_with_failpoint(&["admin", "rotate-key", "--yes", "--config"], &cfg, &spec);
+            assert!(
+                out.status.code().is_none(),
+                "abort at {point} must terminate by signal, not exit normally: {:?}",
+                out.status
+            );
+            assert!(
+                m2_holds_on_disk(&h).await,
+                "M2 must hold after an abort at {point}"
+            );
+        }
+    }
+
+    /// A short write at the staging write must leave the old key active
+    /// and the database untouched — nothing after that point ever runs.
+    #[tokio::test]
+    async fn short_write_at_the_staging_write_leaves_the_old_key_active_and_the_database_untouched()
+    {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg).await;
+        let old_key_body = std::fs::read_to_string(h.key()).expect("old key");
+
+        let out = h.run_with_failpoint(
+            &["admin", "rotate-key", "--yes", "--config"],
+            &cfg,
+            "rotate.stage.write:short-write",
+        );
+        assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+
+        assert_eq!(
+            std::fs::read_to_string(h.key()).expect("key"),
+            old_key_body,
+            "the old key file is untouched"
+        );
+        assert!(
+            key_opens(&h.key(), &h.db()).await,
+            "the old key must still open the database -- untouched"
+        );
+        assert!(
+            h.bak_files().is_empty(),
+            "no rename happened -- the database was never re-sealed"
+        );
+    }
+}
+
 // ---------- v0.26.0: Master-key rotation ----------
 
 /// End-to-end rotation: set up sui-id, enroll TOTP and a passkey,

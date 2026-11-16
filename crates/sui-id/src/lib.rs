@@ -60,6 +60,8 @@ pub mod ipnet;
 pub mod json_shape;
 #[path = "http/jwks.rs"]
 pub mod jwks;
+#[path = "runtime/key_adapter.rs"]
+pub mod key_adapter;
 #[path = "runtime/keyring.rs"]
 pub mod keyring;
 #[path = "http/nonce_claim.rs"]
@@ -74,6 +76,8 @@ pub mod request_id;
 pub mod resolver;
 #[path = "http/response_bounds.rs"]
 pub mod response_bounds;
+#[path = "runtime/rotate.rs"]
+pub mod rotate;
 #[path = "http/router.rs"]
 pub mod router;
 #[path = "http/same_site_return_path.rs"]
