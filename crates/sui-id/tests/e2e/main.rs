@@ -126,6 +126,8 @@ mod r140_stage1_app_identity;
 mod r142_stage4_preview_upgrade;
 mod r142_stage5_pre_migration_backup;
 mod r143_no_ca_certificates;
+mod r147_n1;
+mod r147_n1_consent_on_create;
 mod refresh_theft;
 mod request_id;
 mod rfc030_033_035;

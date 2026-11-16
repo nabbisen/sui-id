@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 pub mod components;
+pub mod doc_links;
 pub mod layout;
 pub mod pages;
 pub mod tokens;

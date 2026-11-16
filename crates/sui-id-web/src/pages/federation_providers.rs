@@ -141,7 +141,19 @@ pub fn render_federation_providers(
                                 </table>
                             }.into_any()
                         } else {
-                            empty_state(t.empty_federation_providers, None).into_any()
+                            // RFC 147 §2: a provider is only added through a
+                            // `[[federation_providers]]` block and a restart --
+                            // say so, and link the configuration reference,
+                            // pinned to this binary's own release (N1's
+                            // correction: there is no deployed docs site).
+                            empty_state(
+                                t.empty_federation_providers,
+                                Some((
+                                    crate::github_doc_url!("docs/src/reference/configuration.md"),
+                                    t.empty_federation_providers_cta,
+                                )),
+                            )
+                            .into_any()
                         }}
                     </div>
                 </section>

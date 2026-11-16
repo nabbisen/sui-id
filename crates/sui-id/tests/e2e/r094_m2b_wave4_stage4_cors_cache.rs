@@ -33,6 +33,7 @@ async fn create_client_makes_its_redirect_origin_visible_to_cors_without_a_resta
             confidential: false,
             allowed_scopes: "",
             post_logout_redirect_uris: &[],
+            consent_policy: sui_id_store::models::ConsentPolicy::default(),
         },
         &state.caches,
     )

@@ -1047,6 +1047,9 @@ pub struct Strings {
     pub empty_clients: &'static str,
     pub empty_clients_cta: &'static str,
     pub empty_signing_keys: &'static str,
+    /// RFC 147 §2: the empty state's next step — there should always be
+    /// one, since setup creates it; this names the doc that says so.
+    pub empty_signing_keys_cta: &'static str,
     pub empty_audit: &'static str,
     // RFC 092: error summary heading
     pub error_summary_heading: &'static str,
@@ -1084,6 +1087,9 @@ pub struct Strings {
     pub federation_providers_check_only_button: &'static str,
     pub federation_providers_disable_button: &'static str,
     pub empty_federation_providers: &'static str,
+    /// RFC 147 §2: the empty state's next step — a provider is only
+    /// added through a `[[federation_providers]]` block and a restart.
+    pub empty_federation_providers_cta: &'static str,
     // Enable-confirm page.
     pub federation_providers_enable_confirm_title: &'static str,
     pub federation_providers_enable_confirm_body: &'static str,

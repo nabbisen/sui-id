@@ -226,9 +226,30 @@ impl MaxLockoutDuration {
 
 impl Config {
     /// Read and parse a TOML configuration file.
+    ///
+    /// RFC 147 §3: the one place every caller (the server's own start,
+    /// and every `cli.rs` subcommand that needs a config) goes through,
+    /// so the not-found case is split here, once, for all of them —
+    /// whatever the actual caller count is at any given time, not the
+    /// ten the dispatch counted. Only `NotFound` changes; a file that
+    /// exists but cannot be read, or does not parse, keeps its current
+    /// message, since those are different problems with their own
+    /// actionable detail already in `e`.
     pub fn load(path: &Path) -> anyhow::Result<Self> {
-        let body = std::fs::read_to_string(path)
-            .map_err(|e| anyhow::anyhow!("failed to read config {}: {e}", path.display()))?;
+        let body = std::fs::read_to_string(path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow::anyhow!(
+                    "no configuration file at {}\n\n  Create one to start from:\n      \
+                     sui-id --print-sample-config > sui-id.toml      (a local trial)\n  The \
+                     production template is sui-id.example.toml, in a source checkout.\n  \
+                     Reference: {}",
+                    path.display(),
+                    sui_id_web::github_doc_url!("docs/src/reference/configuration.md"),
+                )
+            } else {
+                anyhow::anyhow!("failed to read config {}: {e}", path.display())
+            }
+        })?;
         let cfg: Config = toml::from_str(&body)
             .map_err(|e| anyhow::anyhow!("failed to parse config {}: {e}", path.display()))?;
         cfg.validate()?;

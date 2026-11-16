@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The main action on the users, apps and signing-keys pages now says
+  what it does** (previously an icon alone); **the federation providers
+  and signing keys pages say how to fill an empty list**, instead of
+  just naming it empty; and **creating an app now offers the same
+  consent-policy choice editing already did**, instead of only being
+  settable after creation.
+- **`sui-id.example.toml` now names every configuration key the binary
+  accepts**, including `user_sources`, `federation_providers`,
+  `metrics_enabled`, `metrics_listen_addr` and `access_log`, which it
+  previously omitted — set or commented with its default, same as every
+  other key.
+
+### Fixed
+
+- **A missing `sui-id.toml` now says how to create one**, instead of a
+  bare "No such file or directory": where to find `--print-sample-config`,
+  where the production template is, and the configuration reference,
+  pinned to this binary's own release.
+
 ### Tests and CI
 
 - **A crash-injection harness now checks master-key rotation against a

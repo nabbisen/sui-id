@@ -88,7 +88,7 @@ pub fn render_signing_keys(
                         <div class="page-header__actions">
                             <a href="#rotate-key" class="button button--icon"
                                aria-label=t.signing_keys_rotate_section>
-                                "↻"
+                                <span aria-hidden="true">"↻"</span>" "{t.signing_keys_rotate_section}
                             </a>
                         </div>
                     })}
@@ -100,7 +100,18 @@ pub fn render_signing_keys(
                     <div class="table-wrap">
                         {if rows.is_empty() {
                             // No CTA — signing keys are issued via the rotate form below.
-                            empty_state(t.empty_signing_keys, None).into_any()
+                            // RFC 147 §2: one signing key always exists after
+                            // setup, so an empty list is unexpected -- say so,
+                            // and link the section that explains the key
+                            // lifecycle, pinned to this binary's own release.
+                            empty_state(
+                                t.empty_signing_keys,
+                                Some((
+                                    crate::github_doc_url!("docs/src/guides/operators.md"),
+                                    t.empty_signing_keys_cta,
+                                )),
+                            )
+                            .into_any()
                         } else {
                             view! {
                                 <table>

@@ -10,6 +10,16 @@ By the architect, at the owner's request:
 the grouped sidebar, palette B (light warning raised to `#9D6600`), and
 custom scopes kept. **The RFC was accepted 2026-11-15.**
 
+## Carried into this RFC's build, 2026-11-16
+
+- **`client.create` (C01) should record the consent policy chosen at
+  creation.** RFC 147 (`0.92.0`'s N1) let the create form set a policy, but
+  C01 records no attributes (`crates/sui-id-store/src/commands.rs:6314-6318`),
+  while changing the policy later is recorded (`:6135`). This RFC rebuilds the
+  app form, so C01 gains the policy as an attribute here. It is an audit-event
+  schema change, under RFC 094's contract: its registry, the coverage matrix,
+  and the event reference.
+
 ## The mockups
 
 Open each file in a browser, straight from disk. They are static: no

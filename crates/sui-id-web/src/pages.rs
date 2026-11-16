@@ -27,6 +27,10 @@ pub mod setup;
 pub mod signing_keys;
 pub mod users;
 
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod repair_checks;
+
 // Flat public surface — every external caller (lib.rs re-export +
 // handlers) uses `sui_id_web::render_dashboard` etc., not
 // `sui_id_web::pages::dashboard::render_dashboard`. `pub use *` from

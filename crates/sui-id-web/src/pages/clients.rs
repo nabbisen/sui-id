@@ -139,7 +139,7 @@ pub fn render_clients(
                         <div class="page-header__actions">
                             <a href="/admin/clients/new" class="button button--icon"
                                aria-label=t.clients_create_section>
-                                "+"
+                                <span aria-hidden="true">"+"</span>" "{t.clients_create_section}
                             </a>
                         </div>
                     })}
@@ -231,6 +231,18 @@ pub fn render_clients_new(
                             <label for="c-logout" class="field__label">{t.clients_label_post_logout_uris}</label>
                             <textarea id="c-logout" name="post_logout_redirect_uris" rows="2"></textarea>
                             <span class="field__hint">{t.clients_hint_one_per_line}</span>
+                        </div>
+                        // RFC 147 §5: the create form offers the same field
+                        // editing already does, with the same default the
+                        // handler used before this field existed ("none" --
+                        // no consent screen, the first-party default).
+                        <div class="field">
+                            <label for="c-consent" class="field__label">{t.consent_policy_label}</label>
+                            <select id="c-consent" name="consent_policy">
+                                <option value="none" selected=true>{t.consent_policy_none}</option>
+                                <option value="first_time">{t.consent_policy_first_time}</option>
+                                <option value="always">{t.consent_policy_always}</option>
+                            </select>
                         </div>
                         <label class="row gap-2">
                             <input name="confidential" type="checkbox" value="true" checked=true />
@@ -437,15 +449,15 @@ pub fn render_client_edit(
                         </div>
                         <div class="field">
                             <label for="e-homepage" class="field__label">{t.clients_label_homepage_uri}</label>
-                            <input id="e-homepage" name="homepage_uri" type="text" value=homepage_uri_value />
+                            <input id="e-homepage" name="homepage_uri" type="url" value=homepage_uri_value />
                         </div>
                         <div class="field">
                             <label for="e-privacy" class="field__label">{t.clients_label_privacy_policy_uri}</label>
-                            <input id="e-privacy" name="privacy_policy_uri" type="text" value=privacy_policy_uri_value />
+                            <input id="e-privacy" name="privacy_policy_uri" type="url" value=privacy_policy_uri_value />
                         </div>
                         <div class="field">
                             <label for="e-tos" class="field__label">{t.clients_label_tos_uri}</label>
-                            <input id="e-tos" name="tos_uri" type="text" value=tos_uri_value />
+                            <input id="e-tos" name="tos_uri" type="url" value=tos_uri_value />
                         </div>
                         // RFC 071: auditors cannot save changes.
                         {can_write.then(|| view! {
@@ -481,4 +493,5 @@ pub fn render_client_edit(
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests;

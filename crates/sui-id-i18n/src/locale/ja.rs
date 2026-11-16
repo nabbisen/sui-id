@@ -663,7 +663,9 @@ pub static STRINGS_JA: Strings = Strings {
     empty_users_cta: "最初のユーザーを作成",
     empty_clients: "まだアプリケーションが登録されていません。",
     empty_clients_cta: "最初のアプリケーションを登録",
-    empty_signing_keys: "署名鍵が見つかりません。",
+    empty_signing_keys: "署名鍵が見つかりません。これは通常起こりません -- \
+        セットアップ完了時に自動的に作成されるはずです。",
+    empty_signing_keys_cta: "署名鍵のローテーション",
     empty_audit: "まだ監査イベントがありません。",
     error_summary_heading: "以下を修正してください：",
     dynamic_reg_token_issued_flash: "登録トークンを発行しました。",
@@ -914,7 +916,9 @@ pub static STRINGS_JA: Strings = Strings {
     federation_providers_check_and_enable_button: "確認して有効化",
     federation_providers_check_only_button: "確認のみ",
     federation_providers_disable_button: "無効化",
-    empty_federation_providers: "フェデレーションプロバイダーはまだ設定されていません。",
+    empty_federation_providers: "フェデレーションプロバイダーはまだ設定されていません。設定ファイルに \
+        追加してから、sui-id を再起動してください。",
+    empty_federation_providers_cta: "設定リファレンス",
     federation_providers_enable_confirm_title: "このフェデレーションプロバイダーを確認して有効化",
     federation_providers_enable_confirm_body: "sui-id は今すぐアップストリームに接続し、ディスカバリードキュメントと署名キーを確認します。すべての確認に合格した場合のみプロバイダーを有効化します。",
     federation_providers_check_passed_flash: "すべての確認に合格しました。",

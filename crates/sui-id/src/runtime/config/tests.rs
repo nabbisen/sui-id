@@ -1,4 +1,5 @@
 use super::*;
+use anyhow::Context;
 
 #[test]
 fn sample_validates() {
@@ -353,4 +354,114 @@ fn a_slug_used_by_two_blocks_is_refused_at_load() {
     c.federation_providers.push(a_federation_provider());
     let msg = c.validate().expect_err("duplicate slug").to_string();
     assert!(msg.contains("more than one"), "{msg}");
+}
+
+// ── RFC 147 §3: a missing config file names the three parts ────────────────
+
+#[test]
+fn a_missing_config_file_names_how_to_create_one() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("sui-id.toml");
+    let err = Config::load(&path).expect_err("no such file");
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains(&format!("no configuration file at {}", path.display())),
+        "part 1 (what, and its path): {msg}"
+    );
+    assert!(
+        msg.contains("sui-id --print-sample-config > sui-id.toml"),
+        "part 2 (how to make a local trial): {msg}"
+    );
+    assert!(
+        msg.contains("sui-id.example.toml"),
+        "part 3 (the production template): {msg}"
+    );
+    assert!(
+        msg.contains("docs/src/reference/configuration.md"),
+        "part 3 (the reference): {msg}"
+    );
+    assert!(
+        msg.contains(env!("CARGO_PKG_VERSION")),
+        "the reference URL must name this binary's own version: {msg}"
+    );
+    assert!(
+        !msg.contains("os error"),
+        "the bare OS error must be gone: {msg}"
+    );
+}
+
+/// A file that exists but cannot be read, or does not parse, keeps its
+/// own message — a different problem from "does not exist".
+#[test]
+fn a_config_file_that_fails_to_parse_keeps_its_own_message() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("sui-id.toml");
+    std::fs::write(&path, "not valid toml === [[[").expect("write");
+    let err = Config::load(&path).expect_err("malformed");
+    let msg = format!("{err:#}");
+    assert!(msg.contains("failed to parse config"), "{msg}");
+    assert!(
+        !msg.contains("Create one to start from"),
+        "the not-found guidance must not appear for a parse failure: {msg}"
+    );
+}
+
+// ── RFC 147 §4: the production template names every key the sample does ───
+
+fn collect_toml_keys(value: &toml::Value, out: &mut std::collections::BTreeSet<String>) {
+    if let toml::Value::Table(t) = value {
+        for (k, v) in t {
+            out.insert(k.clone());
+            collect_toml_keys(v, out);
+        }
+    }
+}
+
+#[test]
+fn the_example_template_names_every_key_the_sample_serializes() {
+    let sample_toml =
+        toml::to_string_pretty(&Config::sample()).expect("serialize the sample config");
+    let sample_value: toml::Value = toml::from_str(&sample_toml).expect("parse the sample");
+    let mut keys = std::collections::BTreeSet::new();
+    collect_toml_keys(&sample_value, &mut keys);
+
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    // The workspace root, two levels up from this crate's own manifest.
+    let template_path = std::path::Path::new(manifest_dir).join("../../sui-id.example.toml");
+    let template = std::fs::read_to_string(&template_path)
+        .with_context(|| template_path.display().to_string())
+        .expect("read sui-id.example.toml");
+
+    let mut missing = vec![];
+    for key in &keys {
+        // A scalar/array key (`key = …`), a table header (`[key]`), or
+        // an array-of-tables header (`[[key]]`) -- each either set or
+        // commented.
+        let present = [
+            format!("{key} ="),
+            format!("# {key} ="),
+            format!("[{key}]"),
+            format!("# [{key}]"),
+            format!("[[{key}]]"),
+            format!("# [[{key}]]"),
+        ]
+        .iter()
+        .any(|needle| template.contains(needle.as_str()));
+        if !present {
+            missing.push(key.clone());
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "sui-id.example.toml is missing these keys (set or commented): {missing:?}"
+    );
+
+    // The template must still parse once its comments are stripped of
+    // nothing -- i.e. it is valid TOML as shipped, same check RFC 147
+    // §4 names, confirming the file itself (not just its key names)
+    // still works as a config.
+    let cfg: Config =
+        toml::from_str(&template).expect("sui-id.example.toml must parse as a Config");
+    cfg.validate()
+        .expect("the template's own values must validate");
 }

@@ -499,6 +499,7 @@ pub async fn apply_seed(
                 confidential,
                 allowed_scopes: &c.allowed_scopes,
                 post_logout_redirect_uris: &c.post_logout_redirect_uris,
+                consent_policy: sui_id_store::models::ConsentPolicy::default(),
             },
             &_dev_caches,
         )

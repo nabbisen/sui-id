@@ -666,7 +666,9 @@ pub static STRINGS_EN: Strings = Strings {
     empty_users_cta: "Create first user",
     empty_clients: "No applications registered yet.",
     empty_clients_cta: "Register first application",
-    empty_signing_keys: "No signing keys found.",
+    empty_signing_keys: "No signing keys found. This should not happen -- one is created \
+        automatically when setup completes.",
+    empty_signing_keys_cta: "Signing key rotation",
     empty_audit: "No audit events yet.",
     error_summary_heading: "Please fix the following:",
     dynamic_reg_token_issued_flash: "Registration token issued.",
@@ -917,7 +919,9 @@ pub static STRINGS_EN: Strings = Strings {
     federation_providers_check_and_enable_button: "Check and enable",
     federation_providers_check_only_button: "Check only",
     federation_providers_disable_button: "Disable",
-    empty_federation_providers: "No federation providers are configured yet.",
+    empty_federation_providers: "No federation providers are configured yet. Add one in the \
+        configuration file, then restart sui-id.",
+    empty_federation_providers_cta: "Configuration reference",
     federation_providers_enable_confirm_title: "Check and enable this federation provider",
     federation_providers_enable_confirm_body: "sui-id will contact the upstream now, check its discovery document and signing keys, and enable the provider only if every check passes.",
     federation_providers_check_passed_flash: "Every check passed.",

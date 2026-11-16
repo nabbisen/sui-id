@@ -136,6 +136,12 @@ pub struct CreateClientForm {
     pub allowed_scopes: String,
     #[serde(default)]
     pub post_logout_redirect_uris: String,
+    /// RFC 147 §5: the create form now offers this field too, same as
+    /// editing. Parsed with `ConsentPolicy::parse`, which defaults an
+    /// absent or unrecognised value to `None` -- the same value
+    /// `ConsentPolicy::default()` already was before this field existed.
+    #[serde(default)]
+    pub consent_policy: String,
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
 }
@@ -180,6 +186,7 @@ pub async fn clients_create(
     } else {
         raw_scopes
     };
+    let consent_policy = sui_id_store::models::ConsentPolicy::parse(form.consent_policy.trim());
     let created = admin_uc::create_client(
         &app.db,
         &app.clock,
@@ -190,6 +197,7 @@ pub async fn clients_create(
             confidential,
             allowed_scopes,
             post_logout_redirect_uris: &post_logout_uris,
+            consent_policy,
         },
         &app.caches,
     )

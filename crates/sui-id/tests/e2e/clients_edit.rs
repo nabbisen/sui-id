@@ -109,6 +109,7 @@ async fn client_edit_then_authorize_uses_new_scope_policy() {
             confidential: true,
             allowed_scopes: "", // initially permissive
             post_logout_redirect_uris: &[],
+            consent_policy: sui_id_store::models::ConsentPolicy::default(),
         },
         &state.caches,
     )

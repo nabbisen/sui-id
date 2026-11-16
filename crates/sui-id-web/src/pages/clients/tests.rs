@@ -234,3 +234,69 @@ fn render_client_edit_marks_a_client_with_an_unrecognized_auth_method() {
     );
     assert!(!html.contains(unrecorded_marker()));
 }
+
+// ── RFC 147 §5: the create form offers what editing does, URL fields are URL fields ──
+
+fn form_field_names(html: &str) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let mut search_from = 0usize;
+    while let Some(rel) = html[search_from..].find("name=\"") {
+        let start = search_from + rel + "name=\"".len();
+        let end = start + html[start..].find('"').expect("closing quote");
+        out.insert(html[start..end].to_string());
+        search_from = end;
+    }
+    out.remove("_csrf");
+    out
+}
+
+/// RFC 147 §5: everything editing offers, the create form now offers
+/// too -- except the three fields that exist only once a client already
+/// does (RFC 140 stage 2's own scope; unchanged by this RFC).
+#[test]
+fn create_form_offers_every_edit_field_except_the_edit_only_ones() {
+    let create_html = render_clients_new(None, "csrf".into(), false, LANG);
+    let edit_html = render_client_edit(
+        true,
+        client_edit_data("admin", None),
+        None,
+        "csrf".into(),
+        LANG,
+    );
+
+    let create_fields = form_field_names(&create_html);
+    let edit_fields = form_field_names(&edit_html);
+
+    // Exist only after creation (RFC 140 stage 2's own scope) -- not a
+    // regression this RFC introduces or is meant to close.
+    let edit_only = ["homepage_uri", "privacy_policy_uri", "tos_uri"];
+
+    let missing: Vec<&String> = edit_fields
+        .iter()
+        .filter(|f| !create_fields.contains(f.as_str()) && !edit_only.contains(&f.as_str()))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "the create form is missing field(s) the edit form has: {missing:?}"
+    );
+}
+
+/// The three URL fields use `type="url"`, which gives a phone's URL
+/// keyboard and the browser's own check — the server's own validation
+/// is unchanged and remains the authority.
+#[test]
+fn url_fields_use_the_url_input_type() {
+    let html = render_client_edit(
+        true,
+        client_edit_data("admin", None),
+        None,
+        "csrf".into(),
+        LANG,
+    );
+    for field in ["homepage_uri", "privacy_policy_uri", "tos_uri"] {
+        assert!(
+            html.contains(&format!("name=\"{field}\" type=\"url\"")),
+            "{field} must be type=\"url\": {html}"
+        );
+    }
+}

@@ -25,6 +25,12 @@ pub struct CreateClientSpec<'a> {
     /// RP-initiated logout return URIs. Empty → fall back to
     /// `redirect_uris` at logout time (with a deprecation warning logged).
     pub post_logout_redirect_uris: &'a [String],
+    /// RFC 147 §5: the create form now offers the same field the edit
+    /// form already does, with the same default — callers that still
+    /// want today's exact behaviour pass
+    /// `sui_id_store::models::ConsentPolicy::default()` explicitly,
+    /// same as this function used to hardcode.
+    pub consent_policy: sui_id_store::models::ConsentPolicy,
 }
 
 pub async fn create_client(
@@ -85,12 +91,12 @@ pub async fn create_client(
         post_logout_redirect_uris: spec.post_logout_redirect_uris.to_vec(),
         is_disabled: false,
         is_deleted: false,
-        // RFC 136 D1: `ConsentPolicy::default()` (-> `None`, no consent
-        // screen) is right here specifically because this function is
-        // the administrator-created-client path -- an administrator
-        // deciding to register a client *is* the first-party case this
-        // default is for, not a fallback standing in for a real choice.
-        consent_policy: sui_id_store::models::ConsentPolicy::default(),
+        // RFC 147 §5: the caller's own choice now, offered by the create
+        // form with the same default the RFC 136 D1 reasoning above
+        // always assumed (`ConsentPolicy::default()` -> `None`, no
+        // consent screen) -- an administrator may still override it at
+        // creation time, the same as editing already allowed.
+        consent_policy: spec.consent_policy.clone(),
         registered_via: sui_id_store::models::RegistrationSource::Admin,
         logo_uri: None,
         homepage_uri: None,

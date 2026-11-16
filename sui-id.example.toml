@@ -46,6 +46,17 @@ cookie_secure = true
 # in the header.
 trusted_proxies = []
 
+# Enable the Prometheus /metrics endpoint (RFC 006). When false (the
+# default) the route is not registered at all, and returns 404, so the
+# endpoint's existence is not leaked.
+#metrics_enabled = false
+
+# Optional separate listen address for /metrics. Empty (the default)
+# mounts /metrics on the same listener as the main application; set to
+# e.g. "127.0.0.1:9090" to bind a private management port instead
+# (strongly recommended if metrics_enabled is true in production).
+#metrics_listen_addr = ""
+
 # ----- storage ------------------------------------------------------------
 [storage]
 
@@ -75,6 +86,24 @@ id_token_lifetime_secs = 900
 # again.
 refresh_lifetime_secs = 1209600   # 14 days
 
+# ----- external user sources (RFC 005) -------------------------------------
+# Zero or more external directories (e.g. LDAP) sui-id checks credentials
+# against, in addition to its own local accounts. Omit entirely for a
+# local-accounts-only deployment (the default). One block per source:
+#
+#[[user_sources]]
+#kind = "ldap"
+#...see the configuration reference for every ldap key.
+
+# ----- upstream OIDC federation (RFC 004) -----------------------------------
+# Zero or more upstream identity providers users can sign in through
+# ("Sign in with ..."). Omit entirely to offer only local sign-in (the
+# default). One block per provider:
+#
+#[[federation_providers]]
+#slug = "example"
+#...see the configuration reference for every federation_providers key.
+
 # ----- logging -----------------------------------------------------------
 [log]
 
@@ -86,6 +115,10 @@ format = "json"
 # `tracing-subscriber` env-filter expression. The default keeps the project
 # crates at info level and stays quiet about upstream chatter.
 filter = "info,sui_id=info,sui_id_core=info,sui_id_store=info"
+
+# Emit one INFO line per HTTP request (method, path, status, request-id).
+# Defaults to false in production.
+#access_log = false
 
 # ----- security policy ---------------------------------------------------
 [security]
