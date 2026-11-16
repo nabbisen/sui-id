@@ -1,6 +1,8 @@
 # RFC 150 — An administrator can edit a user
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-16
+**Approved by.** `@nabbisen`, 2026-11-16: *"All accepted."*
 **Security review.** Required
 **Design prerequisites.** RFC 101 Accepted, for the email half (§3).
 **Implementation prerequisites.** This RFC Accepted. Built in cycle P, as a
@@ -11,13 +13,14 @@ and language from the user's own page. Each change is one Class-A command
 whose audit record names the old and new value, and is tested with a
 mutation. An email change goes through RFC 101's lifecycle, never a direct
 write. A directory (LDAP) user's name and email are read-only, because the
-directory owns them. The username cannot be changed, and the page says why.
+directory owns them. The username is read-only unless §5 is answered otherwise; a removed name is never reused.
 **Tracks.** The operator-experience track, Track D: one of two features
 given a freeze exception.
 **Touches.** `crates/sui-id-store/src/commands.rs`,
 `crates/sui-id-store/src/repos/users.rs`, `crates/sui-id-web/src/pages/users.rs`,
 `crates/sui-id/src/http/handlers/admin/users.rs`, `crates/sui-id/src/http/router.rs`,
 `crates/sui-id-i18n/src/locale/*.rs`.
+**Independent design review.** [Design review record, 2026-11-16](../handoffs/150-an-administrator-can-edit-a-user/design-review-2026-11-16.md). By `@nabbisen`, who did not author it.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/150-an-administrator-can-edit-a-user/README.md`](../handoffs/150-an-administrator-can-edit-a-user/README.md)
@@ -67,14 +70,30 @@ does not supply it.
 **Test.** The edit form offers no display-name or email field for an LDAP
 user, and the command refuses one. **Mutation:** let the command accept it.
 
-### 2 — the username is not editable, and the page says so
+### 2 — the username, until §5 is answered
 
-The username is how the user signs in, and it is what the audit log shows as
-the actor of everything they did. Changing it would make that history name
-someone who no longer signs in under that name. The page shows it read-only,
-with one line: *"The username is how this person signs in, and cannot be
-changed. To use a different one, create a new user."* Whether a username
-should ever be changeable is §5's question.
+**Corrected 2026-11-16.** This section first said the username *"is what the
+audit log shows as the actor of everything they did"*. **That was false**:
+the audit log records and shows the actor's internal ID
+(`crates/sui-id/src/http/handlers/admin/audit.rs:84`,
+`crates/sui-id-web/src/pages/audit.rs:28`). The architect asserted it without
+measuring it.
+
+What is true:
+- **Applications never see the username.** The OIDC `sub` is the user's ID
+  (`crates/sui-id-core/src/oidc/tokens.rs:142`, `:174`), and no
+  `preferred_username` claim is issued.
+- **A name is never released.** `username` is `UNIQUE`
+  (`0022_boolean_checks.sql:60`), and deletion only marks the row
+  (`repos/users.rs:287-290`), so a deleted user's name stays taken for ever.
+  RFC 115's review recorded that as why *"username reuse is not an
+  impersonation path"*
+  (`rfcs/handoffs/115-user-creation-without-a-password/design-review-2026-09-24.md`,
+  finding 7). It is a **consequence** of keeping deleted rows, which keeps
+  every audit record's actor resolvable. It is not a rule anyone set on its
+  own.
+
+Until §5 is answered, this RFC builds the username read-only.
 
 ### 3 — the email goes through RFC 101, and only through RFC 101
 
@@ -97,9 +116,34 @@ pages, confirmations and step-up as they are. The page's layout follows RFC
 
 ## 5 — questions for the owner
 
-1. **Should a username ever be changeable?** The architect recommends **no**,
-   for the reason in §2. A mistyped username is fixed by creating the right
-   user and disabling the wrong one, which keeps the history true.
+1. **Should a username ever be changeable?** *Open.* Asked 2026-11-16:
+   *"Partially agreed. However, it brings limitation: Removed names can not
+   be used in the future. Never once registered. Is it for security ?"*
+
+   **Proposed (the architect's): an administrator may rename a user, and an
+   old name stays reserved.**
+   - A rename is one Class-A command, `admin.user.username.changed`, with
+     step-up, because it changes how a person signs in. Its audit record
+     names the old and new name.
+   - The renamed user signs in with the new name from then on. Sessions
+     already open continue: they are bound to the ID, not the name.
+   - **The old name stays reserved**, and so does every deleted user's name.
+     No one else can ever be given a name someone once signed in with. That
+     is the protection RFC 115 relied on, kept.
+   - A **mistyped** name is then fixed by renaming the account, not by
+     creating a second one, so the right name is never lost to a typo.
+   - Not for a directory (LDAP) user, whose username comes from the
+     directory (§1a).
+
+   **The one thing it does not change: a removed name is still never reused.**
+   That is the safety part, and it is narrower than it sounds. A reused name
+   would **not** hand over the old account's credentials: a password belongs
+   to the old row, not to the name. What it would hand over is **what people
+   and tools attach to a name outside sui-id**: a ticket, an access list or a
+   log search for *"alice"*, or an application that wrongly keys accounts on
+   the name instead of `sub`. Those would then point at a different person,
+   silently. sui-id itself keys on IDs, but an operator's habits and tools
+   often key on names.
 
 ## Alternatives rejected
 

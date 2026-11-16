@@ -1,6 +1,8 @@
 # RFC 151 — The password policy can be made stricter, never weaker
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-16
+**Approved by.** `@nabbisen`, 2026-11-16: *"All accepted."*
 **Security review.** Required
 **Design prerequisites.** None.
 **Implementation prerequisites.** This RFC Accepted. Built in cycle P, as a
@@ -17,6 +19,7 @@ given a freeze exception.
 `crates/sui-id-store/src/commands.rs`, `crates/sui-id/src/http/handlers.rs`,
 `crates/sui-id/src/http/handlers/settings.rs`, the settings and password
 pages in `crates/sui-id-web`, `crates/sui-id-i18n/src/locale/*.rs`.
+**Independent design review.** [Design review record, 2026-11-16](../handoffs/151-password-policy-can-be-made-stricter/design-review-2026-11-16.md). By `@nabbisen`, who did not author it.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/151-password-policy-can-be-made-stricter/README.md`](../handoffs/151-password-policy-can-be-made-stricter/README.md)

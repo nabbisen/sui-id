@@ -1,7 +1,7 @@
 # RFC 151 — handoff
 
-**RFC.** [`../../proposed/151-password-policy-can-be-made-stricter.md`](../../proposed/151-password-policy-can-be-made-stricter.md)
-**Status.** **Proposed: build-prohibited** under RFC 000. Nothing here is
+**RFC.** [`../../accepted/151-password-policy-can-be-made-stricter.md`](../../accepted/151-password-policy-can-be-made-stricter.md)
+**Status.** **Accepted 2026-11-16** ([design review record](design-review-2026-11-16.md)). Not yet
 dispatched. It is Track D of the operator-experience track, built in cycle P
 as a freeze exception decided 2026-11-15.
 

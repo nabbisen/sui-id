@@ -1,6 +1,8 @@
 # RFC 101 — Email lifecycle: verification and change
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-16
+**Approved by.** `@nabbisen`, 2026-11-16: *"All accepted."*
 **Security review.** Required
 **Design prerequisites.** None. This RFC picks up a deferral recorded in migration
 `0020_user_identity_invariants.sql` §2, which added `email_verified_at` and stated
@@ -19,6 +21,8 @@ approved by `@nabbisen` on 2026-09-09 while scoping RFC 094's Wave C.
 **Touches.** `crates/sui-id-store/src/repos/users.rs`, a new verification-token
 repo, `crates/sui-id-core/src/account/`, `crates/sui-id/src/http/handlers/`,
 `crates/sui-id-core/src/oidc/authorize.rs`.
+**Independent design review.** [Design review record, 2026-11-16](../handoffs/101-email-lifecycle-verification-and-change/design-review-2026-11-16.md). By `@nabbisen`, who did not author it.
+**Handoff.** [`../handoffs/101-email-lifecycle-verification-and-change/README.md`](../handoffs/101-email-lifecycle-verification-and-change/README.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 

@@ -1,7 +1,7 @@
 # RFC 150 — handoff
 
-**RFC.** [`../../proposed/150-an-administrator-can-edit-a-user.md`](../../proposed/150-an-administrator-can-edit-a-user.md)
-**Status.** **Proposed: build-prohibited** under RFC 000. Nothing here is
+**RFC.** [`../../accepted/150-an-administrator-can-edit-a-user.md`](../../accepted/150-an-administrator-can-edit-a-user.md)
+**Status.** **Accepted 2026-11-16** ([design review record](design-review-2026-11-16.md)). Not yet
 dispatched. It is Track D of the operator-experience track, built in cycle P
 as a freeze exception decided 2026-11-15.
 
