@@ -1,7 +1,7 @@
 # RFC 144 — handoff
 
 **RFC.** [`../../accepted/144-legible-to-older-eyes.md`](../../accepted/144-legible-to-older-eyes.md)
-**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Not yet dispatched: its build is scheduled in the ROADMAP's cycles N–P, authorized 2026-11-15.
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Built in `0.92.0` (cycle N), in two dispatches: **N2a, colour**, [dispatched 2026-11-16](0.92.0-n2a-colour-2026-11-16.md); **N2b, size and structure**, to follow.
 
 ## 2026-11-16: built with palette B's values
 
@@ -11,6 +11,14 @@ builds RFC 144 with palette B's values, so the colours change only once
 (`@nabbisen`: *"Yes to all."*, on cycle N's §5, decision 2). B's values and their
 derivation: [`../149-the-console-follows-the-operator/README.md`](../149-the-console-follows-the-operator/README.md).
 The rules, the gate and every other decision of the refresh are unchanged.
+
+**The values built** are in [`palette-b-tokens-2026-11-16.md`](palette-b-tokens-2026-11-16.md):
+every token, in both modes, checked against every surface and tint a
+component composes text on. RFC 149 checked B against the two page surfaces,
+so three values move slightly (OKLab ΔE 0.023–0.057), each forced by a pair
+that file names. That check also found **destructive buttons' labels at
+2.78:1 in dark mode** today, a hard-coded white (`components/buttons.rs:60`).
+N2a fixes it.
 
 ## 2026-11-15: refreshed toward the stricter standard, and accepted the same day
 
