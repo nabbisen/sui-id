@@ -1,7 +1,13 @@
 # RFC 144 — handoff
 
 **RFC.** [`../../accepted/144-legible-to-older-eyes.md`](../../accepted/144-legible-to-older-eyes.md)
-**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Built in `0.92.0` (cycle N), in two dispatches: **N2a, colour**, [dispatched 2026-11-16](0.92.0-n2a-colour-2026-11-16.md); **N2b, size and structure**, to follow.
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Built in `0.92.0` (cycle N), in two dispatches: **N2a, colour**, [landed 2026-11-16](0.92.0-n2a-colour-2026-11-16.md); **N2b, size and structure**, to follow.
+
+**Carried into N2b** (found in N2a's review): four confirmations (delete a
+user, reset MFA, delete an app, delete a signing key) label their optional
+reason *"Reason for disabling"*, because `pages/confirm.rs:122-134` picks the
+label by whether a reason is required, not by the action. N2b rewrites that
+field anyway (placeholder → hint), and gives it an action-neutral label.
 
 ## 2026-11-16: built with palette B's values
 

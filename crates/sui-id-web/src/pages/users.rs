@@ -87,9 +87,8 @@ pub fn render_users(
                     // RFC 071: add button only for admins (auditors can view, not create).
                     {can_write.then(|| view! {
                         <div class="page-header__actions">
-                            <a href="/admin/users/new" class="button button--icon"
-                               aria-label=t.users_create_section>
-                                <span aria-hidden="true">"+"</span>" "{t.users_create_section}
+                            <a href="/admin/users/new" class="button">
+                                <span class="button__icon" aria-hidden="true">"+"</span>{t.users_create_section}
                             </a>
                         </div>
                     })}

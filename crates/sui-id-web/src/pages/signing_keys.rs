@@ -86,9 +86,8 @@ pub fn render_signing_keys(
                     // RFC 071: auditors cannot rotate keys.
                     {can_write.then(|| view! {
                         <div class="page-header__actions">
-                            <a href="#rotate-key" class="button button--icon"
-                               aria-label=t.signing_keys_rotate_section>
-                                <span aria-hidden="true">"↻"</span>" "{t.signing_keys_rotate_section}
+                            <a href="#rotate-key" class="button">
+                                <span class="button__icon" aria-hidden="true">"↻"</span>{t.signing_keys_rotate_section}
                             </a>
                         </div>
                     })}

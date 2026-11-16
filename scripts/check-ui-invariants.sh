@@ -54,7 +54,8 @@ require_policy_line 'declaration_files = ["crates/sui-id-web/src/tokens.rs", "cr
 require_policy_line 'usage_root = "crates"'
 require_policy_line 'token_file = "crates/sui-id-web/src/tokens.rs"'
 require_policy_line 'families = ["danger", "warning", "success", "info"]'
-require_policy_line 'slots = ["default", "subtle", "fg-on"]'
+require_policy_line 'slots = ["default", "subtle"]'
+require_policy_line 'fg_on_families = ["danger"]'
 require_policy_line 'pages_root = "crates/sui-id-web/src/pages"'
 require_policy_line 'checks = ["standalone-translations", "unused-css-tokens"]'
 
@@ -359,18 +360,24 @@ fi
 
 for theme in default explicit-dark automatic-dark; do
   for semantic in danger warning success info; do
-    for slot in default subtle fg-on; do
-      if [[ "$slot" == "fg-on" ]]; then
-        name="fg-on-$semantic"
-      else
-        name="$semantic-$slot"
-      fi
+    for slot in default subtle; do
+      name="$semantic-$slot"
       count=$(grep -cxF -- "--$name" "$tmp/theme-$theme" || true)
       if [[ "$count" -ne 1 ]]; then
         echo "G12 semantic-palette-parity: --$name occurs $count times in $theme; expected exactly 1" >&2
         semantic_failures=$((semantic_failures + 1))
       fi
     done
+  done
+  # RFC 144: warning/success/info are never fills that carry text, so only
+  # danger still has an fg-on slot. See fg_on_families in the policy file.
+  for semantic in danger; do
+    name="fg-on-$semantic"
+    count=$(grep -cxF -- "--$name" "$tmp/theme-$theme" || true)
+    if [[ "$count" -ne 1 ]]; then
+      echo "G12 semantic-palette-parity: --$name occurs $count times in $theme; expected exactly 1" >&2
+      semantic_failures=$((semantic_failures + 1))
+    fi
   done
 done
 

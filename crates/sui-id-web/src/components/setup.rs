@@ -139,7 +139,8 @@ pub const SETUP_LANG_PICKER_CSS: &str = r#"/* v0.48.2 — setup wizard language 
   color: var(--fg-muted);
 }
 .setup-step__label--upcoming {
-  color: var(--fg-subtle);
+  /* RFC 144 §1: --fg-subtle is never text. --fg-muted clears 7:1. */
+  color: var(--fg-muted);
 }
 
 /* ── Consent screen (RFC-MI-070, v0.56.0) ───────────────────────────── */

@@ -30,7 +30,7 @@ input[type="url"], input[type="number"], input[type="search"],
 input[type="tel"], textarea, select {
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  border: var(--border-width-default) solid var(--border-default);
+  border: var(--border-width-default) solid var(--border-control);
   border-radius: var(--radius-sm);
   background: var(--surface-elevated);
   color: var(--fg-default);
@@ -39,8 +39,11 @@ input[type="tel"], textarea, select {
   line-height: var(--line-height-body);
   transition: border-color 0.12s, box-shadow 0.12s;
 }
+/* RFC 144 §1: --fg-subtle was 2.71:1 as placeholder text. --fg-muted
+   clears 7:1. For N2a only — N2b removes every `placeholder` attribute
+   (RFC 144's "What else moves") and this rule along with it. */
 input::placeholder, textarea::placeholder {
-  color: var(--fg-subtle);
+  color: var(--fg-muted);
 }
 input:hover, textarea:hover, select:hover {
   border-color: var(--fg-muted);
@@ -50,8 +53,11 @@ input:focus, textarea:focus, select:focus {
   border-color: var(--accent-default);
   box-shadow: 0 0 0 3px var(--accent-subtle);
 }
+/* Disabled fields use the explicit disabled pair, as disabled buttons do
+   (RFC 144 §6, rule 1): never an opacity, which put this text at 2.34:1. */
 input:disabled, textarea:disabled, select:disabled {
-  color: var(--state-disabled);
+  color: var(--fg-disabled);
+  background: var(--bg-disabled);
   cursor: not-allowed;
 }
 
@@ -171,7 +177,16 @@ pub(crate) const ERROR_SUMMARY_CSS: &str = r#"
 .error-summary__heading {
   font-weight: var(--font-weight-medium);
   margin: 0 0 var(--space-2);
-  color: var(--fg-on-danger);
+  /* Not a stated §3 fix: found by the widened gate itself, run before
+     this return. --fg-on-danger is the label colour for text ON a
+     saturated --danger-default/-emphasis fill (white in light, dark ink
+     in dark) — the gate checks it there, and only there. This heading
+     sits on .error-summary's own --danger-subtle background, which
+     inherits --fg-default (set on .error-summary, just above); the
+     override here was simply wrong, not a case the five-rule set needed
+     to make a decision about. Removing it lets the correct colour
+     inherit. */
+  color: var(--fg-default);
 }
 .error-summary__list {
   margin: 0;

@@ -66,7 +66,9 @@ thead th.cell-wrap {
   word-break: break-word;
 }
 tbody tr:last-child td { border-bottom: 0; }
-tbody tr:hover { background: var(--state-hover); }
+/* Explicit color: unchanged from body's own fg-default, but the
+   contrast gate checks each rule's own declarations. */
+tbody tr:hover { background: var(--state-hover); color: var(--fg-default); }
 
 /* ── Extended cell discipline (RFC-MI-031, v0.52.0) ─────────────────── */
 /* .cell-nowrap  — explicit no-wrap (the default; use for documentation). */

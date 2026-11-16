@@ -34,10 +34,26 @@ pub const BADGES_BASE_CSS: &str = r#"
   color: var(--fg-muted);
   border: var(--border-width-default) solid var(--border-muted);
 }
-.badge--ok      { color: var(--success-default); background: transparent; border-color: currentColor; }
-.badge--warn    { color: var(--warning-default); background: transparent; border-color: currentColor; }
-.badge--danger  { color: var(--danger-default);  background: transparent; border-color: currentColor; }
+/* RFC 144 refresh, rule 3: warning/success/danger are never text. Each
+ * takes the banner convention (components/banners.rs): a tinted fill,
+ * text in --fg-default, and the semantic colour on the border. Danger
+ * could be text under rule 3, but the RFC's own "What else moves" lists
+ * it alongside ok/warn for the same convention, so all three move
+ * together, for one visual language across every badge. --accent stays
+ * text on its own tint — rule 3's one exception, already checked by the
+ * palette (the current nav item composes the identical pair). */
+.badge--ok      { color: var(--fg-default); background: var(--success-subtle); border-color: var(--success-default); }
+.badge--warn    { color: var(--fg-default); background: var(--warning-subtle); border-color: var(--warning-default); }
+.badge--danger  { color: var(--fg-default); background: var(--danger-subtle);  border-color: var(--danger-default); }
 .badge--accent  { color: var(--accent-default);  background: var(--accent-subtle); border-color: transparent; }
+
+/* RFC 144 R5: a tint alone marks .badge--accent's state; under
+ * prefers-contrast: more it also gets a solid border, in its own
+ * semantic colour, same as the current nav item and the pressed theme
+ * toggle (components/chrome.rs). */
+@media (prefers-contrast: more) {
+  .badge--accent { border-color: var(--accent-default); }
+}
 
 "#;
 
@@ -45,8 +61,10 @@ pub const BADGES_MUTED_CSS: &str = r#"
 /* ── Status badge muted variant (RFC 052) ──────────────────────────── */
 /* Used for `retired` and similar low-emphasis status values that aren't */
 /* failure, warning, or success — just "no longer current."              */
+/* RFC 144: var(--surface-subtle), not color-mix() — the contrast gate   */
+/* cannot resolve a color-mix() pair, only a plain custom-property ref.  */
 .badge--muted {
-  background: color-mix(in srgb, var(--fg-muted) 12%, transparent);
+  background: var(--surface-subtle);
   color: var(--fg-muted);
 }
 "#;

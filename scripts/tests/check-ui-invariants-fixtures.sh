@@ -98,6 +98,14 @@ sed -i '0,/--info-subtle:/{/--info-subtle:/d;}' \
   "$palette/crates/sui-id-web/src/tokens.rs"
 expect_failure semantic-palette-parity "G12 semantic-palette-parity:"
 
+# RFC 144 (0.92.0 N2a): only danger keeps an fg-on slot, in its own loop;
+# this fixture exercises that loop, which the --info-subtle ones above do not.
+fg_on="$tmp/semantic-palette-fg-on-danger"
+cp -R "$valid" "$fg_on"
+sed -i '0,/--fg-on-danger:/{/--fg-on-danger:/d;}' \
+  "$fg_on/crates/sui-id-web/src/tokens.rs"
+expect_failure semantic-palette-fg-on-danger "G12 semantic-palette-parity:"
+
 relocated="$tmp/semantic-palette-relocated"
 cp -R "$valid" "$relocated"
 sed -i '0,/--info-subtle:/{/--info-subtle:/d;}' \

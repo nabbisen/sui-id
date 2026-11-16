@@ -11,7 +11,8 @@ usage_root = "crates"
 [semantic-palette-parity]
 token_file = "crates/sui-id-web/src/tokens.rs"
 families = ["danger", "warning", "success", "info"]
-slots = ["default", "subtle", "fg-on"]
+slots = ["default", "subtle"]
+fg_on_families = ["danger"]
 required_mode_roots = 3
 
 [inline-style-bound]

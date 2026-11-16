@@ -4,14 +4,18 @@
 //! CSS custom properties (variables) so themes can swap with a single
 //! `[data-theme="dark"]` attribute on the document root.
 //!
-//! The palette is **Lavender-Jade**: lavender accent (#6956C0 light /
-//! #A89BFF dark), jade-influenced success (#2F7D5E / #5FC49A), neutral
-//! cool greys for surfaces and foreground. Semantic colours (danger /
-//! warning / info / success) are tuned per mode for AA contrast on the
-//! default surface: light mode darkens the fills so white text passes;
-//! dark mode pairs the bright pastels with dark ink. A contrast test in
-//! tokens/tests.rs re-verifies every text-on-colour pair (>= 4.5:1) in
-//! all three modes (light / dark / auto-dark).
+//! RFC 144, N2a: the palette is **B** (RFC 149 §6), built to the refresh's
+//! five rules (R1-R5) — see
+//! `rfcs/handoffs/144-legible-to-older-eyes/palette-b-tokens-2026-11-16.md`
+//! for every value and the pair it was checked against. In short: all text
+//! clears 7:1 (WCAG AAA) in both modes; only `--accent-default` and
+//! `--danger-default` are ever used as `color:` among the semantic
+//! colours (warning/success/info are border- and tint-only); every
+//! control boundary and the focus ring clear 3:1; `prefers-contrast: more`
+//! raises control borders to 4.5:1. The gate in `tokens/tests.rs` now
+//! reads `components::components_css()`, the stylesheet every page
+//! actually receives, not only the tokens below — no token is excused
+//! from it on a claim about its use.
 //!
 //! Token naming follows the convention from the design memo:
 //!   --surface-* / --fg-* / --accent-* / --border-* / --state-* / --semantic.
@@ -23,63 +27,84 @@ pub const TOKENS_CSS: &str = r#"
   /* Light mode (default) ------------------------------------------------- */
 
   /* Surface */
-  --surface-default:  #F6F5F9;
-  --surface-subtle:   #EFEAF4;
+  --surface-default:  #F6F7F9;
+  --surface-subtle:   #EEF0F3;
   --surface-elevated: #FFFFFF;
-  --surface-inverse:  #2B2733;
-  --surface-sunken:   #E9E4EF;
+  --surface-inverse:  #23272E;
+  --surface-sunken:   #E8EBEF;
 
   /* Foreground */
-  --fg-default:    #1F1B24;
-  --fg-muted:      #5F5A66;
-  --fg-subtle:     #9A94A3;
+  --fg-default:    #1A1D23;
+  --fg-muted:      #464E5C;
+  --fg-subtle:     #818791;
   --fg-on-accent:  #FFFFFF;
-  --fg-inverse:    #F6F5F9;
+  --fg-inverse:    #F6F7F9;
 
-  /* Disabled controls — explicit AA-compliant tokens, not opacity.
-     #5F5A66 on #EFEAF4 = 5.65:1. A disabled control must never be the
-     sole carrier of a meaningful value (read-only values use static
-     rows); see the UI/UX contrast contract. */
-  --fg-disabled:   #5F5A66;
-  --bg-disabled:   #EFEAF4;
+  /* Disabled controls — explicit AAA-compliant tokens, not opacity.
+     fg-disabled on bg-disabled clears 7:1 in both modes. A disabled
+     control must never be the sole carrier of a meaningful value
+     (read-only values use static rows); see the contrast gate in
+     tokens/tests.rs. */
+  --fg-disabled:   #464E5C;
+  --bg-disabled:   #EEF0F3;
 
-  /* Accent */
-  --accent-default:  #6956C0;
-  --accent-emphasis: #5A48AD;
-  --accent-subtle:   #E6E1F5;
+  /* Accent — rule 3: only accent and danger are ever `color:` among the
+     semantic colours (links, the current nav item, field errors). Also
+     checked as text on its own tint (the current nav item, the pressed
+     theme toggle, the active language, .badge--accent). */
+  --accent-default:  #3342AA;
+  --accent-emphasis: #262F96;
+  --accent-subtle:   #EBEDF7;
 
-  /* Semantic — full set per RFC 061 (v0.46.0).
+  /* Semantic — full set per RFC 061 (v0.46.0), refreshed per RFC 144.
    * Every semantic colour has three slots:
    *   --{name}-default — the border/foreground tint
    *   --{name}-subtle  — the tinted background for cards/banners
    *   --fg-on-{name}   — the foreground when text sits ON a -default fill
-   * Contrast pairs all clear WCAG AA. */
-  --danger-default:  #BE3F3F;
-  --danger-subtle:   #F6E3E3;
+   * Rule 3: warning, success and info are never text and never fills —
+   * only borders, icons and tints (3:1). Danger is checked as text on
+   * every surface, and (rule 3) never on its own tint — RFC 144 §1a
+   * moves every tinted danger label to --fg-default. Button labels
+   * (--fg-on-accent, --fg-on-danger) are the only two inverse tokens
+   * that still exist: warning/success/info are never fills, so they
+   * need no --fg-on-* of their own (removed by this RFC). */
+  --danger-default:  #9D0D1B;
+  --danger-emphasis: #870009;
+  --danger-subtle:   #F6E8E9;
   --fg-on-danger:    #FFFFFF;
 
-  --warning-default: #8A6500;
-  --warning-subtle:  #FBF1D9;
-  --fg-on-warning:   #FFFFFF;
+  --warning-default: #9D6600;
+  --warning-subtle:  #F5F0E6;
 
-  --success-default: #2F7D5E;
-  --success-subtle:  #DFF3E9;
-  --fg-on-success:   #FFFFFF;
+  --success-default: #2E7D52;
+  --success-subtle:  #EAF2EE;
 
-  --info-default:    #3B6EA8;
-  --info-subtle:     #E2ECF8;
-  --fg-on-info:      #FFFFFF;
+  --info-default:    #2F77C0;
+  --info-subtle:     #EAF1F9;
 
   /* Interaction */
   --state-hover:    rgba(0, 0, 0, 0.05);
   --state-active:   rgba(0, 0, 0, 0.10);
-  --state-focus:    #6956C0;
-  --state-disabled: rgba(31, 27, 36, 0.38);
+  --state-focus:    #3342AA;
+  --state-disabled: rgba(26, 29, 35, 0.38);
 
-  /* Border */
-  --border-default: #D6D1DE;
-  --border-muted:   #E9E4EF;
-  --border-accent:  #6956C0;
+  /* Border — RFC 144 §2: split into a control boundary (3:1, WCAG
+   * 1.4.11) and a divider that may stay subtle for rules and table
+   * lines. --border-control is palette B's own control value;
+   * --border-default is the midpoint of --border-control and
+   * --surface-elevated (sRGB, 50%) — a visible-but-quiet divider, not
+   * held to 3:1. */
+  --border-control: #83878F;
+  --border-default: #C1C3C7;
+  --border-muted:   #E2E5E9;
+  --border-accent:  #3342AA;
+
+  /* Dev-mode banner (RFC 144 §1): one value, both modes — the banner
+   * looks the same regardless of theme. Replaces the literal colours
+   * components/banners.rs used to set directly. */
+  --devmode-bg:   #5A3D00;
+  --devmode-fg:   #FFF8E1;
+  --devmode-warn: #FFCDD2;
 
   /* Shadow (light) */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -174,51 +199,48 @@ pub const TOKENS_CSS: &str = r#"
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --surface-default:  #1A1720;
-  --surface-subtle:   #211D2A;
-  --surface-elevated: #2A2433;
-  --surface-inverse:  #F6F5F9;
-  --surface-sunken:   #16131B;
+  --surface-default:  #14171C;
+  --surface-subtle:   #191D23;
+  --surface-elevated: #1E232B;
+  --surface-inverse:  #EEF1F5;
+  --surface-sunken:   #101317;
 
-  --fg-default:    #F1EEF6;
-  --fg-muted:      #B8B2C4;
-  --fg-subtle:     #7E788A;
-  --fg-on-accent:  #1A1720;
-  --fg-inverse:    #1F1B24;
+  --fg-default:    #EEF1F5;
+  --fg-muted:      #B8C1CE;
+  --fg-subtle:     #666D78;
+  --fg-on-accent:  #14171C;
+  --fg-inverse:    #1A1D23;
 
-  /* Disabled controls — explicit AA-compliant tokens, not opacity.
-     #9D96AA on #211D2A = 5.79:1. */
-  --fg-disabled:   #9D96AA;
-  --bg-disabled:   #211D2A;
+  --fg-disabled:   #B8C1CE;
+  --bg-disabled:   #191D23;
 
-  --accent-default:  #A89BFF;
-  --accent-emphasis: #C1B6FF;
-  --accent-subtle:   #332C4A;
+  --accent-default:  #AABBFF;
+  --accent-emphasis: #BDCEFF;
+  --accent-subtle:   #2A3040;
 
-  --danger-default:  #FF6B6B;
-  --danger-subtle:   #3A1F22;
-  --fg-on-danger:    #1A1720;
+  --danger-default:  #FF8C8B;
+  --danger-emphasis: #FFA7A5;
+  --danger-subtle:   #342E35;
+  --fg-on-danger:    #14171C;
 
-  --warning-default: #E6B85C;
-  --warning-subtle:  #3A2E14;
-  --fg-on-warning:   #1A1720;
+  --warning-default: #E8B54A;
+  --warning-subtle:  #32322E;
 
-  --success-default: #5FC49A;
-  --success-subtle:  #1E3A2D;
-  --fg-on-success:   #1A1720;
+  --success-default: #5CC48C;
+  --success-subtle:  #243335;
 
-  --info-default:    #6FA8FF;
-  --info-subtle:     #1F2D44;
-  --fg-on-info:      #1A1720;
+  --info-default:    #67C8E8;
+  --info-subtle:     #25343E;
 
   --state-hover:    rgba(255, 255, 255, 0.06);
   --state-active:   rgba(255, 255, 255, 0.12);
-  --state-focus:    #A89BFF;
-  --state-disabled: rgba(241, 238, 246, 0.38);
+  --state-focus:    #AABBFF;
+  --state-disabled: rgba(238, 241, 245, 0.38);
 
-  --border-default: #3A3445;
-  --border-muted:   #2A2433;
-  --border-accent:  #A89BFF;
+  --border-control: #666D77;
+  --border-default: #424851;
+  --border-muted:   #262B33;
+  --border-accent:  #AABBFF;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
@@ -230,51 +252,48 @@ pub const TOKENS_CSS: &str = r#"
    overrides. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --surface-default:  #1A1720;
-    --surface-subtle:   #211D2A;
-    --surface-elevated: #2A2433;
-    --surface-inverse:  #F6F5F9;
-    --surface-sunken:   #16131B;
+    --surface-default:  #14171C;
+    --surface-subtle:   #191D23;
+    --surface-elevated: #1E232B;
+    --surface-inverse:  #EEF1F5;
+    --surface-sunken:   #101317;
 
-    --fg-default:    #F1EEF6;
-    --fg-muted:      #B8B2C4;
-    --fg-subtle:     #7E788A;
-    --fg-on-accent:  #1A1720;
-    --fg-inverse:    #1F1B24;
+    --fg-default:    #EEF1F5;
+    --fg-muted:      #B8C1CE;
+    --fg-subtle:     #666D78;
+    --fg-on-accent:  #14171C;
+    --fg-inverse:    #1A1D23;
 
-    /* Disabled controls — explicit AA-compliant tokens, not opacity.
-       #9D96AA on #211D2A = 5.79:1. */
-    --fg-disabled:   #9D96AA;
-    --bg-disabled:   #211D2A;
+    --fg-disabled:   #B8C1CE;
+    --bg-disabled:   #191D23;
 
-    --accent-default:  #A89BFF;
-    --accent-emphasis: #C1B6FF;
-    --accent-subtle:   #332C4A;
+    --accent-default:  #AABBFF;
+    --accent-emphasis: #BDCEFF;
+    --accent-subtle:   #2A3040;
 
-    --danger-default:  #FF6B6B;
-    --danger-subtle:   #3A1F22;
-    --fg-on-danger:    #1A1720;
+    --danger-default:  #FF8C8B;
+    --danger-emphasis: #FFA7A5;
+    --danger-subtle:   #342E35;
+    --fg-on-danger:    #14171C;
 
-    --warning-default: #E6B85C;
-    --warning-subtle:  #3A2E14;
-    --fg-on-warning:   #1A1720;
+    --warning-default: #E8B54A;
+    --warning-subtle:  #32322E;
 
-    --success-default: #5FC49A;
-    --success-subtle:  #1E3A2D;
-    --fg-on-success:   #1A1720;
+    --success-default: #5CC48C;
+    --success-subtle:  #243335;
 
-    --info-default:    #6FA8FF;
-    --info-subtle:     #1F2D44;
-    --fg-on-info:      #1A1720;
+    --info-default:    #67C8E8;
+    --info-subtle:     #25343E;
 
     --state-hover:    rgba(255, 255, 255, 0.06);
     --state-active:   rgba(255, 255, 255, 0.12);
-    --state-focus:    #A89BFF;
-    --state-disabled: rgba(241, 238, 246, 0.38);
+    --state-focus:    #AABBFF;
+    --state-disabled: rgba(238, 241, 245, 0.38);
 
-    --border-default: #3A3445;
-    --border-muted:   #2A2433;
-    --border-accent:  #A89BFF;
+    --border-control: #666D77;
+    --border-default: #424851;
+    --border-muted:   #262B33;
+    --border-accent:  #AABBFF;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
@@ -298,6 +317,25 @@ pub const TOKENS_CSS: &str = r#"
   }
 }
 
+/* RFC 144 R5: honour OS-level "Increase contrast" preference by raising
+   the control-boundary token to its high-contrast value (4.5:1) in
+   every mode. Nested so the dark value applies whichever way dark mode
+   was reached — an explicit [data-theme="dark"], or the auto-dark
+   media query with no saved preference. */
+@media (prefers-contrast: more) {
+  :root {
+    --border-control: #666A72;
+  }
+  [data-theme="dark"] {
+    --border-control: #838A94;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+      --border-control: #838A94;
+    }
+  }
+}
+
 /* Text selection contrast (v0.48.2 bug fix): use the saturated
    accent + on-accent foreground rather than the subtle accent
    wash. The previous wash (--accent-subtle) was close in
@@ -305,12 +343,9 @@ pub const TOKENS_CSS: &str = r#"
    was visible against text but not against the page itself —
    the highlight blended into the background. Switching to the
    saturated accent gives the selection a strong, unambiguous
-   shape regardless of where on the page it falls.
-
-   Light: selection #6956C0 bg / #FFFFFF text → 5.69:1, strong
-          against the #F6F5F9 page bg.
-   Dark:  selection #A89BFF bg / #1A1720 ink text → 7.41:1, strong
-          against the #16131B page bg. */
+   shape regardless of where on the page it falls. The gate in
+   tokens/tests.rs verifies --fg-on-accent on --accent-default
+   clears 7:1 in every mode, so this pair is never re-measured here. */
 ::selection {
   background-color: var(--accent-default);
   color: var(--fg-on-accent);
@@ -318,4 +353,5 @@ pub const TOKENS_CSS: &str = r#"
 "#;
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests;

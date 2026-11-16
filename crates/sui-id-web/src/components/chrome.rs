@@ -83,8 +83,6 @@ p { margin: 0 0 var(--space-3) 0; }
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
 }
-.subtle { color: var(--fg-subtle); }
-
 code, pre, .mono {
   font-family: var(--font-mono);
   font-size: 0.92em;
@@ -150,6 +148,13 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
 .app-nav__link[aria-current="page"] {
   color: var(--accent-default);
   background: var(--accent-subtle);
+}
+/* RFC 144 R5: a tint alone marks the current nav item; under
+ * prefers-contrast: more it also gets a solid border. */
+@media (prefers-contrast: more) {
+  .app-nav__link[aria-current="page"] {
+    border: var(--border-width-default) solid var(--accent-default);
+  }
 }
 .app-nav__signout { margin-left: auto; }
 /* Sign-out form in nav — renders a button that looks like a nav link    */
@@ -218,6 +223,9 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
 .user-menu__item:hover,
 .user-menu__item:focus-visible {
   background: var(--state-hover);
+  /* Explicit: unchanged from the base rule's own fg-default, but the
+     contrast gate checks each rule's own declarations. */
+  color: var(--fg-default);
   outline: none;
 }
 .user-menu__form { display: contents; }
@@ -282,7 +290,9 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   opacity: 0.85;
 }
 .app-footer__version {
-  color: var(--fg-subtle);
+  /* RFC 144 §1: --fg-subtle is never text (2.71:1 in the original
+     palette). --fg-muted clears 7:1. */
+  color: var(--fg-muted);
   font-family: var(--font-mono);
 }
 
@@ -317,19 +327,13 @@ pub const CHROME_PAGE_HEADER_CSS: &str = r#"
   gap: var(--space-2);
   align-items: center;
 }
-/* Icon-only action button in page headers (users, clients, signing-keys).
- * Use class="button button--icon" with aria-label on the element. */
-.button--icon {
-  width: var(--space-5);
-  height: var(--space-5);
-  padding: 0;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* The icon inside a labelled button (RFC 147 §1): the label is the
+ * button's name, and the icon is aria-hidden beside it. There is no
+ * icon-only button: the retired icon-only class was a fixed 32px circle,
+ * which a label cannot fit. */
+.button__icon {
   font-size: 1.25rem;
   line-height: 1;
-  flex-shrink: 0;
 }
 /* CSS-only toggle for create/action panels (users, clients, signing-keys).
  * A hidden <input type="checkbox" class="create-toggle"> holds open/closed
@@ -358,7 +362,7 @@ pub const CHROME_THEME_TOGGLE_CSS: &str = r#"
   display: inline-flex;
   align-items: center;
   background: var(--surface-elevated);
-  border: var(--border-width-default) solid var(--border-default);
+  border: var(--border-width-default) solid var(--border-control);
   border-radius: var(--radius-sm);
   padding: 2px;
   gap: 0;
@@ -380,6 +384,13 @@ pub const CHROME_THEME_TOGGLE_CSS: &str = r#"
 .theme-toggle__btn[aria-pressed="true"] {
   background: var(--accent-subtle);
   color: var(--accent-default);
+}
+/* RFC 144 R5: a tint alone marks the pressed theme-toggle button; under
+ * prefers-contrast: more it also gets a solid border. */
+@media (prefers-contrast: more) {
+  .theme-toggle__btn[aria-pressed="true"] {
+    border: var(--border-width-default) solid var(--accent-default);
+  }
 }
 
 

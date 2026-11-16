@@ -145,7 +145,7 @@ pub const UTILITIES_COPY_BUTTON_CSS: &str = r#"
     align-items: center;
     gap: 0.25em;
     padding: 0.1em 0.5em;
-    border: 1px solid var(--border-default);
+    border: 1px solid var(--border-control);
     border-radius: var(--radius-sm, 4px);
     background: transparent;
     color: var(--fg-muted);
@@ -326,7 +326,7 @@ pub(crate) const COPY_FIELD_CSS: &str = r#"
   font-family: var(--font-mono);
   font-size: var(--font-size-caption);
   padding: var(--space-1) var(--space-2);
-  border: var(--border-width-default) solid var(--border-default);
+  border: var(--border-width-default) solid var(--border-control);
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
   color: var(--fg-default);

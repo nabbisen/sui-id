@@ -94,17 +94,25 @@ pub const BANNERS_DEVMODE_CSS: &str = r#"
   position: sticky;
   top: 0;
   z-index: var(--z-raised);
-  background: #7A5C00;        /* deep amber, distinct from any semantic colour */
-  color: #FFF8E1;
+  /* RFC 144: tokens, not literals — the contrast gate cannot resolve a
+     hard-coded colour, and these three are the same in both modes (the
+     banner looks the same regardless of theme). */
+  background: var(--devmode-bg);
+  color: var(--devmode-fg);
   padding: var(--space-1) var(--space-3);
   font-size: var(--font-size-caption);
   text-align: center;
   letter-spacing: 0.04em;
 }
 .dev-banner strong { letter-spacing: 0.08em; }
-/* High-contrast bind warning within the banner */
+/* High-contrast bind warning within the banner. background: repeats
+   the ancestor .dev-banner's own fill (no visible change) so the
+   contrast gate resolves the real pair (devmode-warn on devmode-bg)
+   instead of checking devmode-warn against the four neutral page
+   surfaces it is never actually painted on. */
 .dev-banner__bind-warn {
-  color: #FFCDD2;
+  background: var(--devmode-bg);
+  color: var(--devmode-warn);
   font-weight: var(--font-weight-medium);
 }
 
@@ -146,7 +154,10 @@ pub const BANNERS_DEVMODE_CSS: &str = r#"
 }
 .checklist > li.done::before {
   content: "\2713";       /* ✓ check mark */
-  color: var(--success-default);
+  /* RFC 144 refresh rule 3: the done state is carried by the glyph
+     itself and the muted text (.checklist > li.done, above), not by
+     colouring the glyph green. */
+  color: var(--fg-default);
 }
 
 "#;

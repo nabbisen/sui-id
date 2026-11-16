@@ -23,13 +23,20 @@ pub const CONFIRM_CSS: &str = r#"
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-medium);
 }
+/* RFC 144 §1a, refresh rule 3: danger/success as text on their own
+ * tint fail the contrast gate (color-mix() also cannot be resolved by
+ * it at all). Both badges take the banner convention instead: the
+ * tinted fill, text in --fg-default, and the semantic colour on the
+ * border. */
 .reversibility-badge--recoverable {
-  background: color-mix(in srgb, var(--success-default) 15%, transparent);
-  color: var(--success-default);
+  background: var(--success-subtle);
+  color: var(--fg-default);
+  border: var(--border-width-default) solid var(--success-default);
 }
 .reversibility-badge--permanent {
   background: var(--danger-subtle);
-  color: var(--danger-default);
+  color: var(--fg-default);
+  border: var(--border-width-default) solid var(--danger-default);
 }
 
 /* ── Danger zone (RFC-MI-051, v0.54.0) ──────────────────────────────── */
@@ -48,7 +55,11 @@ pub const CONFIRM_CSS: &str = r#"
 .danger-zone__title {
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-medium);
-  color: var(--danger-default);
+  /* RFC 144 §1a: danger as text on the danger tint was 4.28:1. The
+     zone itself keeps its danger border; the title's own meaning now
+     comes from that border and the section heading, not the hue of
+     its text. */
+  color: var(--fg-default);
   margin: 0 0 var(--space-2);
 }
 .danger-zone__body {

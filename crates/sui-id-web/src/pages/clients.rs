@@ -137,9 +137,8 @@ pub fn render_clients(
                     </div>
                     {can_write.then(|| view! {
                         <div class="page-header__actions">
-                            <a href="/admin/clients/new" class="button button--icon"
-                               aria-label=t.clients_create_section>
-                                <span aria-hidden="true">"+"</span>" "{t.clients_create_section}
+                            <a href="/admin/clients/new" class="button">
+                                <span class="button__icon" aria-hidden="true">"+"</span>{t.clients_create_section}
                             </a>
                         </div>
                     })}

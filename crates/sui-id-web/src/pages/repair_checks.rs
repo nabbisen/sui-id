@@ -50,18 +50,17 @@ fn page_sources() -> Vec<(String, String)> {
     out
 }
 
-// ── §1: every `button--icon` element also has visible text ─────────────────
+// ── §1: every primary action has a visible label ──────────────────────────
 
-/// Scans forward from each `button--icon` match to the nearest closing
-/// `</a>` or `</button>` (whichever comes first) and requires a `{t.`
-/// interpolation somewhere in between — the shape every fix in this
-/// dispatch uses (`<span aria-hidden="true">"…"</span>" "{t.…}`). A bare
-/// `aria-label=t.…` attribute (no braces) does not count, so the
-/// unfixed markup this RFC found is exactly what this rejects.
-fn icon_only_buttons(src: &str) -> Vec<usize> {
+/// Scans forward from each `button__icon` (an icon inside a button) to the
+/// nearest closing `</a>` or `</button>`, whichever comes first, and
+/// requires a `{t.` interpolation in between: the visible label. An
+/// `aria-label=t.…` attribute (no braces) does not count, so an icon with
+/// only an accessible name is exactly what this rejects.
+fn icons_without_a_label(src: &str) -> Vec<usize> {
     let mut bad = vec![];
     let mut search_from = 0usize;
-    while let Some(rel) = src[search_from..].find("button--icon") {
+    while let Some(rel) = src[search_from..].find("button__icon") {
         let pos = search_from + rel;
         let close_a = src[pos..].find("</a>").map(|i| pos + i);
         let close_button = src[pos..].find("</button>").map(|i| pos + i);
@@ -74,20 +73,39 @@ fn icon_only_buttons(src: &str) -> Vec<usize> {
         if !src[pos..close].contains("{t.") {
             bad.push(src[..pos].matches('\n').count() + 1);
         }
-        search_from = pos + "button--icon".len();
+        search_from = pos + "button__icon".len();
     }
     bad
 }
 
 #[test]
-fn no_button_icon_is_without_visible_text() {
+fn every_button_icon_has_a_visible_label() {
     for (name, src) in page_sources() {
-        let bad = icon_only_buttons(&src);
+        let bad = icons_without_a_label(&src);
         assert!(
             bad.is_empty(),
-            "{name}: button--icon with no visible {{t.…}} text, at line(s) {bad:?}"
+            "{name}: button__icon with no visible {{t.…}} label, at line(s) {bad:?}"
         );
     }
+}
+
+/// The icon-only button is retired, not only labelled: `.button--icon` was
+/// a fixed 32px circle, and the label N1 put inside it wrapped one
+/// character per line (found in 0.92.0's N2a walk). Neither a page nor the
+/// stylesheet may use the class again.
+#[test]
+fn the_icon_only_button_class_is_retired() {
+    let retired = ["button", "--icon"].concat();
+    for (name, src) in page_sources() {
+        assert!(
+            !src.contains(&retired),
+            "{name}: uses the retired `{retired}` class"
+        );
+    }
+    assert!(
+        !crate::components::components_css().contains(&retired),
+        "the stylesheet defines the retired `{retired}` class"
+    );
 }
 
 // ── §2: every `empty_state(…, None)` call is on the named, reasoned list ──

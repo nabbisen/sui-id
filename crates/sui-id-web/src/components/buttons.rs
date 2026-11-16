@@ -39,28 +39,39 @@ button:hover:not(:disabled), .button:hover:not(.disabled),
 button.primary:hover:not(:disabled), .button.primary:hover:not(.disabled) {
   background: var(--accent-emphasis);
   border-color: var(--accent-emphasis);
+  /* Explicit, not just inherited: the contrast gate checks each rule's
+     own declarations, and the label never actually changes colour on
+     hover, so this is also simply accurate. */
+  color: var(--fg-on-accent);
   text-decoration: none;
 }
 
 /* Secondary: outlined, for non-dominant actions */
 button.secondary, .button.secondary {
   background: transparent;
-  border-color: var(--border-default);
+  border-color: var(--border-control);
   color: var(--fg-default);
 }
 button.secondary:hover:not(:disabled), .button.secondary:hover:not(.disabled) {
   background: var(--state-hover);
   border-color: var(--fg-muted);
+  color: var(--fg-default);
 }
 
-/* Danger: irreversible / destructive actions, visually isolated */
+/* Danger: irreversible / destructive actions, visually isolated.
+ * RFC 144: the label is var(--fg-on-danger), not a literal white — dark
+ * mode's danger fill is light, so a hard-coded white label was 2.78:1.
+ * The hover fill is a real colour (--danger-emphasis), not filter:
+ * brightness(), so the contrast gate can resolve it. */
 button.danger, .button.danger {
   background: var(--danger-default);
   border-color: var(--danger-default);
-  color: #FFFFFF;
+  color: var(--fg-on-danger);
 }
 button.danger:hover:not(:disabled), .button.danger:hover:not(.disabled) {
-  filter: brightness(0.92);
+  background: var(--danger-emphasis);
+  border-color: var(--danger-emphasis);
+  color: var(--fg-on-danger);
 }
 
 /* Ghost: very low emphasis, for inline cancel / dismiss */
@@ -77,8 +88,8 @@ button.ghost:hover:not(:disabled), .button.ghost:hover:not(.disabled) {
 button:disabled, .button.disabled {
   /* Explicit AA-compliant disabled tokens, not opacity: opacity over a
      coloured fill degrades contrast unpredictably. fg-disabled on
-     bg-disabled clears WCAG AA in both modes (light 5.65:1 / dark
-     5.79:1). A disabled control must never be the sole carrier of a
+     bg-disabled clears WCAG AAA in both modes (light 7.34:1 / dark
+     9.31:1), asserted by tokens/tests.rs. A disabled control must never be the sole carrier of a
      meaningful value (see tokens.rs / the UI/UX contrast contract). */
   color: var(--fg-disabled);
   background: var(--bg-disabled);

@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `metrics_enabled`, `metrics_listen_addr` and `access_log`, which it
   previously omitted — set or commented with its default, same as every
   other key.
+- **The console's colours move to a calmer slate palette, and every
+  text reaches 7:1 contrast (WCAG AAA) in light and dark mode.** Status
+  badges carry their meaning in a word and a border, not in coloured
+  text. The interface honours the system's "increase contrast" setting.
 
 ### Fixed
 
@@ -27,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bare "No such file or directory": where to find `--print-sample-config`,
   where the production template is, and the configuration reference,
   pinned to this binary's own release.
+- **Destructive buttons' labels were unreadable in dark mode (2.78:1).**
+- **A disabled form field's text was faint (2.34:1).** It was drawn at 38%
+  opacity; it now uses the same explicit disabled colours as a disabled
+  button.
 
 ### Tests and CI
 
