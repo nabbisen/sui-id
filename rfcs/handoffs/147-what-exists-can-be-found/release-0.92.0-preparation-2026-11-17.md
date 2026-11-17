@@ -4,9 +4,9 @@
 > `.git-exclude/reviewed/release-0.92.0-preparation-2026-11-17.md`. The threat
 > model's banner no longer names the workspace's version, which it had
 > stated wrongly since `0.91.0`; and two defects N2b fixed reach the
-> CHANGELOG. **Next:** the owner's decision on the review's F3 (a regular
-> user's own pages show the console navigation): if it is fixed in `0.92.0`,
-> stage 14 runs on the commit that fixes it; if not, on this one. Then the cut.
+> CHANGELOG. **Next:** the review's F3, a regular user's own pages showing
+> the console navigation, is fixed in `0.92.0` as N2c; stage 14 runs on the
+> commit that lands it. Then the cut.
 >
 > ## Whose turn it was: **the implementation role's.**
 > This is the mechanical half of the release. These stay with the architect
