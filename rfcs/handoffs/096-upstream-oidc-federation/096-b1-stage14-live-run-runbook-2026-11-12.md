@@ -1,5 +1,13 @@
 # 096-B1 stage 14 — the live run against a real upstream: a runbook
 
+> ## Its slot now: `0.92.0`'s prepared commit, **`c30056b`** (2026-11-17)
+> Cycle N's prepared commit, the slot set 2026-11-15. The preparation landed
+> as `2a4e4a6`; `9aa4665` fixed its G16; and N2c, decided for `0.92.0` before
+> this run, landed as **`c30056b67aa89756e849a1ff219cee9032748a2f`**. So that is
+> the commit to run, and `sui-id --version` must print `sui-id 0.92.0`.
+> **`0.92.0`'s tag waits for this run's record.** §1 and §5 are updated for
+> it; the slot headers below are the history.
+
 > ## Deferred again, 2026-11-15, before step 2
 > `@nabbisen`: *"Deferred, because we have a lot of work around fuctions and UI/UX."* Step 1 passed on `a0a6c1a`;
 > steps 2–12 were not run, and the instance was removed. **Its new slot:
@@ -60,15 +68,15 @@ mocks.
 
 ## 1 — the commit
 
-`0.91.0`'s preparation landed as `461443c`, and a test-only fix after it as
-**`a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad`** (2026-11-15). That is the
-commit to run. The architect builds it, detached, in a clean sibling clone:
+**`c30056b67aa89756e849a1ff219cee9032748a2f`** (2026-11-17), `0.92.0`'s
+prepared commit (see the header). *(Until 2026-11-17: `a0a6c1a`, `0.91.0`'s.)*
+The architect builds it, detached, in a clean sibling clone:
 
 ```sh
 git clone . ../sui-id-stage14
-git -C ../sui-id-stage14 checkout --detach a0a6c1a7d5922b61f2519dfdc54d527a7a0357ad
+git -C ../sui-id-stage14 checkout --detach c30056b67aa89756e849a1ff219cee9032748a2f
 cargo build --release -p sui-id --locked --manifest-path ../sui-id-stage14/Cargo.toml
-../sui-id-stage14/target/release/sui-id --version     # must print: sui-id 0.91.0
+../sui-id-stage14/target/release/sui-id --version     # must print: sui-id 0.92.0
 ```
 
 ## 2 — the upstream
@@ -129,11 +137,11 @@ every step has a second, independent record.
 | 3 | **Admin → Federation providers** | one row: Duende demo, Disabled, Requires review, "—" for the check column, "No" linked users, and one button, **Check and enable** |
 | 4 | **Check and enable**, which opens a confirm page. There, **Check only** | "Every check passed." *(Corrected 2026-11-15: *Check only* is on this page, not in the row.)* |
 | 5 | On the same confirm page, **Check and enable** | "The provider was checked and enabled.", and the row Enabled, Validated, with a time |
-| 6 | Sign out. Open the login page | a **"Sign in with Duende demo"** button |
-| 7 | Press it, and sign in at the demo as `alice` / `alice` | back at sui-id, signed in as a new user, on that user's own security page (`/me/security`) |
+| 6 | Sign out: **admin ▾ → Sign out** (the account menu, top right, since `0.92.0`). Open the login page | *"You are signed out."* (in Japanese, *"サインアウトしました。"*), then on the login page a **"Sign in with Duende demo"** button |
+| 7 | Press it, and sign in at the demo as `alice` / `alice` | back at sui-id, signed in as a new user, on that user's own security page (`/me/security`). **Since `0.92.0` (N2c): the header shows only the account menu (*alice ▾*, or the name the demo sends), and none of the console's links** |
 | 8 | Sign in as the admin. **Users →** that user | a *Federated sign-in* section with Duende demo |
 | 9 | **Unlink**. Read the confirm page, then confirm | the page says the unlink cannot be undone, and that open sessions stay valid until the account is disabled |
-| 10 | Sign out, and press "Sign in with Duende demo" again, as `alice` | refused on the login page with "This sign-in could not be linked to a local account automatically. Contact an administrator." It is the same message whether or not a local account exists, by design |
+| 10 | Sign out (the account menu), and press "Sign in with Duende demo" again, as `alice` | refused on the login page with "This sign-in could not be linked to a local account automatically. Contact an administrator." It is the same message whether or not a local account exists, by design |
 | 11 | **Federation providers → Disable** | "The provider was disabled."; the login button is gone |
 | 12 | The architect stops sui-id, removes the block, and starts it again. Then **Delete** | the confirm page states how many users' sign-in ends; then the row is gone |
 
