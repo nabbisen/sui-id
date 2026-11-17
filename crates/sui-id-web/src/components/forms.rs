@@ -38,12 +38,10 @@ input[type="tel"], textarea, select {
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
   transition: border-color 0.12s, box-shadow 0.12s;
-}
-/* RFC 144 §1: --fg-subtle was 2.71:1 as placeholder text. --fg-muted
-   clears 7:1. For N2a only — N2b removes every `placeholder` attribute
-   (RFC 144's "What else moves") and this rule along with it. */
-input::placeholder, textarea::placeholder {
-  color: var(--fg-muted);
+  /* RFC 144 §4: 44×44 CSS px for standalone controls. A multi-row
+   * textarea already exceeds this from its own rows; this is a floor,
+   * not a fixed height. */
+  min-height: 2.75rem;
 }
 input:hover, textarea:hover, select:hover {
   border-color: var(--fg-muted);

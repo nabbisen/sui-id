@@ -50,7 +50,11 @@ thead th {
   white-space: nowrap;
 }
 tbody td {
-  padding: var(--space-3);
+  /* RFC 144, "What else moves": vertical padding --space-2 (was
+   * --space-3) — with the §1/§3 type and spacing changes, a row now
+   * stands at about 44px, in reach of §4's target size, instead of
+   * about 57px. Horizontal padding is unchanged. */
+  padding: var(--space-2) var(--space-3);
   border-bottom: var(--border-width-default) solid var(--border-muted);
   vertical-align: middle;
   /* v0.48.2 (Bug 8): body cells default to no-wrap. On narrow

@@ -20,11 +20,26 @@
 //!   ships.
 //! - The footer with the theme toggle (light / dark / auto) and the
 //!   accessibility badges.
-//! - The admin nav (when `show_nav` is true).
+//! - The admin nav, with its account menu, for [`Chrome::Console`].
 
 use crate::components::components_css;
 use crate::tokens::TOKENS_CSS;
 use leptos::prelude::*;
+
+/// RFC 144, *Refresh*: the navigation **is** the signed-in person's
+/// name, or there is no navigation — there is no third state where a
+/// page shows the console chrome to someone the type system cannot
+/// name. Replaces the former `show_nav: bool` + `admin_username:
+/// Option<String>` pair on [`Shell`], which let 38 of 39 pages fall
+/// through to a bare *Sign out* with no account menu (measured
+/// 2026-11-15; see RFC 144's refresh and N2a's review, F5).
+#[derive(Debug, Clone)]
+pub enum Chrome {
+    /// The console navigation, with the account menu for `username`.
+    Console { username: String },
+    /// No navigation: sign-in, setup, error pages.
+    Bare,
+}
 
 /// Wrap a page body in the standard sui-id chrome.
 ///
@@ -34,24 +49,19 @@ use leptos::prelude::*;
 #[component]
 pub fn Shell(
     title: String,
-    show_nav: bool,
+    nav: Chrome,
     current: Option<String>,
     lang: sui_id_i18n::Locale,
     /// CSRF token for the Shell-internal sign-out form (RFC-MI-021,
-    /// v0.51.0). Required even when `show_nav` is false, so handlers
-    /// have a uniform API; in the `show_nav=false` case the token is
-    /// not rendered to any form. Must be obtained from the request's
-    /// session (e.g. via `crate::csrf::extract_token`) — passing an
-    /// empty string is a contract violation.
+    /// v0.51.0). Required even for `Chrome::Bare`, so handlers have a
+    /// uniform API; in that case the token is not rendered to any
+    /// form. Must be obtained from the request's session (e.g. via
+    /// `crate::csrf::extract_token`) — passing an empty string is a
+    /// contract violation.
     csrf_token: String,
     /// When true, renders the DEV MODE banner (RFC 032).
     #[prop(optional)]
     dev_mode: Option<bool>,
-    /// RFC 074: username/display-name for the user-menu dropdown.
-    /// `None` → nav renders without the user-menu (anonymous / me-only
-    /// pages that never show the admin nav).
-    #[prop(optional)]
-    admin_username: Option<String>,
     children: Children,
 ) -> impl IntoView {
     let stylesheet = format!("{}\n{}", TOKENS_CSS, components_css());
@@ -81,14 +91,14 @@ pub fn Shell(
                 })}
                 <header class="app-header" role="banner">
                     <h1 class="app-header__brand">"sui-id"</h1>
-                    {show_nav.then(|| {
-                        let au = admin_username.clone();
-                        view! {
+                    {match nav {
+                        Chrome::Console { username } => Some(view! {
                             <Nav current=current.clone() lang=lang
                                  csrf_token=csrf_token.clone()
-                                 admin_username=au />
-                        }
-                    })}</header>
+                                 username=username />
+                        }),
+                        Chrome::Bare => None,
+                    }}</header>
                 <main class="app-main" id="main-content">{children()}</main>
                 <Footer lang=lang />
             </body>
@@ -137,8 +147,10 @@ fn Nav(
     current: Option<String>,
     lang: sui_id_i18n::Locale,
     csrf_token: String,
-    // RFC 074: display name for the user-menu dropdown. None = omit menu.
-    admin_username: Option<String>,
+    // RFC 144, Refresh: always present — Chrome::Console is the only
+    // variant that renders a Nav at all (see Shell). The account menu
+    // is on every page that shows the navigation, with no fallback.
+    username: String,
 ) -> impl IntoView {
     let t = lang.strings();
     // RFC 074: "clients" renamed to "apps" in nav label (route unchanged).
@@ -158,53 +170,41 @@ fn Nav(
     ];
     view! {
         <nav class="app-nav" aria-label=t.nav_aria_main>
-            {items.into_iter().map(|(key, label, href)| {
-                let aria = if current.as_deref() == Some(key) { Some("page") } else { None };
-                view! {
-                    <a class="app-nav__link" href=href aria-current=aria>{label}</a>
-                }
-            }).collect::<Vec<_>>()}
+            // RFC 144 N2b's walk, 125% browser font size: this inner
+            // wrapper is what scrolls when the links don't fit, so the
+            // account menu just below — outside it — stays visible
+            // and never slides off the edge with them.
+            <div class="app-nav__links">
+                {items.into_iter().map(|(key, label, href)| {
+                    let aria = if current.as_deref() == Some(key) { Some("page") } else { None };
+                    view! {
+                        <a class="app-nav__link" href=href aria-current=aria>{label}</a>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
 
             // RFC 074: user-menu dropdown — replaces the old flat
             // "Security" link and "Sign out" button. Pure HTML
             // (<details>/<summary>); no JavaScript required.
-            {if let Some(uname) = admin_username {
-                let csrf_val = csrf_token.clone();
-                view! {
-                    <details class="user-menu">
-                        <summary class="app-nav__link user-menu__toggle">
-                            {uname} " ▾"
-                        </summary>
-                        <div class="user-menu__panel" role="menu">
-                            <a class="user-menu__item" href="/me/security/overview"
-                               role="menuitem">
-                                {t.nav_my_account}
-                            </a>
-                            <form method="post" action="/admin/logout"
-                                  class="user-menu__form">
-                                <input type="hidden" name="_csrf" value=csrf_val />
-                                <button type="submit" class="user-menu__item"
-                                        role="menuitem">
-                                    {t.nav_logout}
-                                </button>
-                            </form>
-                        </div>
-                    </details>
-                }.into_any()
-            } else {
-                // Fallback sign-out when admin_username is None (e.g. /me/* pages).
-                let csrf_val = csrf_token.clone();
-                view! {
+            <details class="user-menu">
+                <summary class="app-nav__link user-menu__toggle">
+                    {username} " ▾"
+                </summary>
+                <div class="user-menu__panel" role="menu">
+                    <a class="user-menu__item" href="/me/security/overview"
+                       role="menuitem">
+                        {t.nav_my_account}
+                    </a>
                     <form method="post" action="/admin/logout"
-                          class="app-nav__signout-form" id="logout-form">
-                        <input type="hidden" name="_csrf" id="logout-csrf" value=csrf_val />
-                        <button type="submit" class="app-nav__link app-nav__signout"
-                                aria-label=t.nav_aria_signout>
+                          class="user-menu__form">
+                        <input type="hidden" name="_csrf" value=csrf_token.clone() />
+                        <button type="submit" class="user-menu__item"
+                                role="menuitem">
                             {t.nav_logout}
                         </button>
                     </form>
-                }.into_any()
-            }}
+                </div>
+            </details>
         </nav>
     }
 }
@@ -294,3 +294,7 @@ fn ThemeToggle(lang: sui_id_i18n::Locale) -> impl IntoView {
         </p>
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod tests;

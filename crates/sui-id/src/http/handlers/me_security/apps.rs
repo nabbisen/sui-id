@@ -20,6 +20,9 @@ pub async fn me_apps_get(
     RequestLocale(lang): RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
+    let user = sui_id_store::repos::users::get(&app.db, user_id)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let grants_raw = sui_id_store::repos::user_consent::list_for_user(&app.db, user_id)
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
@@ -44,6 +47,7 @@ pub async fn me_apps_get(
         grants,
         csrf_token: token.clone(),
         dev_mode: app.is_dev_mode,
+        username: user.username,
     };
 
     let resp = Html(render_me_apps(data, None, lang)).into_response();

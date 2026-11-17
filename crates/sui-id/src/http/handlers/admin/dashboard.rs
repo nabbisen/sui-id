@@ -12,7 +12,7 @@ use sui_id_web::{pages::DashboardData, render_dashboard};
 
 pub async fn dashboard(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _, _): CurrentAdminOrAuditor,
     jar: CookieJar,
     axum::extract::Query(q): axum::extract::Query<DashboardQuery>,
 ) -> Result<Response, HttpError> {

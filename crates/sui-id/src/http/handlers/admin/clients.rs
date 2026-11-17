@@ -23,7 +23,7 @@ use sui_id_web::{
 
 pub async fn clients_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -46,6 +46,7 @@ pub async fn clients_delete_confirm_get(
         client_id: id,
         client_name: client.name,
         csrf_token: token.clone(),
+        admin_username,
     };
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_delete_client(data, app.is_dev_mode, lang)).into_response();
@@ -54,7 +55,7 @@ pub async fn clients_delete_confirm_get(
 
 pub async fn clients_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role, ref read_actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, role, ref read_actor, username): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -98,6 +99,7 @@ pub async fn clients_get(
         token.clone(),
         app.is_dev_mode,
         lang,
+        username,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -106,7 +108,7 @@ pub async fn clients_get(
 /// `GET /admin/clients/new` — isolated register-client form.
 pub async fn clients_new_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     if !actor.can_write() {
@@ -120,6 +122,7 @@ pub async fn clients_new_get(
         token.clone(),
         app.is_dev_mode,
         lang,
+        username,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -148,7 +151,7 @@ pub struct CreateClientForm {
 
 pub async fn clients_create(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
     jar: CookieJar,
     Form(form): Form<CreateClientForm>,
 ) -> Result<Response, HttpError> {
@@ -246,6 +249,7 @@ pub async fn clients_create(
         token.clone(),
         app.is_dev_mode,
         lang,
+        username,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -253,7 +257,7 @@ pub async fn clients_create(
 
 pub async fn clients_set_disabled(
     state_ext: AppStateExt,
-    CurrentAdmin(_, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(_, ref admin_actor, _): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -293,7 +297,7 @@ pub async fn clients_set_disabled(
 
 pub async fn clients_delete(
     state_ext: AppStateExt,
-    CurrentAdmin(_, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(_, ref admin_actor, _): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -325,7 +329,7 @@ pub async fn clients_delete(
 
 pub async fn clients_edit_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref read_actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref read_actor, username): CurrentAdminOrAuditor,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
@@ -362,6 +366,7 @@ pub async fn clients_edit_get(
             token_endpoint_auth_method: row.token_endpoint_auth_method.map(|m| m.as_str()),
             auth_method_unrecognized,
             freshly_rotated_secret: None,
+            username,
         },
         None,
         token.clone(),
@@ -397,7 +402,7 @@ pub struct EditClientForm {
 
 pub async fn clients_edit_post(
     state_ext: AppStateExt,
-    CurrentAdmin(_, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(_, ref admin_actor, _): CurrentAdmin,
     jar: CookieJar,
     Path(id): Path<String>,
     Form(form): Form<EditClientForm>,
@@ -487,7 +492,7 @@ pub async fn clients_edit_post(
 
 pub async fn clients_rotate_secret_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -539,6 +544,7 @@ pub async fn clients_rotate_secret_post(
             token_endpoint_auth_method: row.token_endpoint_auth_method.map(|m| m.as_str()),
             auth_method_unrecognized,
             freshly_rotated_secret: Some(new_secret),
+            username,
         },
         None,
         token.clone(),

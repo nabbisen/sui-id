@@ -2,9 +2,31 @@
 
 use super::common::*;
 use crate::components::empty_state;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 use leptos::prelude::*;
 use sui_id_shared::api::AuditLogEntryDto;
+
+/// The number of cells [`audit_row_view`] renders, and so the number of
+/// columns [`audit_table_head`] heads. A table that shows audit rows takes
+/// both from here, so its header cannot disagree with its rows (the user
+/// detail page once headed six cells with three).
+pub(super) const AUDIT_COLUMNS: usize = 6;
+
+/// The header for a table of [`audit_row_view`] rows: one `<th>` per cell.
+pub(super) fn audit_table_head(t: &'static sui_id_i18n::Strings) -> impl IntoView {
+    view! {
+        <thead>
+            <tr>
+                <th class="cell-nowrap">{t.audit_col_when}</th>
+                <th class="cell-nowrap">{t.audit_col_actor}</th>
+                <th>{t.audit_col_action}</th>
+                <th>{t.audit_col_target}</th>
+                <th class="cell-nowrap">{t.audit_col_outcome}</th>
+                <th class="cell-actions" aria-hidden="true"></th>
+            </tr>
+        </thead>
+    }
+}
 
 pub(super) fn audit_row_view(
     t: &'static sui_id_i18n::Strings,
@@ -41,6 +63,7 @@ pub(super) fn audit_row_view(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_audit(
     entries: Vec<AuditLogEntryDto>,
     chain: ChainStatus,
@@ -49,6 +72,7 @@ pub fn render_audit(
     csrf_token: String,
     dev_mode: bool,
     lang: sui_id_i18n::Locale,
+    username: String,
 ) -> String {
     render(move || {
         let t = lang.strings();
@@ -77,7 +101,7 @@ pub fn render_audit(
         }
         .into_any();
         view! {
-            <Shell title=t.audit_title.to_string() show_nav=true current=Some("audit".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.audit_title.to_string() nav=Chrome::Console{username} current=Some("audit".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.audit_title}</h1>
@@ -94,29 +118,21 @@ pub fn render_audit(
                     <form method="get" action="/admin/audit" class="row row-gap2-center">
                         <label for="audit-q" class="fw-500">{t.audit_filter_label}</label>
                         <input id="audit-q" name="q" type="search"
-                               placeholder=t.audit_filter_placeholder
                                value=fq_display
+                               aria-describedby="audit-q-hint"
                                class="min-w-16rem" />
+                        <span id="audit-q-hint" class="field__hint">{t.audit_filter_hint}</span>
                         <button type="submit" class="secondary">{t.audit_filter_button}</button>
                     </form>
                     <a href=csv_href class="button secondary">{t.audit_export_csv}</a>
                 </div>
                 <div class="table-wrap">
                     <table>
-                        <thead>
-                            <tr>
-                                <th class="cell-nowrap">{t.audit_col_when}</th>
-                                <th class="cell-nowrap">{t.audit_col_actor}</th>
-                                <th>{t.audit_col_action}</th>
-                                <th>{t.audit_col_target}</th>
-                                <th class="cell-nowrap">{t.audit_col_outcome}</th>
-                                <th class="cell-actions" aria-hidden="true"></th>
-                            </tr>
-                        </thead>
+                        {audit_table_head(t)}
                         {if rows.is_empty() {
                             // No CTA for audit log — read-only surface.
                             view! {
-                                <tbody><tr><td colspan="6">
+                                <tbody><tr><td colspan=AUDIT_COLUMNS.to_string()>
                                     {empty_state(t.empty_audit, None)}
                                 </td></tr></tbody>
                             }.into_any()

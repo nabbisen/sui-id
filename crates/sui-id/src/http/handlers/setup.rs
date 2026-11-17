@@ -368,7 +368,7 @@ pub async fn lang_get(
 
 pub async fn lang_post(
     state_ext: AppStateExt,
-    crate::handlers::CurrentAdmin(admin_id, _): crate::handlers::CurrentAdmin,
+    crate::handlers::CurrentAdmin(admin_id, _, _): crate::handlers::CurrentAdmin,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     jar: CookieJar,
     Form(form): Form<SetupLangForm>,
@@ -427,7 +427,7 @@ pub async fn hibp_get(
 
 pub async fn hibp_post(
     state_ext: AppStateExt,
-    crate::handlers::CurrentAdmin(admin_id, _): crate::handlers::CurrentAdmin,
+    crate::handlers::CurrentAdmin(admin_id, _, _): crate::handlers::CurrentAdmin,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     jar: CookieJar,
     Form(form): Form<SetupHibpForm>,

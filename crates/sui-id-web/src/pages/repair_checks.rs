@@ -1,8 +1,8 @@
-//! RFC 147 §1 and §2: two source scans over `crates/sui-id-web/src/pages`'s
-//! top-level files (not its test subdirectories, e.g. `clients/tests.rs`,
-//! which hold assertions, not markup), that fail the moment a future page
-//! regresses either repair — not just the three/two sites this RFC
-//! measured.
+//! RFC 147 §1 and §2, and RFC 144 (Refresh, §3): source scans over
+//! `crates/sui-id-web/src/pages`'s top-level files (not its test
+//! subdirectories, e.g. `clients/tests.rs`, which hold assertions,
+//! not markup), that fail the moment a future page regresses a
+//! repair — not just the sites each RFC measured.
 
 use std::fs;
 use std::path::Path;
@@ -212,4 +212,110 @@ fn pages_the_rfc_says_already_pass_an_action_do() {
         .expect("read me_security/passkey.rs");
     assert!(passkey_src.contains("empty_state("));
     assert!(bare_none_empty_state_calls(&passkey_src).is_empty());
+}
+
+// ── RFC 144 (Refresh, §3): no placeholder carries guidance ────────────────
+
+/// No page sets a `placeholder=` attribute. RFC 144's refresh: a
+/// placeholder reads as text already typed, and disappears the
+/// moment typing begins, which is when an uncertain reader most
+/// wants the guidance. Every field's guidance now lives in visible
+/// `field__hint` text instead.
+#[test]
+fn no_page_sets_a_placeholder_attribute() {
+    for (name, src) in page_sources() {
+        let lines: Vec<usize> = src
+            .match_indices("placeholder=")
+            .map(|(pos, _)| src[..pos].matches('\n').count() + 1)
+            .collect();
+        assert!(
+            lines.is_empty(),
+            "{name}: placeholder= attribute at line(s) {lines:?} — RFC 144 moves \
+             every field's guidance to visible field__hint text instead"
+        );
+    }
+}
+
+/// The stylesheet carries no `::placeholder` rule either — RFC 144 N2a's
+/// interim one (`--fg-muted` on a vanishing placeholder) is deleted along
+/// with the attribute it styled.
+#[test]
+fn components_css_has_no_placeholder_rule() {
+    assert!(
+        !crate::components::components_css().contains("::placeholder"),
+        "the stylesheet still defines a ::placeholder rule, but no page sets \
+         the attribute it would style"
+    );
+}
+
+// ── An audit table's header heads every cell its rows render ───────────────
+
+/// The user detail page once headed the audit page's six-cell rows with
+/// three columns, so a UUID sat under *Action* and the action under
+/// *Outcome* (found in 0.92.0's N2b walk). Both tables now take their header
+/// from `audit_table_head`; this checks that it and a rendered row each have
+/// `AUDIT_COLUMNS` cells.
+#[test]
+fn the_audit_header_heads_every_cell_of_an_audit_row() {
+    use super::audit::{AUDIT_COLUMNS, audit_row_view, audit_table_head};
+    let t = sui_id_i18n::Locale::En.strings();
+    let entry = sui_id_shared::api::AuditLogEntryDto {
+        at: chrono::Utc::now(),
+        actor: None,
+        action: "user.create".into(),
+        target: Some("00000000-0000-0000-0000-000000000000".into()),
+        result: "ok".into(),
+        note: None,
+    };
+    let head = super::common::render(|| audit_table_head(t));
+    let row = super::common::render(|| audit_row_view(t, entry));
+    // `<th ` or `<th>`, not `<thead`.
+    let cells = |html: &str, tag: &str| {
+        html.matches(&format!("<{tag} ")).count() + html.matches(&format!("<{tag}>")).count()
+    };
+    assert_eq!(cells(&head, "th"), AUDIT_COLUMNS, "header cells: {head}");
+    assert_eq!(cells(&row, "td"), AUDIT_COLUMNS, "row cells: {row}");
+}
+
+// ── A key-value row is a table row, so it sits inside a table ──────────────
+
+/// `kv_row` and its three wrappers render a `<tr>`. Outside a `<tbody>` (the
+/// overview and MFA pages once put them in a `<dl>`, or in nothing) the
+/// browser drops the cells, and the label and value run together into one
+/// line: "Passkeys0Active sessions1" (found in 0.92.0's N2b walk). Every
+/// call in a page must follow an open `<tbody>`.
+#[test]
+fn every_key_value_row_is_inside_a_table_body() {
+    const CALLS: [&str; 4] = ["kv_row(", "kv_text(", "kv_code(", "kv_bool_badge("];
+    for (name, src) in page_sources() {
+        // The helpers' own definitions, and their calls to each other.
+        if name == "common.rs" {
+            continue;
+        }
+        let mut bad = vec![];
+        for call in CALLS {
+            let mut from = 0;
+            while let Some(rel) = src[from..].find(call) {
+                let pos = from + rel;
+                from = pos + call.len();
+                // `kv_row(` also matches inside `fn kv_row(` or `use … kv_row`.
+                let before = &src[..pos];
+                if before.ends_with("fn ")
+                    || !before.ends_with(|c: char| !c.is_alphanumeric() && c != '_')
+                {
+                    continue;
+                }
+                let open = before.rfind("<tbody>");
+                let close = before.rfind("</tbody>");
+                if !matches!((open, close), (Some(o), c) if c.is_none_or(|c| o > c)) {
+                    bad.push(before.matches('\n').count() + 1);
+                }
+            }
+        }
+        bad.sort_unstable();
+        assert!(
+            bad.is_empty(),
+            "{name}: a key-value row outside a <tbody>, at line(s) {bad:?}"
+        );
+    }
 }

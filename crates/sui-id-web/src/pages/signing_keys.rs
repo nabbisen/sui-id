@@ -2,7 +2,7 @@
 
 use super::common::*;
 use crate::components::empty_state;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 use leptos::prelude::*;
 
 fn signing_key_row_view(
@@ -57,6 +57,7 @@ pub fn render_signing_keys(
     csrf_token: String,
     _dev_mode: bool,
     lang: sui_id_i18n::Locale,
+    username: String,
 ) -> String {
     render(move || {
         let t = lang.strings();
@@ -70,7 +71,7 @@ pub fn render_signing_keys(
         view! {
             <Shell
                 title=t.signing_keys_title.to_string()
-                show_nav=true
+                nav=Chrome::Console{username}
                 current=Some("signing-keys".to_string()) lang=lang
                 csrf_token=csrf_token.clone()
             >

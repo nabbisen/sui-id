@@ -177,7 +177,7 @@ async fn provider_summary(
 
 pub async fn federation_providers_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, role, _, username): CurrentAdminOrAuditor,
     Query(q): Query<FederationProvidersListQuery>,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
@@ -199,6 +199,7 @@ pub async fn federation_providers_get(
         token.clone(),
         app.is_dev_mode,
         lang,
+        username,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -206,7 +207,7 @@ pub async fn federation_providers_get(
 
 pub async fn federation_providers_enable_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -233,6 +234,7 @@ pub async fn federation_providers_enable_confirm_get(
         display_name: row.display_name,
         csrf_token: token.clone(),
         flash: None,
+        username,
     };
     let resp = Html(render_confirm_enable_federation_provider(
         data,
@@ -245,7 +247,7 @@ pub async fn federation_providers_enable_confirm_get(
 
 pub async fn federation_providers_enable_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -269,14 +271,14 @@ pub async fn federation_providers_enable_post(
         }
         Err(e) => {
             let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
-            render_enable_confirm_with_error(&app, &jar, id, provider_id, e, lang).await
+            render_enable_confirm_with_error(&app, &jar, id, provider_id, e, lang, username).await
         }
     }
 }
 
 pub async fn federation_providers_check_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _): CurrentAdmin,
+    CurrentAdmin(admin_id, _, username): CurrentAdmin,
     jar: CookieJar,
     Path(id): Path<String>,
     Form(form): Form<super::forms::CsrfOnlyForm>,
@@ -308,6 +310,7 @@ pub async fn federation_providers_check_post(
         display_name: row.display_name,
         csrf_token: token.clone(),
         flash,
+        username,
     };
     let resp = Html(render_confirm_enable_federation_provider(
         data,
@@ -325,6 +328,7 @@ async fn render_enable_confirm_with_error(
     provider_id: FederationProviderId,
     e: CheckAndEnableError,
     lang: sui_id_i18n::Locale,
+    username: String,
 ) -> Result<Response, HttpError> {
     let row = federation_provider::get(&app.db, provider_id)
         .await
@@ -338,6 +342,7 @@ async fn render_enable_confirm_with_error(
             kind: FlashKind::Error,
             text: check_and_enable_error_text(e, lang.strings()).into(),
         }),
+        username,
     };
     let resp = Html(render_confirm_enable_federation_provider(
         data,
@@ -350,7 +355,7 @@ async fn render_enable_confirm_with_error(
 
 pub async fn federation_providers_disable_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -377,6 +382,7 @@ pub async fn federation_providers_disable_confirm_get(
         display_name: row.display_name,
         csrf_token: token.clone(),
         flash: None,
+        username,
     };
     let resp = Html(render_confirm_disable_federation_provider(
         data,
@@ -389,7 +395,7 @@ pub async fn federation_providers_disable_confirm_get(
 
 pub async fn federation_providers_disable_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -442,6 +448,7 @@ pub async fn federation_providers_disable_post(
                     kind: FlashKind::Error,
                     text: disable_error_text(e, lang.strings()).into(),
                 }),
+                username,
             };
             let resp = Html(render_confirm_disable_federation_provider(
                 data,
@@ -458,7 +465,7 @@ pub async fn federation_providers_disable_post(
 
 pub async fn federation_providers_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -489,6 +496,7 @@ pub async fn federation_providers_delete_confirm_get(
         linked_users_count: linked_users_count.max(0) as usize,
         csrf_token: token.clone(),
         flash: None,
+        username,
     };
     let resp = Html(render_confirm_delete_federation_provider(
         data,
@@ -501,7 +509,7 @@ pub async fn federation_providers_delete_confirm_get(
 
 pub async fn federation_providers_delete_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -539,6 +547,7 @@ pub async fn federation_providers_delete_post(
                     kind: FlashKind::Error,
                     text: delete_provider_error_text(e, lang.strings()).into(),
                 }),
+                username,
             };
             let resp = Html(render_confirm_delete_federation_provider(
                 data,

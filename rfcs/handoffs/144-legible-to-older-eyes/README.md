@@ -1,7 +1,15 @@
 # RFC 144 — handoff
 
 **RFC.** [`../../accepted/144-legible-to-older-eyes.md`](../../accepted/144-legible-to-older-eyes.md)
-**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Built in `0.92.0` (cycle N), in two dispatches: **N2a, colour**, [landed 2026-11-16](0.92.0-n2a-colour-2026-11-16.md); **N2b, size and structure**, [dispatched 2026-11-16](0.92.0-n2b-size-and-structure-2026-11-16.md).
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Built in `0.92.0` (cycle N), in two dispatches: **N2a, colour**, [landed 2026-11-16](0.92.0-n2a-colour-2026-11-16.md); **N2b, size and structure**, [landed 2026-11-17](0.92.0-n2b-size-and-structure-2026-11-16.md). **RFC 144 is built.**
+
+**A correction to the refresh's measurement (2026-11-17).** The refresh says
+the account menu was missing from *"38 of 39 pages"*, and §6 that it was
+*"right on the dashboard only"*. **It was on no page**: no page ever passed
+`admin_username` to the layout (at `0d5b17e`, the only `admin_username=` is
+inside `layout.rs`). The dashboard used the name for its greeting only. The
+measurement was the architect's; N2b's return found it. The decision and
+the fix are unchanged.
 
 **Carried into N2b, §5** (found in N2a's review): four confirmations (delete a
 user, reset MFA, delete an app, delete a signing key) label their optional

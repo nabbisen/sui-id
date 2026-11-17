@@ -127,6 +127,24 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   align-items: center;
   gap: var(--space-1);
   flex: 1;
+  /* The row itself never wraps: the links wrap inside .app-nav__links,
+   * so the account menu beside them keeps its place at the right. */
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.app-nav__links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  /* RFC 144 N2b's walk, 125% browser font size: the links no longer
+   * fit beside the account menu. They wrap onto a further line inside
+   * their own box, so every destination stays visible; the account
+   * menu, a sibling outside this box, stays where it is. (Scrolling
+   * them instead hid Settings off the edge with no sign it was there,
+   * at exactly the font size a reader chose to see more clearly.) */
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 .app-nav__link {
   color: var(--fg-muted);
@@ -156,33 +174,9 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
     border: var(--border-width-default) solid var(--accent-default);
   }
 }
-.app-nav__signout { margin-left: auto; }
-/* Sign-out form in nav — renders a button that looks like a nav link    */
-.app-nav__signout-form {
-    margin-top: auto;
-    border-top: 1px solid var(--border-default);
-    padding-top: var(--space-2);
-}
-.app-nav__signout {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    text-align: left;
-    width: 100%;
-    color: var(--fg-muted);
-    font: inherit;
-}
-.app-nav__signout:hover,
-.app-nav__signout:focus-visible {
-    color: var(--fg-default);
-    background-color: var(--surface-elevated);
-    text-decoration: none;
-}
-
 /* RFC 074: user-menu dropdown — replaces the flat "Security" nav link.
  * Uses <details>/<summary> so it works with JavaScript disabled.      */
-.user-menu { position: relative; margin-left: auto; }
+.user-menu { position: relative; margin-left: auto; flex-shrink: 0; }
 .user-menu__toggle {
   list-style: none;
   cursor: pointer;
@@ -208,7 +202,12 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   padding: var(--space-1) 0;
 }
 .user-menu__item {
-  display: block;
+  display: flex;
+  align-items: center;
+  /* RFC 144 §4: 44×44 CSS px for standalone controls — a menu item is
+   * one. display:flex + align-items:center keeps the label vertically
+   * centred in the taller box. */
+  min-height: 2.75rem;
   padding: var(--space-2) var(--space-4);
   color: var(--fg-default);
   font: inherit;
@@ -374,7 +373,8 @@ pub const CHROME_THEME_TOGGLE_CSS: &str = r#"
   padding: var(--space-1) var(--space-2);
   font-size: var(--font-size-caption);
   cursor: pointer;
-  min-height: auto;
+  /* RFC 144 §4: 44×44 CSS px for standalone controls. */
+  min-height: 2.75rem;
   border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
@@ -444,19 +444,16 @@ pub const CHROME_RESPONSIVE_CSS: &str = r#"
   .app-main {
     padding: var(--space-3) var(--space-3);
   }
-  /* Nav: horizontal scroll instead of squish. Items keep their
-   * desktop padding/typography; the row just slides under your
-   * finger when there's not enough space for everything. */
-  .app-nav {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-  }
-  /* Sign-out button stops being pushed to the far right (which
-   * is unreachable in an overflow-scroll context) and joins the
-   * row in order. */
-  .app-nav__signout { margin-left: var(--space-1); }
+  /* Nav: the links wrap rather than squish. Items keep their
+   * desktop padding/typography. The links' wrap (.app-nav__links) and
+   * the row's no-wrap (.app-nav) are unconditional -- nothing to
+   * override at this breakpoint. */
+  /* The navigation takes the full width under the brand, so its links
+   * wrap several to a row rather than one per row beside it. */
+  .app-header { flex-wrap: wrap; row-gap: var(--space-2); }
+  .app-nav { flex-basis: 100%; }
   /* The header brand text shrinks slightly so the nav has more
-   * room before the scroll kicks in. */
+   * room before the links wrap. */
   .app-header__brand {
     font-size: var(--font-size-h3);
   }

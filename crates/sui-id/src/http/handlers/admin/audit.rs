@@ -21,7 +21,7 @@ pub struct AuditQuery {
 
 pub async fn audit_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(_, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_, _role, _, username): CurrentAdminOrAuditor,
     jar: CookieJar,
     axum::extract::Query(query): axum::extract::Query<AuditQuery>,
 ) -> Result<Response, HttpError> {
@@ -56,6 +56,7 @@ pub async fn audit_get(
         token.clone(),
         app.is_dev_mode,
         sui_id_i18n::Locale::Ja,
+        username,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -63,7 +64,7 @@ pub async fn audit_get(
 
 pub async fn audit_csv_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(_, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_, _role, _, _): CurrentAdminOrAuditor,
     axum::extract::Query(query): axum::extract::Query<AuditQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;

@@ -20,6 +20,15 @@ custom scopes kept. **The RFC was accepted 2026-11-15.**
   schema change, under RFC 094's contract: its registry, the coverage matrix,
   and the event reference.
 
+- **From `0.92.0`'s N2b review (2026-11-17):**
+  - the top bar's links now **wrap** at large font sizes and on phones, an
+    interim until this RFC's sidebar replaces the top bar;
+  - `.kv-list` has no CSS: the user detail and recovery-link pages render
+    `<dl>` in the browser's default style. Style it with the detail pages'
+    layout, or move them to the key-value table the settings pages use;
+  - `me_security/security.rs`'s `page_get` is dead (no route reaches it):
+    delete it when the `/me` pages are rebuilt.
+
 ## The mockups
 
 Open each file in a browser, straight from disk. They are static: no

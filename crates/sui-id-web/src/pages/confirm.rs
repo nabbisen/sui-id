@@ -1,7 +1,7 @@
 //! Page renderers for the "confirm" screen domain (RFC 065).
 
 use super::common::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 use leptos::prelude::*;
 
 fn reversibility_badge(recoverable: bool, t: &'static sui_id_i18n::Strings) -> impl IntoView {
@@ -120,18 +120,15 @@ pub fn confirm_screen(data: ConfirmScreenData, lang: sui_id_i18n::Locale) -> imp
         })
         .collect();
     let reason_block = include_reason_field.then(|| {
-        let (label, placeholder, hint) = if reason_required {
-            (
-                t.recovery_reason_label,
-                t.recovery_reason_placeholder,
-                t.recovery_reason_hint,
-            )
+        // RFC 144 (Refresh, §3/§5): the field's own label and hint carry
+        // the guidance now — no placeholder — and the label says what
+        // the reason is for, not whether it is required. N2a review F5:
+        // the optional label used to say "for disabling" on all four
+        // confirmations that don't disable anything.
+        let (label, hint) = if reason_required {
+            (t.recovery_reason_label, t.recovery_reason_hint)
         } else {
-            (
-                t.disable_reason_label,
-                t.disable_reason_placeholder,
-                t.disable_reason_hint,
-            )
+            (t.optional_reason_label, t.optional_reason_hint)
         };
         view! {
             <div class="field">
@@ -140,8 +137,8 @@ pub fn confirm_screen(data: ConfirmScreenData, lang: sui_id_i18n::Locale) -> imp
                 </label>
                 <textarea id="disable-reason" name="reason" rows="2" maxlength="200"
                           required=reason_required
-                          placeholder=placeholder></textarea>
-                <span class="field__hint">{hint}</span>
+                          aria-describedby="disable-reason-hint"></textarea>
+                <span id="disable-reason-hint" class="field__hint">{hint}</span>
             </div>
         }
     });
@@ -175,6 +172,10 @@ pub struct ConfirmDisableData {
     pub username: String,
     pub is_disabled: bool,
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's own name,
+    /// for the account menu — distinct from `username` above, which
+    /// names the user being acted on.
+    pub admin_username: String,
 }
 
 pub fn render_confirm_disable_user(
@@ -202,6 +203,7 @@ pub fn render_confirm_disable_user(
                 true,
             )
         };
+        let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: title.into(),
@@ -222,7 +224,7 @@ pub fn render_confirm_disable_user(
             lang,
         );
         view! {
-            <Shell title=title.to_string() show_nav=true
+            <Shell title=title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
@@ -234,6 +236,9 @@ pub struct ConfirmDeleteUserData {
     pub user_id: String,
     pub username: String,
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's own name,
+    /// for the account menu — distinct from `username` above.
+    pub admin_username: String,
 }
 
 pub fn render_confirm_delete_user(
@@ -243,6 +248,7 @@ pub fn render_confirm_delete_user(
 ) -> String {
     render(move || {
         let t = lang.strings();
+        let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_delete_user_title.into(),
@@ -263,7 +269,7 @@ pub fn render_confirm_delete_user(
             lang,
         );
         view! {
-            <Shell title=t.confirm_delete_user_title.to_string() show_nav=true
+            <Shell title=t.confirm_delete_user_title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
@@ -275,6 +281,9 @@ pub struct ConfirmResetMfaData {
     pub user_id: String,
     pub username: String,
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's own name,
+    /// for the account menu — distinct from `username` above.
+    pub admin_username: String,
 }
 
 pub fn render_confirm_reset_mfa(
@@ -284,6 +293,7 @@ pub fn render_confirm_reset_mfa(
 ) -> String {
     render(move || {
         let t = lang.strings();
+        let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_reset_mfa_title.into(),
@@ -304,7 +314,7 @@ pub fn render_confirm_reset_mfa(
             lang,
         );
         view! {
-            <Shell title=t.confirm_reset_mfa_title.to_string() show_nav=true
+            <Shell title=t.confirm_reset_mfa_title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
@@ -319,6 +329,9 @@ pub struct ConfirmRecoveryLinkData {
     pub user_id: String,
     pub username: String,
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's own name,
+    /// for the account menu — distinct from `username` above.
+    pub admin_username: String,
 }
 
 pub fn render_confirm_recovery_link(
@@ -328,6 +341,7 @@ pub fn render_confirm_recovery_link(
 ) -> String {
     render(move || {
         let t = lang.strings();
+        let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_recovery_link_title.into(),
@@ -348,7 +362,7 @@ pub fn render_confirm_recovery_link(
             lang,
         );
         view! {
-            <Shell title=t.confirm_recovery_link_title.to_string() show_nav=true
+            <Shell title=t.confirm_recovery_link_title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
@@ -360,6 +374,9 @@ pub struct ConfirmDeleteClientData {
     pub client_id: String,
     pub client_name: String,
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub admin_username: String,
 }
 
 pub fn render_confirm_delete_client(
@@ -369,6 +386,7 @@ pub fn render_confirm_delete_client(
 ) -> String {
     render(move || {
         let t = lang.strings();
+        let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_delete_client_title.into(),
@@ -389,7 +407,7 @@ pub fn render_confirm_delete_client(
             lang,
         );
         view! {
-            <Shell title=t.confirm_delete_client_title.to_string() show_nav=true
+            <Shell title=t.confirm_delete_client_title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("clients".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
@@ -401,6 +419,9 @@ pub struct ConfirmDeleteSigningKeyData {
     pub key_id: String,
     pub algorithm: String,
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub admin_username: String,
 }
 
 pub fn render_confirm_delete_signing_key(
@@ -411,6 +432,7 @@ pub fn render_confirm_delete_signing_key(
     render(move || {
         let t = lang.strings();
         let identity = format!("{} ({})", data.key_id, data.algorithm);
+        let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_delete_signing_key_title.into(),
@@ -431,7 +453,7 @@ pub fn render_confirm_delete_signing_key(
             lang,
         );
         view! {
-            <Shell title=t.confirm_delete_signing_key_title.to_string() show_nav=true
+            <Shell title=t.confirm_delete_signing_key_title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("signing_keys".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
@@ -444,6 +466,9 @@ pub fn render_confirm_delete_signing_key(
 pub struct ConfirmRotateSigningKeyData {
     pub csrf_token: String,
     pub active_key_count: usize,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub admin_username: String,
 }
 
 pub fn render_confirm_rotate_signing_key(
@@ -466,6 +491,7 @@ pub fn render_confirm_rotate_signing_key(
                 String::new()
             }
         );
+        let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_rotate_signing_key_title.into(),
@@ -486,7 +512,7 @@ pub fn render_confirm_rotate_signing_key(
             lang,
         );
         view! {
-            <Shell title=t.confirm_rotate_signing_key_title.to_string() show_nav=true
+            <Shell title=t.confirm_rotate_signing_key_title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("signing_keys".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
@@ -503,6 +529,9 @@ pub struct SettingsEmailConfirmData {
     pub summary: String,
     /// CSRF token for the confirm POST.
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub admin_username: String,
 }
 
 pub fn render_settings_email_confirm(
@@ -512,6 +541,7 @@ pub fn render_settings_email_confirm(
 ) -> String {
     render(move || {
         let t = lang.strings();
+        let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_email_settings_title.into(),
@@ -532,10 +562,14 @@ pub fn render_settings_email_confirm(
             lang,
         );
         view! {
-            <Shell title=t.confirm_email_settings_title.to_string() show_nav=true
+            <Shell title=t.confirm_email_settings_title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("settings".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
         }
     })
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod tests;

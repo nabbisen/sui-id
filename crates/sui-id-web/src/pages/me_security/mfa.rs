@@ -1,7 +1,7 @@
 //! /me/security mfa (RFC 065).
 
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 /// What a user must present to add a second factor (RFC 102 B7), as the
 /// page shows it.
@@ -38,7 +38,7 @@ pub fn render_me_mfa(
         let t = lang.strings();
         let tabs = me_security_tabs(MeTab::Mfa, lang);
         let MeMfaData {
-            shell: _,
+            shell,
             factor_add_proof,
             totp_enabled,
             passkey_count,
@@ -72,7 +72,7 @@ pub fn render_me_mfa(
         let csrf_for_disable = csrf_token.clone();
         let csrf_for_regen = csrf_token.clone();
         view! {
-            <Shell title=t.me_tab_mfa.to_string() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.me_tab_mfa.to_string() nav=Chrome::Console{username: shell.username} current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_tab_mfa}</h1>
                 </header>
@@ -83,17 +83,17 @@ pub fn render_me_mfa(
                     // TOTP card
                     <section class="card">
                         <h2 class="card__title">{t.profile_mfa_totp_card_title}</h2>
-                        <dl class="kv-list">
-                            {kv_bool_badge(t, t.me_security_mfa_status_label, totp_enabled)}
-                            {if totp_enabled {
-                                view! {
-                                    <div>
-                                        {kv_row(t.me_security_mfa_recovery_section_label,
-                                                (t.me_security_mfa_recovery_codes_remaining)(recovery_codes_remaining))}
-                                    </div>
-                                }.into_any()
-                            } else { view! { <div/> }.into_any() }}
-                        </dl>
+                        <div class="table-wrap">
+                            <table>
+                                <tbody>
+                                    {kv_bool_badge(t, t.me_security_mfa_status_label, totp_enabled)}
+                                    {totp_enabled.then(|| kv_row(
+                                        t.me_security_mfa_recovery_section_label,
+                                        (t.me_security_mfa_recovery_codes_remaining)(recovery_codes_remaining),
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                         <div class="row mt-3">
                             {if totp_enabled {
                                 view! {
@@ -127,7 +127,13 @@ pub fn render_me_mfa(
                     // Passkeys summary
                     <section class="card">
                         <h2 class="card__title">{t.me_passkey_section_title}</h2>
-                        {kv_row(t.profile_passkeys_section, passkey_count.to_string())}
+                        <div class="table-wrap">
+                            <table>
+                                <tbody>
+                                    {kv_row(t.profile_passkeys_section, passkey_count.to_string())}
+                                </tbody>
+                            </table>
+                        </div>
                         <p class="mt-3">
                             <a href="/me/security/passkeys" class="button secondary">{t.me_tab_passkey}</a>
                         </p>

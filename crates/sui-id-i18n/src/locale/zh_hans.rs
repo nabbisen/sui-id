@@ -69,9 +69,8 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     // Settings: Email extensions (RFC 051)
     settings_email_enable_checkbox: "启用邮件功能",
     settings_email_enable_hint: "关闭时，忘记密码等邮件发送端点不可用。",
-    settings_email_password_placeholder_change: "（仅修改时填写）",
-    settings_email_password_placeholder_none: "（无需认证时留空）",
-    settings_email_password_hint: "仅在修改保存的密码时填写。留空时保留原有值。",
+    settings_email_password_hint_change: "仅在需要修改已保存的密码时填写；留空则保留当前密码。",
+    settings_email_password_hint_none: "如果 SMTP 服务器不需要认证，请留空。",
     settings_email_base_url_hint: "已不再用于重置链接：链接由 Issuer URL (server.issuer) 生成。",
     settings_email_save_button: "保存设置",
     settings_email_test_section: "连接测试",
@@ -96,7 +95,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     nav_logout: "退出登录",
     a11y_skip_to_main: "跳转到主要内容",
     nav_aria_main: "主导航",
-    nav_aria_signout: "退出登录",
 
     // Footer (RFC 050)
     footer_tagline: "🌱 sui-id · 安静、可靠的身份认证基础。",
@@ -154,7 +152,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     copy_noun_passkey_id: "通行密钥 ID",
 
     // Login
-    signed_out_flash: "已退出登录。",
+    signed_out_flash: "您已退出登录。",
     login_title: "登录",
     login_username_label: "用户名",
     login_password_label: "密码",
@@ -583,7 +581,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     audit_chain_ok: "审计链完整性正常。",
     audit_chain_broken: "审计链完整性检查失败，请立即调查。",
     audit_filter_label: "按事件筛选",
-    audit_filter_placeholder: "例如：auth.login",
+    audit_filter_hint: "例如：auth.login",
     audit_export_csv: "导出 CSV",
     // Audit log extensions (RFC 051)
     audit_entry_count_caption: |n| format!("({n} 条)"),
@@ -849,17 +847,14 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     me_passkey_section_title: "已注册的通行密钥",
     me_passkey_button_rename: "重命名",
     me_passkey_nickname_label: "昵称",
-    me_passkey_nickname_placeholder: "例: YubiKey 5C",
     me_language_title: "显示语言",
     me_language_lede: "设置您的首选语言。未设置时将使用浏览器设置或服务器默认值。",
     me_language_use_default: "系统默认（Cookie / Accept-Language）",
     me_language_saved_flash: "语言偏好已保存。",
 
-    disable_reason_label: "禁用原因（可选）",
+    optional_reason_label: "原因（可选）",
 
-    disable_reason_placeholder: "例如：已离职、存在可疑活动",
-
-    disable_reason_hint: "将记录在审计日志中，便于未来管理员了解背景。",
+    optional_reason_hint: "将记录在审计日志中，便于未来管理员了解背景。",
 
     // Administrator-issued recovery links (RFC 103)
     copy_noun_recovery_link: "恢复链接",
@@ -870,7 +865,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     confirm_recovery_link_button: "签发恢复链接",
     recovery_link_handover: "请通过能够确认对方身份的渠道交付链接，例如回拨到已登记的号码，或当面交付。切勿发送到请求者在同一请求中提供的地址或号码。请立即交付：链接 30 分钟后失效。",
     recovery_reason_label: "理由（必填）",
-    recovery_reason_placeholder: "例如：已回拨到登记号码核实身份，工单 4711",
     recovery_reason_hint: "将记录在审计日志中。单行，最多 200 个字符。",
     recovery_link_issued_title: "恢复链接已签发",
     recovery_link_issued_once: "链接只显示这一次。请立即复制：离开此页面后将无法再次查看。",

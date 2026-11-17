@@ -12,7 +12,7 @@ use crate::components::empty_state;
 use leptos::prelude::*;
 use sui_id_shared::api::FederationProviderSummary;
 
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 fn provider_row_view(
     can_write: bool,
@@ -97,6 +97,7 @@ pub fn render_federation_providers(
     csrf_token: String,
     dev_mode: bool,
     lang: sui_id_i18n::Locale,
+    username: String,
 ) -> String {
     render(move || {
         let t = lang.strings();
@@ -108,7 +109,7 @@ pub fn render_federation_providers(
         view! {
             <Shell
                 title=t.federation_providers_title.to_string()
-                show_nav=true
+                nav=Chrome::Console{username}
                 current=Some("federation-providers".to_string())
                 dev_mode=dev_mode
                 lang=lang
@@ -173,6 +174,9 @@ pub struct ConfirmEnableFederationProviderData {
     /// message, or the "Check only" success text) — `None` on the
     /// first, unrefused visit to this page.
     pub flash: Option<Flash>,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub username: String,
 }
 
 pub fn render_confirm_enable_federation_provider(
@@ -188,10 +192,11 @@ pub fn render_confirm_enable_federation_provider(
         let check_url = format!("/admin/federation-providers/{}/check", data.provider_id);
         let cancel_url = "/admin/federation-providers".to_string();
         let flash = data.flash;
+        let username = data.username.clone();
         view! {
             <Shell
                 title=t.federation_providers_enable_confirm_title.to_string()
-                show_nav=true
+                nav=Chrome::Console{username}
                 current=Some("federation-providers".to_string())
                 dev_mode=dev_mode
                 lang=lang
@@ -231,6 +236,9 @@ pub struct ConfirmDisableFederationProviderData {
     pub display_name: String,
     pub csrf_token: String,
     pub flash: Option<Flash>,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub username: String,
 }
 
 pub fn render_confirm_disable_federation_provider(
@@ -243,10 +251,11 @@ pub fn render_confirm_disable_federation_provider(
         let disable_url = format!("/admin/federation-providers/{}/disable", data.provider_id);
         let cancel_url = "/admin/federation-providers".to_string();
         let flash = data.flash;
+        let username = data.username.clone();
         view! {
             <Shell
                 title=t.federation_providers_disable_confirm_title.to_string()
-                show_nav=true
+                nav=Chrome::Console{username}
                 current=Some("federation-providers".to_string())
                 dev_mode=dev_mode
                 lang=lang
@@ -283,6 +292,9 @@ pub struct ConfirmDeleteFederationProviderData {
     pub linked_users_count: usize,
     pub csrf_token: String,
     pub flash: Option<Flash>,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub username: String,
 }
 
 pub fn render_confirm_delete_federation_provider(
@@ -293,6 +305,7 @@ pub fn render_confirm_delete_federation_provider(
     render(move || {
         let t = lang.strings();
         let flash = data.flash;
+        let username = data.username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_delete_federation_provider_title.into(),
@@ -317,7 +330,7 @@ pub fn render_confirm_delete_federation_provider(
         view! {
             <Shell
                 title=t.confirm_delete_federation_provider_title.to_string()
-                show_nav=true
+                nav=Chrome::Console{username}
                 current=Some("federation-providers".to_string())
                 dev_mode=dev_mode
                 lang=lang

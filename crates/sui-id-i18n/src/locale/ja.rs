@@ -66,9 +66,8 @@ pub static STRINGS_JA: Strings = Strings {
     // Settings: Email extensions (RFC 051)
     settings_email_enable_checkbox: "メール機能を有効化",
     settings_email_enable_hint: "オフの場合、forgot-password などのメール送信エンドポイントは無効になります。",
-    settings_email_password_placeholder_change: "（変更する場合のみ入力）",
-    settings_email_password_placeholder_none: "（認証不要の場合は空欄）",
-    settings_email_password_hint: "保存済みのパスワードを変更する場合のみ入力してください。空欄の場合は既存値を保持します。",
+    settings_email_password_hint_change: "変更する場合のみ入力してください。空欄のままにすると現在のパスワードを維持します。",
+    settings_email_password_hint_none: "SMTP サーバーが認証を必要としない場合は空欄のままにしてください。",
     settings_email_base_url_hint: "リセットリンクには使われなくなりました。リンクは Issuer URL (server.issuer) から作られます。",
     settings_email_save_button: "設定を保存",
     settings_email_test_section: "接続テスト",
@@ -93,7 +92,6 @@ pub static STRINGS_JA: Strings = Strings {
     nav_logout: "サインアウト",
     a11y_skip_to_main: "メインコンテンツへスキップ",
     nav_aria_main: "メインナビゲーション",
-    nav_aria_signout: "サインアウト",
 
     // Footer (RFC 050)
     footer_tagline: "🌱 sui-id · 静かで、凛として、やさしい ID 基盤を。",
@@ -581,7 +579,7 @@ pub static STRINGS_JA: Strings = Strings {
     audit_chain_ok: "監査チェーンは正常です。",
     audit_chain_broken: "監査チェーンの整合性チェックに失敗しました。早急に調査してください。",
     audit_filter_label: "イベントで絞り込む",
-    audit_filter_placeholder: "例: auth.login",
+    audit_filter_hint: "例: auth.login",
     audit_export_csv: "CSV でエクスポート",
     // Audit log extensions (RFC 051)
     audit_entry_count_caption: |n| format!("({n} 件)"),
@@ -849,17 +847,14 @@ pub static STRINGS_JA: Strings = Strings {
     me_passkey_section_title: "登録済みパスキー",
     me_passkey_button_rename: "名前を変更",
     me_passkey_nickname_label: "ニックネーム",
-    me_passkey_nickname_placeholder: "例: YubiKey 5C",
     me_language_title: "表示言語",
     me_language_lede: "優先言語を設定します。未設定の場合はブラウザ設定またはサーバー既定値が使用されます。",
     me_language_use_default: "システム既定（Cookie / Accept-Language）",
     me_language_saved_flash: "言語設定を保存しました。",
 
-    disable_reason_label: "無効化の理由（任意）",
+    optional_reason_label: "理由（任意）",
 
-    disable_reason_placeholder: "例: 退職のため、不審なアクティビティのため",
-
-    disable_reason_hint: "監査ログに記録されます。将来の管理者が経緯を確認できます。",
+    optional_reason_hint: "監査ログに記録されます。将来の管理者が経緯を確認できます。",
 
     // Administrator-issued recovery links (RFC 103)
     copy_noun_recovery_link: "復旧リンク",
@@ -870,7 +865,6 @@ pub static STRINGS_JA: Strings = Strings {
     confirm_recovery_link_button: "復旧リンクを発行",
     recovery_link_handover: "リンクは、本人であることを確認できる手段で渡してください。たとえば、登録済みの番号への折り返し電話や、直接の手渡しです。依頼と同時に相手が示したアドレスや番号には送らないでください。有効期間は 30 分なので、すぐに渡してください。",
     recovery_reason_label: "理由（必須）",
-    recovery_reason_placeholder: "例：登録済みの番号への折り返しで本人確認、チケット 4711",
     recovery_reason_hint: "監査ログに記録されます。1 行で、200 文字以内。",
     recovery_link_issued_title: "復旧リンクを発行しました",
     recovery_link_issued_once: "リンクが表示されるのはこの 1 回だけです。今すぐコピーしてください。このページを離れると再表示できません。",

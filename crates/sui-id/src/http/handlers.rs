@@ -220,7 +220,11 @@ where
 /// (write access). Returns 403 for auditors and plain users.
 /// Used on all POST / DELETE / PUT admin routes.
 /// RFC 081: produces an [`AdminActor`] alongside the raw `UserId`.
-pub struct CurrentAdmin(pub UserId, pub AdminActor);
+/// RFC 144 (*Refresh*, §4): carries `username` too — the row is already
+/// fetched to check role/disabled/deleted, so this is the one place
+/// that resolves the name the console's account menu shows, rather
+/// than each of 38 page handlers querying it again.
+pub struct CurrentAdmin(pub UserId, pub AdminActor, pub String);
 
 impl<S> FromRequestParts<S> for CurrentAdmin
 where
@@ -246,7 +250,7 @@ where
         let actor = Actor::from_session(uid, user.role, session_id)
             .into_admin()
             .map_err(|_| HttpError::html(CoreError::Forbidden))?;
-        Ok(CurrentAdmin(uid, actor))
+        Ok(CurrentAdmin(uid, actor, user.username))
     }
 }
 
@@ -254,10 +258,12 @@ where
 /// Used on all GET admin routes so auditors can view without mutating.
 /// Returns `(UserId, Role)` so handlers can pass role to render fns.
 /// RFC 081: also produces a [`ReadOnlyAdminActor`] for domain read functions.
+/// RFC 144 (*Refresh*, §4): carries `username` too — see `CurrentAdmin`.
 pub struct CurrentAdminOrAuditor(
     pub UserId,
     pub sui_id_store::models::Role,
     pub ReadOnlyAdminActor,
+    pub String,
 );
 
 impl<S> FromRequestParts<S> for CurrentAdminOrAuditor
@@ -283,7 +289,7 @@ where
         let actor = Actor::from_session(uid, user.role, session_id)
             .into_read_admin()
             .map_err(|_| HttpError::html(CoreError::Forbidden))?;
-        Ok(CurrentAdminOrAuditor(uid, user.role, actor))
+        Ok(CurrentAdminOrAuditor(uid, user.role, actor, user.username))
     }
 }
 

@@ -1,7 +1,7 @@
 //! /me/security security (RFC 065).
 
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 pub struct MeSecurityData {
     pub username: String,
@@ -185,7 +185,7 @@ pub fn render_me_security(
         );
 
         view! {
-            <Shell title=t.me_security_title.to_owned() show_nav=false current=None lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.me_security_title.to_owned() nav=Chrome::Bare current=None lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.me_security_title}</h1>

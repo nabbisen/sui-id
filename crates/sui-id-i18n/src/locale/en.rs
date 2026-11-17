@@ -66,9 +66,8 @@ pub static STRINGS_EN: Strings = Strings {
     // Settings: Email extensions (RFC 051)
     settings_email_enable_checkbox: "Enable email",
     settings_email_enable_hint: "When disabled, forgot-password and other mail-sending endpoints are unavailable.",
-    settings_email_password_placeholder_change: "(only enter to change)",
-    settings_email_password_placeholder_none: "(leave blank if no authentication)",
-    settings_email_password_hint: "Enter only to change the stored password. Leave blank to keep the existing value.",
+    settings_email_password_hint_change: "Enter only to change the stored password; leave it blank to keep the current one.",
+    settings_email_password_hint_none: "Leave blank if the SMTP server needs no authentication.",
     settings_email_base_url_hint: "No longer used for reset links: they are built from the issuer URL (server.issuer).",
     settings_email_save_button: "Save settings",
     settings_email_test_section: "Connection test",
@@ -93,7 +92,6 @@ pub static STRINGS_EN: Strings = Strings {
     nav_logout: "Sign out",
     a11y_skip_to_main: "Skip to main content",
     nav_aria_main: "Main navigation",
-    nav_aria_signout: "Sign out",
 
     // Footer (RFC 050)
     footer_tagline: "🌱 sui-id · A quiet, dependable identity foundation.",
@@ -151,7 +149,7 @@ pub static STRINGS_EN: Strings = Strings {
     copy_noun_passkey_id: "passkey ID",
 
     // Login
-    signed_out_flash: "Signed out.",
+    signed_out_flash: "You are signed out.",
     login_title: "Sign in",
     login_username_label: "Username",
     login_password_label: "Password",
@@ -582,7 +580,7 @@ pub static STRINGS_EN: Strings = Strings {
     audit_chain_ok: "Audit chain verified.",
     audit_chain_broken: "Audit chain integrity check failed — investigate immediately.",
     audit_filter_label: "Filter by event",
-    audit_filter_placeholder: "e.g. auth.login",
+    audit_filter_hint: "e.g. auth.login",
     audit_export_csv: "Export CSV",
     // Audit log extensions (RFC 051)
     audit_entry_count_caption: |n| format!("({n})"),
@@ -852,17 +850,14 @@ pub static STRINGS_EN: Strings = Strings {
     me_passkey_section_title: "Registered passkeys",
     me_passkey_button_rename: "Rename",
     me_passkey_nickname_label: "Nickname",
-    me_passkey_nickname_placeholder: "e.g. YubiKey 5C",
     me_language_title: "Display language",
     me_language_lede: "Set your preferred language. If not set, your browser settings or the server default will be used.",
     me_language_use_default: "System default (Cookie / Accept-Language)",
     me_language_saved_flash: "Language preference saved.",
 
-    disable_reason_label: "Reason for disabling (optional)",
+    optional_reason_label: "Reason (optional)",
 
-    disable_reason_placeholder: "e.g. Left company, suspicious activity",
-
-    disable_reason_hint: "Recorded in the audit log so future administrators can understand the context.",
+    optional_reason_hint: "Recorded in the audit log so future administrators can understand the context.",
 
     // Administrator-issued recovery links (RFC 103)
     copy_noun_recovery_link: "recovery link",
@@ -873,7 +868,6 @@ pub static STRINGS_EN: Strings = Strings {
     confirm_recovery_link_button: "Issue recovery link",
     recovery_link_handover: "Give the link to the person through a channel that authenticates them, such as a call-back to a number already on record, or in person. Never send it to an address or number the requester supplies in the same request. Hand it over immediately: it expires in 30 minutes.",
     recovery_reason_label: "Reason (required)",
-    recovery_reason_placeholder: "e.g. Caller verified by call-back to the number on record, ticket 4711",
     recovery_reason_hint: "Recorded in the audit log. One line, at most 200 characters.",
     recovery_link_issued_title: "Recovery link issued",
     recovery_link_issued_once: "This is the only time the link is shown. Copy it now: leaving this page does not let you see it again.",

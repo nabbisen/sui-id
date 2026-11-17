@@ -109,6 +109,7 @@ pub async fn mfa_enroll_start(
             otpauth_uri,
             qr_svg,
             secret_b32,
+            username: user.username,
         },
         None,
         token.clone(),

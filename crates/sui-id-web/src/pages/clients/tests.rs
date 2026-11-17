@@ -63,6 +63,7 @@ fn client_edit_data(registered_via: &str, auth_method: Option<&str>) -> ClientEd
         token_endpoint_auth_method: auth_method.map(str::to_string),
         auth_method_unrecognized: false,
         freshly_rotated_secret: None,
+        username: "admin".into(),
     }
 }
 
@@ -76,6 +77,7 @@ fn render_clients_marks_a_dynamically_registered_client() {
         "csrf".into(),
         false,
         LANG,
+        "admin".into(),
     );
     assert!(
         html.contains(marker()),
@@ -93,6 +95,7 @@ fn render_clients_does_not_mark_an_admin_created_client() {
         "csrf".into(),
         false,
         LANG,
+        "admin".into(),
     );
     assert!(
         !html.contains(marker()),
@@ -142,6 +145,7 @@ fn render_clients_marks_a_client_with_no_recorded_auth_method() {
         "csrf".into(),
         false,
         LANG,
+        "admin".into(),
     );
     assert!(
         html.contains(unrecorded_marker()),
@@ -160,6 +164,7 @@ fn render_clients_does_not_mark_a_client_with_a_recorded_auth_method() {
         "csrf".into(),
         false,
         LANG,
+        "admin".into(),
     );
     assert!(
         !html.contains(unrecorded_marker()),
@@ -209,7 +214,16 @@ fn unrecognized_marker() -> &'static str {
 fn render_clients_marks_a_client_with_an_unrecognized_auth_method() {
     let mut summary = client_summary("admin", Some("CLIENT_SECRET_BASIC"));
     summary.auth_method_unrecognized = true;
-    let html = render_clients(true, vec![summary], None, None, "csrf".into(), false, LANG);
+    let html = render_clients(
+        true,
+        vec![summary],
+        None,
+        None,
+        "csrf".into(),
+        false,
+        LANG,
+        "admin".into(),
+    );
     assert!(
         html.contains(unrecognized_marker()),
         "a client whose stored auth method is unparseable must carry the \
@@ -255,7 +269,7 @@ fn form_field_names(html: &str) -> std::collections::BTreeSet<String> {
 /// does (RFC 140 stage 2's own scope; unchanged by this RFC).
 #[test]
 fn create_form_offers_every_edit_field_except_the_edit_only_ones() {
-    let create_html = render_clients_new(None, "csrf".into(), false, LANG);
+    let create_html = render_clients_new(None, "csrf".into(), false, LANG, "admin".into());
     let edit_html = render_client_edit(
         true,
         client_edit_data("admin", None),

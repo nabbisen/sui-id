@@ -2,7 +2,7 @@
 
 use super::common::*;
 use crate::components::empty_state;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 use leptos::prelude::*;
 use sui_id_shared::api::ClientSummary;
 
@@ -96,6 +96,7 @@ fn client_row_view(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_clients(
     can_write: bool,
     clients: Vec<ClientSummary>,
@@ -104,6 +105,7 @@ pub fn render_clients(
     csrf_token: String,
     dev_mode: bool,
     lang: sui_id_i18n::Locale,
+    username: String,
 ) -> String {
     render(move || {
         let t = lang.strings();
@@ -125,7 +127,7 @@ pub fn render_clients(
             .map(|c| client_row_view(can_write, t, c, csrf_for_rows.clone()))
             .collect();
         view! {
-            <Shell title=t.clients_title.to_string() show_nav=true current=Some("clients".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.clients_title.to_string() nav=Chrome::Console{username} current=Some("clients".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.clients_title}</h1>
@@ -184,11 +186,12 @@ pub fn render_clients_new(
     csrf_token: String,
     dev_mode: bool,
     lang: sui_id_i18n::Locale,
+    username: String,
 ) -> String {
     render(move || {
         let t = lang.strings();
         view! {
-            <Shell title=t.clients_create_section.to_string() show_nav=true current=Some("clients".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.clients_create_section.to_string() nav=Chrome::Console{username} current=Some("clients".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.clients_create_section}</h1>
@@ -293,6 +296,9 @@ pub struct ClientEditData {
     /// the secret, from the value that operation produced — never from a
     /// caller-supplied value. Shown once.
     pub freshly_rotated_secret: Option<String>,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub username: String,
 }
 
 pub fn render_client_edit(
@@ -320,6 +326,7 @@ pub fn render_client_edit(
             token_endpoint_auth_method,
             auth_method_unrecognized,
             freshly_rotated_secret,
+            username,
         } = data;
         let self_registered_badge = (registered_via == "dynamic").then(|| {
             crate::components::status_badge(t, crate::components::StatusKind::SelfRegistered)
@@ -352,7 +359,7 @@ pub fn render_client_edit(
         };
 
         view! {
-            <Shell title=t.client_edit_title.to_string() show_nav=true current=Some("clients".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.client_edit_title.to_string() nav=Chrome::Console{username} current=Some("clients".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.client_edit_title}</h1>

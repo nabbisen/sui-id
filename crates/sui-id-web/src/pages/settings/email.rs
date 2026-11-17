@@ -1,7 +1,7 @@
 //! Settings email tab (RFC 065).
 
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 pub struct SettingsEmailData {
     pub configured: bool,
@@ -16,6 +16,10 @@ pub struct SettingsEmailData {
     pub base_url: String,
     /// RFC 088: false for auditors → render static rows instead of form.
     pub can_write: bool,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's own name,
+    /// for the account menu — distinct from `username` above, which is
+    /// the SMTP account's own username.
+    pub admin_username: String,
 }
 
 pub fn render_settings_email(
@@ -38,14 +42,18 @@ pub fn render_settings_email(
             from_name,
             base_url,
             can_write: _can_write,
+            admin_username,
         } = data;
         let csrf_save = csrf_token.clone();
         let csrf_test = csrf_token.clone();
         let port_str = port.to_string();
-        let pw_placeholder = if has_password {
-            t.settings_email_password_placeholder_change
+        // RFC 144 (Refresh, §3): visible hint, not a placeholder that
+        // vanishes while typing — and the one case (has_password)
+        // tells a reader something a static hint couldn't.
+        let pw_hint = if has_password {
+            t.settings_email_password_hint_change
         } else {
-            t.settings_email_password_placeholder_none
+            t.settings_email_password_hint_none
         };
         let enabled_attr = if enabled { Some("checked") } else { None };
         let tls_implicit = if tls_mode == "implicit" {
@@ -60,7 +68,7 @@ pub fn render_settings_email(
         };
 
         view! {
-            <Shell title=t.settings_email_page_title.to_string() show_nav=true current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.settings_email_page_title.to_string() nav=Chrome::Console{username: admin_username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.settings_title}</h1>
@@ -110,10 +118,8 @@ pub fn render_settings_email(
                         <div class="field">
                             <label for="password" class="field__label">{t.settings_auth_password_section}</label>
                             <input id="password" name="password" type="password"
-                                   autocomplete="off" placeholder=pw_placeholder />
-                            <span class="field__hint">
-                                {t.settings_email_password_hint}
-                            </span>
+                                   autocomplete="off" aria-describedby="password-hint" />
+                            <span id="password-hint" class="field__hint">{pw_hint}</span>
                         </div>
                         <hr class="divider" />
                         <div class="field">
@@ -129,8 +135,8 @@ pub fn render_settings_email(
                             <label for="base_url" class="field__label">{t.settings_email_base_url_label}</label>
                             <input id="base_url" name="base_url" type="url"
                                    required=true value=base_url
-                                   placeholder="https://idp.example.com" />
-                            <span class="field__hint">
+                                   aria-describedby="base_url-hint" />
+                            <span id="base_url-hint" class="field__hint">
                                 {t.settings_email_base_url_hint}
                             </span>
                         </div>

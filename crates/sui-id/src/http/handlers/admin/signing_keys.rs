@@ -18,7 +18,7 @@ use sui_id_web::{
 
 pub async fn signing_keys_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -36,6 +36,7 @@ pub async fn signing_keys_delete_confirm_get(
         key_id: id,
         algorithm: "Ed25519".to_string(),
         csrf_token: token.clone(),
+        admin_username: username,
     };
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_delete_signing_key(
@@ -57,7 +58,7 @@ pub async fn signing_keys_delete_confirm_get(
 /// only happens when the user submits the confirm POST.
 pub async fn signing_keys_rotate_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
@@ -81,6 +82,7 @@ pub async fn signing_keys_rotate_confirm_get(
     let data = ConfirmRotateSigningKeyData {
         csrf_token: token.clone(),
         active_key_count,
+        admin_username: username,
     };
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_rotate_signing_key(
@@ -94,7 +96,7 @@ pub async fn signing_keys_rotate_confirm_get(
 
 pub async fn signing_keys_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, role, _, username): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -120,6 +122,7 @@ pub async fn signing_keys_get(
         token.clone(),
         app.is_dev_mode,
         lang,
+        username,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -127,7 +130,7 @@ pub async fn signing_keys_get(
 
 pub async fn signing_keys_rotate(
     state_ext: AppStateExt,
-    CurrentAdmin(_, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(_, ref admin_actor, _): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Form(form): Form<ConfirmedReasonForm>,
@@ -159,7 +162,7 @@ pub async fn signing_keys_rotate(
 
 pub async fn signing_keys_delete(
     state_ext: AppStateExt,
-    CurrentAdmin(_, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(_, ref admin_actor, _): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,

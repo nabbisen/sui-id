@@ -1,7 +1,7 @@
 //! /me/security overview (RFC 065).
 
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 pub struct MeOverviewData {
     pub shell: MeShellData,
@@ -40,7 +40,7 @@ pub fn render_me_overview(
         let tabs = me_security_tabs(MeTab::Overview, lang);
         let last_login_at = data.last_login_at;
         let MeOverviewData {
-            shell: _,
+            shell,
             totp_enabled,
             passkey_count,
             active_session_count,
@@ -101,7 +101,7 @@ pub fn render_me_overview(
             view! { <p class="muted text-caption">{text}</p> }
         });
         view! {
-            <Shell title=t.me_tab_overview.to_string() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.me_tab_overview.to_string() nav=Chrome::Console{username: shell.username} current=Some("me".to_string()) lang=lang csrf_token=data.csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_tab_overview}</h1>
                     {last_login_line}
@@ -111,12 +111,16 @@ pub fn render_me_overview(
                 <div class="stack mt-4">
                     <section class="card">
                         <h2 class="card__title">{t.me_overview_section_status}</h2>
-                        <dl class="kv-list">
-                            {kv_bool_badge(t, t.me_overview_label_mfa_totp, totp_enabled)}
-                            {kv_row(t.me_overview_label_passkeys, passkey_count.to_string())}
-                            {kv_row(t.me_security_sessions_section,
-                                    active_session_count.to_string())}
-                        </dl>
+                        <div class="table-wrap">
+                            <table>
+                                <tbody>
+                                    {kv_bool_badge(t, t.me_overview_label_mfa_totp, totp_enabled)}
+                                    {kv_row(t.me_overview_label_passkeys, passkey_count.to_string())}
+                                    {kv_row(t.me_security_sessions_section,
+                                            active_session_count.to_string())}
+                                </tbody>
+                            </table>
+                        </div>
                     </section>
                     <section class="card">
                         <h2 class="card__title">{t.me_overview_section_activity}</h2>

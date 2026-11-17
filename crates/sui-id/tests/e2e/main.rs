@@ -49,6 +49,8 @@ mod lockout;
 mod logout_jwks;
 mod me_security;
 mod mfa;
+mod n2b_account_menu;
+mod n2b_signed_out;
 mod oidc_flow;
 mod password_change;
 mod r094_cycle_i_u20_revoke_idempotent;

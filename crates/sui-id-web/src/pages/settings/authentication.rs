@@ -1,7 +1,7 @@
 //! Settings authentication tab (RFC 065).
 
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 pub struct SettingsAuthenticationData {
     pub password_min_length: usize,
@@ -17,6 +17,9 @@ pub struct SettingsAuthenticationData {
     pub refresh_theft_detection: bool,
     /// RFC 088: false for auditors → render static rows instead of form.
     pub can_write: bool,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub username: String,
 }
 
 fn fmt_lifetime(t: &'static sui_id_i18n::Strings, secs: i64) -> String {
@@ -52,9 +55,10 @@ pub fn render_settings_authentication(
             refresh_rotation,
             refresh_theft_detection,
             can_write: _can_write,
+            username,
         } = data;
         view! {
-            <Shell title=t.settings_title_authentication.to_string() show_nav=true current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.settings_title_authentication.to_string() nav=Chrome::Console{username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.settings_title}</h1>

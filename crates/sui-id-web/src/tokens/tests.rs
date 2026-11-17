@@ -267,6 +267,24 @@ fn contrast_border_control_overrides() -> Vec<(&'static str, Rgb)> {
 
 // ── Extracting composed pairs from components_css() ─────────────────────────
 
+/// Remove every `/* ... */` comment before anything else parses the
+/// stylesheet. A comment is prose, not CSS: a comment that mentions
+/// `@media (...)` or a brace would otherwise be taken for a real block
+/// (0.92.0's N2b hit exactly that, and N2a's G12 hit its sibling).
+fn strip_css_comments(css: &str) -> String {
+    let mut out = String::with_capacity(css.len());
+    let mut rest = css;
+    while let Some(start) = rest.find("/*") {
+        out.push_str(&rest[..start]);
+        let end = rest[start + 2..]
+            .find("*/")
+            .expect("every CSS comment in components_css() is terminated");
+        rest = &rest[start + 2 + end + 2..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Unwrap every `@media (...) { ... }` block (brace-matched): its rules
 /// stay, and only the guard goes. A rule inside a media query is composed
 /// whenever its condition holds, so every check covers it exactly as it
@@ -501,7 +519,59 @@ fn resolve_fill(fill: &Fill, mode: &Mode) -> Vec<(String, Rgb)> {
 }
 
 fn components_rule_decls() -> Vec<String> {
-    extract_rule_decls(&unwrap_media_blocks(crate::components::components_css()))
+    extract_rule_decls(&unwrap_media_blocks(&strip_css_comments(
+        crate::components::components_css(),
+    )))
+}
+
+/// Like [`extract_rule_decls`], but keeps each rule's selector text
+/// alongside its declaration block — RFC 144 §4's 44px check needs to
+/// know *which* rule it is looking at, not only what it declares.
+fn extract_rules_with_selector(css: &str) -> Vec<(String, String)> {
+    let mut out = vec![];
+    let mut rest = css;
+    while let Some(open) = rest.find('{') {
+        let selector = rest[..open].trim().to_string();
+        let after_open = &rest[open + 1..];
+        let Some(close) = after_open.find('}') else {
+            break;
+        };
+        out.push((selector, after_open[..close].to_string()));
+        rest = &after_open[close + 1..];
+    }
+    out
+}
+
+/// Whether one comma-separated selector part names `named` (`"button"`,
+/// `".button"`, …) — either exactly, or as a compound selector built on
+/// it (`button:disabled`, `.button.secondary`), not merely a selector
+/// that happens to start with the same letters (`.button__icon` does
+/// not name `.button`).
+fn selector_part_names(part: &str, named: &str) -> bool {
+    match part.strip_prefix(named) {
+        Some(rest) => rest.is_empty() || matches!(rest.chars().next(), Some('.' | ':' | '[' | ' ')),
+        None => false,
+    }
+}
+
+fn selector_names_any(selector: &str, named: &[&str]) -> bool {
+    selector
+        .split(',')
+        .map(str::trim)
+        .any(|part| named.iter().any(|n| selector_part_names(part, n)))
+}
+
+/// A CSS length (`"2.75rem"`, `"44px"`, `"auto"`) to its px-equivalent,
+/// at the platform-default 16px root. `None` for `"auto"` — a rule that
+/// sets no floor makes no claim to check.
+fn length_to_px(value: &str) -> Option<f64> {
+    if value == "auto" {
+        return None;
+    }
+    if let Some(n) = value.strip_suffix("rem") {
+        return n.trim().parse::<f64>().ok().map(|r| r * 16.0);
+    }
+    value.strip_suffix("px").and_then(|n| n.trim().parse().ok())
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
@@ -741,5 +811,83 @@ fn dark_and_auto_dark_stay_in_lockstep() {
         drift.is_empty(),
         "dark / auto-dark roots have drifted:\n{}",
         drift.join("\n")
+    );
+}
+
+/// RFC 144 §3: the type scale, and the spacing scale that moves with
+/// it, are expressed in `rem`, not `px`, so a reader's own browser
+/// font-size setting is honoured, not only page zoom. No
+/// `--font-size-*` or `--space-*` token, and no `font-size:`
+/// declaration `components_css()` sets, is `px`. Border widths and the
+/// 1px visually-hidden utility are not text or spacing, and are not
+/// checked here.
+#[test]
+fn no_font_size_or_space_token_is_in_px() {
+    let mut failures = vec![];
+    for line in TOKENS_CSS.lines() {
+        let line = line.trim();
+        if (line.starts_with("--font-size-") || line.starts_with("--space-")) && line.contains("px")
+        {
+            failures.push(format!("token declared in px: `{line}`"));
+        }
+    }
+    for decls in components_rule_decls() {
+        if let Some(value) = find_decl(&decls, "font-size")
+            && value.contains("px")
+        {
+            failures.push(format!("font-size: {value} -- in `{}`", decls.trim()));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "px font-size or spacing token found:\n{}",
+        failures.join("\n")
+    );
+}
+
+/// RFC 144 §4: every rule in `components_css()` whose selector names
+/// `button`, `.button`, `input`, `select`, `.user-menu__item` or
+/// `.theme-toggle__btn`, and that sets `min-height` or `height`, sets
+/// at least 44px (2.75rem) — standalone controls reach the WCAG 2.5.5
+/// (AAA) target size. `.link-button` is the one named exception: an
+/// inline link in running text, which WCAG 2.5.8 exempts.
+#[test]
+fn standalone_controls_reach_44px() {
+    const NAMED: &[&str] = &[
+        "button",
+        ".button",
+        "input",
+        "select",
+        ".user-menu__item",
+        ".theme-toggle__btn",
+    ];
+    const EXEMPT: &[&str] = &[".link-button"];
+    let mut failures = vec![];
+    for (selector, decls) in extract_rules_with_selector(&unwrap_media_blocks(&strip_css_comments(
+        crate::components::components_css(),
+    ))) {
+        if !selector_names_any(&selector, NAMED) {
+            continue;
+        }
+        if selector_names_any(&selector, EXEMPT) {
+            continue;
+        }
+        for prop in ["min-height", "height"] {
+            let Some(value) = find_decl(&decls, prop) else {
+                continue;
+            };
+            match length_to_px(&value) {
+                Some(px) if px + 1e-9 >= 44.0 => {}
+                Some(px) => failures.push(format!(
+                    "{selector} {{ {prop}: {value}; }} -- {px}px, below 44px"
+                )),
+                None => {} // "auto": no floor claimed
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "standalone control(s) below the 44px target size:\n{}",
+        failures.join("\n")
     );
 }

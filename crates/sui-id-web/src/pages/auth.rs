@@ -1,7 +1,7 @@
 //! Page renderers for the "auth" screen domain (RFC 065).
 
 use super::common::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 use leptos::prelude::*;
 // RFC-MI-060: import the me_security tab helpers so render_password_change
 // can render the route-tab strip that the other five /me/security/* pages
@@ -216,6 +216,9 @@ pub struct MfaSetupData {
     /// Base32-encoded secret string for users who would rather type it
     /// in than scan the QR code.
     pub secret_b32: String,
+    /// RFC 144 (Refresh, §4): the signed-in user's name, for the
+    /// account menu.
+    pub username: String,
 }
 
 pub fn render_mfa_setup(
@@ -230,9 +233,10 @@ pub fn render_mfa_setup(
             otpauth_uri,
             qr_svg,
             secret_b32,
+            username,
         } = data;
         view! {
-            <Shell title=t.mfa_setup_shell_title.to_string() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.mfa_setup_shell_title.to_string() nav=Chrome::Console{username} current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.mfa_setup_title}</h1>
@@ -311,10 +315,11 @@ pub fn render_password_change(
         } else {
             None
         };
+        let username_for_nav = username.clone();
         view! {
-            // RFC-MI-060: show_nav=true + current="me" so the admin nav
-            // highlights "Security". Tab strip added (deferred from RFC-MI-022).
-            <Shell title=t.password_change_title.to_owned() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            // RFC-MI-060: current="me" so the admin nav highlights
+            // "Security". Tab strip added (deferred from RFC-MI-022).
+            <Shell title=t.password_change_title.to_owned() nav=Chrome::Console{username: username_for_nav} current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 {me_security_tabs(MeTab::Password, lang)}
                 <header class="page-header">
                     <div>
@@ -413,7 +418,7 @@ pub fn render_step_up(
             }
         };
         view! {
-            <Shell title=t.step_up_title.to_string() show_nav=false current=None lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.step_up_title.to_string() nav=Chrome::Bare current=None lang=lang csrf_token=csrf_token.clone()>
                 <div class="auth-page">
                     <div class="auth-card">
                         <h1>{t.step_up_title}</h1>

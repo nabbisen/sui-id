@@ -1,7 +1,7 @@
 //! Settings basic tab (RFC 065).
 
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 pub struct SettingsBasicData {
     pub issuer: String,
@@ -20,6 +20,9 @@ pub struct SettingsBasicData {
     pub csrf_token: String,
     /// RFC 088: false for auditors → render static rows instead of form.
     pub can_write: bool,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub username: String,
 }
 
 pub fn render_settings_basic(
@@ -39,6 +42,7 @@ pub fn render_settings_basic(
             default_lang,
             csrf_token,
             can_write: _can_write,
+            username,
         } = data;
         let csrf_for_lang = csrf_token.clone();
         let lang_form = view! {
@@ -78,7 +82,7 @@ pub fn render_settings_basic(
             trusted_proxies.join(", ")
         };
         view! {
-            <Shell title=t.settings_title_basic.to_string() show_nav=true current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.settings_title_basic.to_string() nav=Chrome::Console{username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.settings_title}</h1>

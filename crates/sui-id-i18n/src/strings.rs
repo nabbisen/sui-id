@@ -83,9 +83,13 @@ pub struct Strings {
     // ---- Settings: Email extensions (RFC 051) ----
     pub settings_email_enable_checkbox: &'static str,
     pub settings_email_enable_hint: &'static str,
-    pub settings_email_password_placeholder_change: &'static str,
-    pub settings_email_password_placeholder_none: &'static str,
-    pub settings_email_password_hint: &'static str,
+    /// RFC 144 (Refresh, §3): visible hint, not a placeholder — shown
+    /// when a password is already stored (renamed from
+    /// settings_email_password_placeholder_change).
+    pub settings_email_password_hint_change: &'static str,
+    /// Shown when no password is stored yet (renamed from
+    /// settings_email_password_placeholder_none).
+    pub settings_email_password_hint_none: &'static str,
     pub settings_email_base_url_hint: &'static str,
     pub settings_email_save_button: &'static str,
     pub settings_email_test_section: &'static str,
@@ -114,7 +118,6 @@ pub struct Strings {
     pub nav_logout: &'static str,
     pub a11y_skip_to_main: &'static str,
     pub nav_aria_main: &'static str,
-    pub nav_aria_signout: &'static str,
 
     // ---- Footer (RFC 050) ----
     pub footer_tagline: &'static str,
@@ -727,10 +730,12 @@ pub struct Strings {
     pub settings_advanced_build_section: &'static str,
     pub settings_advanced_storage_section: &'static str,
     pub settings_advanced_record_counts: &'static str,
-    // ---- User disable reason (RFC 045) ----
-    pub disable_reason_label: &'static str,
-    pub disable_reason_placeholder: &'static str,
-    pub disable_reason_hint: &'static str,
+    // ---- Confirmation screens' optional reason field (RFC 045; renamed
+    // from disable_reason_* by RFC 144, N2a review F5 — the field is
+    // shared by every confirmation with an optional reason, not only
+    // disabling a user) ----
+    pub optional_reason_label: &'static str,
+    pub optional_reason_hint: &'static str,
     // ---- Administrator-issued recovery links (RFC 103) ----
     pub copy_noun_recovery_link: &'static str,
     pub copy_noun_recovery_token: &'static str,
@@ -740,7 +745,6 @@ pub struct Strings {
     pub confirm_recovery_link_button: &'static str,
     pub recovery_link_handover: &'static str,
     pub recovery_reason_label: &'static str,
-    pub recovery_reason_placeholder: &'static str,
     pub recovery_reason_hint: &'static str,
     pub recovery_link_issued_title: &'static str,
     pub recovery_link_issued_once: &'static str,
@@ -810,7 +814,6 @@ pub struct Strings {
     pub me_passkey_section_title: &'static str,
     pub me_passkey_button_rename: &'static str,
     pub me_passkey_nickname_label: &'static str,
-    pub me_passkey_nickname_placeholder: &'static str,
     // Language tab
     pub me_language_title: &'static str,
     pub me_language_lede: &'static str,
@@ -960,7 +963,8 @@ pub struct Strings {
     pub audit_chain_ok: &'static str,
     pub audit_chain_broken: &'static str,
     pub audit_filter_label: &'static str,
-    pub audit_filter_placeholder: &'static str,
+    /// RFC 144 (Refresh, §3): visible hint, not a vanishing placeholder.
+    pub audit_filter_hint: &'static str,
     pub audit_export_csv: &'static str,
     // ---- Audit log extensions (RFC 051) ----
     pub audit_entry_count_caption: fn(usize) -> String,

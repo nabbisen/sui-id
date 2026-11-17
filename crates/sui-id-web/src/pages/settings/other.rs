@@ -1,7 +1,7 @@
 //! Settings other tab (RFC 065).
 
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 pub struct SettingsOtherData {
     pub binary_version: String,
@@ -15,6 +15,9 @@ pub struct SettingsOtherData {
     pub clock_now: chrono::DateTime<chrono::Utc>,
     /// RFC 088: false for auditors → render static rows instead of form.
     pub can_write: bool,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub username: String,
 }
 
 pub fn render_settings_other(
@@ -34,10 +37,11 @@ pub fn render_settings_other(
             client_count,
             clock_now,
             can_write: _can_write,
+            username,
         } = data;
         let now_str = clock_now.format("%Y-%m-%d %H:%M:%S UTC").to_string();
         view! {
-            <Shell title=t.settings_title_advanced.to_string() show_nav=true current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.settings_title_advanced.to_string() nav=Chrome::Console{username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.settings_title}</h1>

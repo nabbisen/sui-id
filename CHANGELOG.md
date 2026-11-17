@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text reaches 7:1 contrast (WCAG AAA) in light and dark mode.** Status
   badges carry their meaning in a word and a border, not in coloured
   text. The interface honours the system's "increase contrast" setting.
+- **Text follows your browser's font size, and is slightly larger by
+  default.** Buttons and fields are at least 44 pixels tall. Hints stay
+  visible while you type, instead of disappearing the moment you start.
+  Your account menu, with sign-out, is on every page, set apart from
+  the navigation. A confirmation's optional reason no longer says
+  "disabling" when the action isn't one.
 
 ### Fixed
 

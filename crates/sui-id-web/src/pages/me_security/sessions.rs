@@ -1,7 +1,7 @@
 //! /me/security sessions (RFC 065).
 
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 pub struct MeSessionsData {
     pub shell: MeShellData,
@@ -20,7 +20,7 @@ pub fn render_me_sessions(
         let t = lang.strings();
         let tabs = me_security_tabs(MeTab::Sessions, lang);
         let MeSessionsData {
-            shell: _,
+            shell,
             current_session_id: _,
             sessions,
             csrf_token,
@@ -66,7 +66,7 @@ pub fn render_me_sessions(
 
         let revoke_all_confirm = t.me_security_sessions_revoke_all_others_confirm;
         view! {
-            <Shell title=t.me_security_sessions_section.to_string() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.me_security_sessions_section.to_string() nav=Chrome::Console{username: shell.username} current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_security_sessions_section}</h1>
                 </header>

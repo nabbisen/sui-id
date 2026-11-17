@@ -113,20 +113,26 @@ pub const TOKENS_CSS: &str = r#"
 
   /* ------- Mode-independent tokens ------- */
 
-  /* Spacing scale (4px base, 6 steps) */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 16px;
-  --space-4: 24px;
-  --space-5: 32px;
-  --space-6: 48px;
+  /* Spacing scale (4px base at the platform default font size, 6 steps).
+   * RFC 144 §3: rem, not px — a reader's enlarged browser font size must
+   * grow the spacing with the text, or padding stays fixed while the
+   * text it holds grows, crowding every line against its container. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2rem;
+  --space-6: 3rem;
 
-  /* Typography scale */
-  --font-size-display:  28px;
-  --font-size-h2:       22px;
-  --font-size-h3:       18px;
-  --font-size-body:     15px;
-  --font-size-caption:  13px;
+  /* Typography scale. RFC 144 §3: rem, not px, so a reader's own browser
+   * font-size setting is honoured, not only page zoom. Body raised to
+   * 1rem (16px, the platform default; was 15px) and caption to 0.875rem
+   * (14px; was 13px) — RFC 144 refresh, "What else moves". */
+  --font-size-display:  1.75rem;
+  --font-size-h2:       1.375rem;
+  --font-size-h3:       1.125rem;
+  --font-size-body:     1rem;
+  --font-size-caption:  0.875rem;
 
   --line-height-display: 1.3;
   --line-height-h2:      1.35;

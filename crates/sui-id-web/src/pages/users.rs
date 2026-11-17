@@ -1,10 +1,10 @@
 //! Page renderers for the "users" screen domain (RFC 065).
 
-use super::audit::audit_row_view;
+use super::audit::{AUDIT_COLUMNS, audit_row_view, audit_table_head};
 use super::common::*;
 use super::confirm::{ConfirmScreenData, ReversibilityKind, confirm_screen};
 use crate::components::empty_state;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 use leptos::prelude::*;
 use sui_id_shared::api::UserSummary;
 
@@ -69,12 +69,13 @@ pub fn render_users(
     render(move || {
         let t = lang.strings();
         let user_count = users.len();
+        let nav_username = current_user.clone();
         let rows: Vec<_> = users
             .into_iter()
             .map(|u| user_row_view(t, u, current_user.clone()))
             .collect();
         view! {
-            <Shell title=t.users_title.to_string() show_nav=true current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.users_title.to_string() nav=Chrome::Console{username: nav_username} current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.users_title}</h1>
@@ -132,11 +133,12 @@ pub fn render_users_new(
     csrf_token: String,
     dev_mode: bool,
     lang: sui_id_i18n::Locale,
+    username: String,
 ) -> String {
     render(move || {
         let t = lang.strings();
         view! {
-            <Shell title=t.users_create_section.to_string() show_nav=true current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.users_create_section.to_string() nav=Chrome::Console{username} current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.users_create_section}</h1>
@@ -202,6 +204,10 @@ pub struct UserDetailData {
     pub federated_links: Vec<UserDetailFederatedLink>,
     pub dev_mode: bool,
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's own name,
+    /// for the account menu — distinct from `username` above, which
+    /// names the user this page is about.
+    pub admin_username: String,
 }
 
 pub struct UserDetailSession {
@@ -308,9 +314,10 @@ pub fn render_user_detail(
         let delete_confirm_url = format!("/admin/users/{uid}/delete-confirm");
         let reset_mfa_confirm_url = format!("/admin/users/{uid}/mfa-reset-confirm");
         let recovery_link_confirm_url = format!("/admin/users/{uid}/recovery-link-confirm");
+        let admin_username = data.admin_username.clone();
 
         view! {
-            <Shell title=username.clone() show_nav=true
+            <Shell title=username.clone() nav=Chrome::Console{username: admin_username}
                    current=Some("users".to_string())
                    dev_mode=data.dev_mode lang=lang
                    csrf_token=data.csrf_token.clone()>
@@ -400,16 +407,10 @@ pub fn render_user_detail(
                     <h2>{t.user_detail_activity_section}</h2>
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>{t.audit_col_when}</th>
-                                    <th>{t.audit_col_action}</th>
-                                    <th>{t.audit_col_outcome}</th>
-                                </tr>
-                            </thead>
+                            {audit_table_head(t)}
                             {if audit_rows.is_empty() {
                                 view! {
-                                    <tbody><tr><td colspan="3" class="muted center-pad-4">
+                                    <tbody><tr><td colspan=AUDIT_COLUMNS.to_string() class="muted center-pad-4">
                                         {t.muted_none}
                                     </td></tr></tbody>
                                 }.into_any()
@@ -492,6 +493,9 @@ pub struct ConfirmUnlinkFederationData {
     pub provider_display_name: String,
     pub csrf_token: String,
     pub flash: Option<Flash>,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's own name,
+    /// for the account menu — distinct from `username` above.
+    pub admin_username: String,
 }
 
 pub fn render_confirm_unlink_federation(
@@ -508,6 +512,7 @@ pub fn render_confirm_unlink_federation(
             .replace("{provider}", &data.provider_display_name);
         let identity = format!("{} — {}", data.username, data.provider_display_name);
         let user_url = format!("/admin/users/{}", data.user_id);
+        let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_unlink_federation_title.into(),
@@ -536,7 +541,7 @@ pub fn render_confirm_unlink_federation(
         view! {
             <Shell
                 title=t.confirm_unlink_federation_title.to_string()
-                show_nav=true
+                nav=Chrome::Console{username: admin_username}
                 current=Some("users".to_string())
                 dev_mode=dev_mode
                 lang=lang

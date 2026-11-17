@@ -2,7 +2,7 @@
 
 use super::super::auth::PasskeyDescriptor;
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 pub struct MePasskeyData {
     pub shell: MeShellData,
@@ -24,7 +24,7 @@ pub fn render_me_passkey(
         let t = lang.strings();
         let tabs = me_security_tabs(MeTab::Passkey, lang);
         let MePasskeyData {
-            shell: _,
+            shell,
             factor_add_proof,
             passkeys,
             origin_eligible,
@@ -43,6 +43,9 @@ pub fn render_me_passkey(
             let nick2 = p.nickname.clone();
             let csrf = csrf_token.clone();
             let delete_action = format!("/me/security/passkeys/{}/delete", cred_id);
+            let rename_input_id = format!("rename-nickname-{cred_id}");
+            let rename_hint_id = format!("rename-nickname-{cred_id}-hint");
+            let rename_hint_id_for_span = rename_hint_id.clone();
             view! {
                 <tr>
                     <td>
@@ -62,12 +65,15 @@ pub fn render_me_passkey(
                                   class="mt-2">
                                 <input type="hidden" name="_csrf" value=csrf.clone()/>
                                 <div class="row">
-                                    <input type="text" name="nickname"
-                                           placeholder=t.me_passkey_nickname_placeholder
+                                    <input type="text" name="nickname" id=rename_input_id
                                            required=true maxlength="64"
+                                           aria-describedby=rename_hint_id
                                            class="flex-1"/>
                                     <button type="submit">{t.button_save}</button>
                                 </div>
+                                <span id=rename_hint_id_for_span class="field__hint">
+                                    {t.profile_passkeys_nickname_hint}
+                                </span>
                             </form>
                         </details>
                     </td>
@@ -84,7 +90,7 @@ pub fn render_me_passkey(
             }
         }).collect();
         view! {
-            <Shell title=t.me_passkey_section_title.to_string() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.me_passkey_section_title.to_string() nav=Chrome::Console{username: shell.username} current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header"><h1 class="page-header__title">{t.me_passkey_section_title}</h1></header>
                 {tabs}
                 {flash_banner(flash)}
@@ -115,9 +121,9 @@ pub fn render_me_passkey(
                                         {t.profile_passkeys_nickname_label}
                                     </label>
                                     <input id="pk-nickname" name="nickname" type="text" required=true
-                                           placeholder=t.me_passkey_nickname_placeholder
-                                           maxlength="64" />
-                                    <span class="field__hint">{t.profile_passkeys_nickname_hint}</span>
+                                           maxlength="64"
+                                           aria-describedby="pk-nickname-hint" />
+                                    <span id="pk-nickname-hint" class="field__hint">{t.profile_passkeys_nickname_hint}</span>
                                 </div>
                                 {factor_add_fields(t, factor_add_proof, "pk-current-password")}
                                 <div>

@@ -16,6 +16,9 @@ pub struct MeAppsData {
     pub grants: Vec<AppGrantData>,
     pub csrf_token: String,
     pub dev_mode: bool,
+    /// RFC 144 (Refresh, §4): the signed-in user's name, for the
+    /// account menu.
+    pub username: String,
 }
 
 pub fn render_me_apps(data: MeAppsData, flash: Option<Flash>, lang: sui_id_i18n::Locale) -> String {
@@ -25,6 +28,7 @@ pub fn render_me_apps(data: MeAppsData, flash: Option<Flash>, lang: sui_id_i18n:
             grants,
             csrf_token,
             dev_mode,
+            username,
         } = data;
 
         let grant_items: Vec<_> = grants
@@ -98,7 +102,7 @@ pub fn render_me_apps(data: MeAppsData, flash: Option<Flash>, lang: sui_id_i18n:
         view! {
             <crate::layout::Shell
                 title=t.me_apps_title.to_owned()
-                show_nav=true
+                nav=crate::layout::Chrome::Console{username}
                 current=Some("me".to_string())
                 lang=lang
                 csrf_token=csrf_token.clone()

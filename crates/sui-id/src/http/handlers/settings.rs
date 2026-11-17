@@ -41,7 +41,7 @@ pub async fn index_redirect() -> Redirect {
 
 pub async fn basic_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -60,6 +60,7 @@ pub async fn basic_get(
         default_lang: server_settings.default_lang,
         csrf_token: token.clone(),
         can_write: actor.can_write(),
+        username,
     };
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_basic(data, None, lang);
@@ -81,7 +82,7 @@ pub struct BasicLangForm {
 
 pub async fn basic_lang_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<BasicLangForm>,
 ) -> Result<Response, HttpError> {
@@ -120,6 +121,7 @@ pub async fn basic_lang_post(
         jwks_url: format!("{}/.well-known/jwks.json", cfg.server.issuer),
         default_lang: server_settings.default_lang,
         csrf_token: token.clone(),
+        username,
     };
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_basic(data, flash, lang);
@@ -131,7 +133,7 @@ pub async fn basic_lang_post(
 
 pub async fn security_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -152,6 +154,7 @@ pub async fn security_get(
         idle_session_timeout_secs: server_settings.idle_session_timeout_secs,
         max_concurrent_sessions: server_settings.max_concurrent_sessions,
         csrf_token: token.clone(),
+        username,
     };
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_security(data, None, lang);
@@ -172,7 +175,7 @@ pub struct IdleTimeoutForm {
 
 pub async fn idle_timeout_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _): CurrentAdmin,
+    CurrentAdmin(admin_id, _, _): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<IdleTimeoutForm>,
 ) -> Result<Response, HttpError> {
@@ -204,7 +207,7 @@ pub struct MaxSessionsForm {
 
 pub async fn max_sessions_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _): CurrentAdmin,
+    CurrentAdmin(admin_id, _, _): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<MaxSessionsForm>,
 ) -> Result<Response, HttpError> {
@@ -226,7 +229,7 @@ pub async fn max_sessions_post(
 
 pub async fn authentication_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -244,6 +247,7 @@ pub async fn authentication_get(
         refresh_rotation: true,
         refresh_theft_detection: true,
         can_write: actor.can_write(),
+        username,
     };
     let token = csrf::ensure_token(&jar);
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
@@ -256,7 +260,7 @@ pub async fn authentication_get(
 
 pub async fn logs_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -297,6 +301,7 @@ pub async fn logs_get(
         password_changed_self_24h: password_changed,
         chain_report,
         can_write: actor.can_write(),
+        username,
     };
     let token = csrf::ensure_token(&jar);
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
@@ -309,7 +314,7 @@ pub async fn logs_get(
 
 pub async fn other_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -341,6 +346,7 @@ pub async fn other_get(
         client_count,
         clock_now: Utc::now(),
         can_write: actor.can_write(),
+        username,
     };
     let token = csrf::ensure_token(&jar);
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
@@ -375,7 +381,7 @@ pub struct EmailSettingsForm {
 
 pub async fn email_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -384,6 +390,7 @@ pub async fn email_get(
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let mut data = build_email_data(cfg_row.as_ref());
     data.can_write = actor.can_write();
+    data.admin_username = username;
     let token = csrf::ensure_token(&jar);
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_email(data, token.clone(), None, lang);
@@ -393,7 +400,7 @@ pub async fn email_get(
 
 pub async fn email_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor, _): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     axum::Form(form): axum::Form<EmailSettingsForm>,
@@ -513,7 +520,7 @@ pub struct EmailTestForm {
 
 pub async fn email_test(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _): CurrentAdmin,
+    CurrentAdmin(admin_id, _, username): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<EmailTestForm>,
 ) -> Result<Response, HttpError> {
@@ -535,6 +542,7 @@ pub async fn email_test(
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let mut data = build_email_data(cfg_row.as_ref());
     data.can_write = true; // email_test is admin-only
+    data.admin_username = username;
     let token = csrf::ensure_token(&jar);
     let flash = match &result {
         Ok(()) => Some(sui_id_web::Flash {
@@ -560,7 +568,7 @@ pub async fn email_test(
 /// pending SMTP settings change (RFC 090).
 pub async fn email_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _): CurrentAdmin,
+    CurrentAdmin(admin_id, _, username): CurrentAdmin,
     jar: CookieJar,
     axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Response, HttpError> {
@@ -593,6 +601,7 @@ pub async fn email_confirm_get(
         pending_change_id: id_str,
         summary,
         csrf_token: token.clone(),
+        admin_username: username,
     };
     let resp = Html(sui_id_web::render_settings_email_confirm(
         data,
@@ -615,7 +624,7 @@ pub struct EmailConfirmForm {
 
 pub async fn email_confirm_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor, _): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     axum::Form(form): axum::Form<EmailConfirmForm>,
@@ -679,6 +688,7 @@ fn build_email_data(
             from_name: row.from_name.clone().unwrap_or_default(),
             base_url: row.base_url.clone(),
             can_write: false, // overridden by caller via actor.can_write()
+            admin_username: String::new(), // overridden by caller
         },
         None => sui_id_web::SettingsEmailData {
             configured: false,
@@ -692,6 +702,7 @@ fn build_email_data(
             from_name: String::new(),
             base_url: String::new(),
             can_write: false, // overridden by caller via actor.can_write()
+            admin_username: String::new(), // overridden by caller
         },
     }
 }

@@ -1,7 +1,7 @@
 //! Settings logs tab (RFC 065).
 
 use super::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 
 pub struct SettingsLogsData {
     pub log_format: String,
@@ -13,6 +13,9 @@ pub struct SettingsLogsData {
     pub chain_report: ChainStatus,
     /// RFC 088: false for auditors → render static rows instead of form.
     pub can_write: bool,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub username: String,
 }
 
 pub fn render_settings_logs(
@@ -32,6 +35,7 @@ pub fn render_settings_logs(
             password_changed_self_24h,
             chain_report,
             can_write: _can_write,
+            username,
         } = data;
 
         // RFC 121 D1, D2: read from the one shared place, so this page
@@ -40,7 +44,7 @@ pub fn render_settings_logs(
         let chain_badge = crate::components::status_badge(t, kind).into_any();
 
         view! {
-            <Shell title=t.settings_title_logs.to_string() show_nav=true current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.settings_title_logs.to_string() nav=Chrome::Console{username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.settings_title}</h1>

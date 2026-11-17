@@ -25,7 +25,12 @@ button, .button {
   cursor: pointer;
   text-decoration: none;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
-  min-height: 36px;
+  /* RFC 144 §4: 44×44 CSS px (WCAG 2.5.5, AAA) for standalone controls.
+   * In rem so it grows with the reader's font size, same reasoning as
+   * the type scale. Not applied to .link-button (WCAG 2.5.8 exempts an
+   * inline link in prose). */
+  min-height: 2.75rem;
+  min-width: 2.75rem;
 }
 
 /* Primary: accent-filled, the dominant call-to-action */

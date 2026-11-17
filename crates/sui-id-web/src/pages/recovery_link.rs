@@ -6,7 +6,7 @@
 //! `sui-id-i18n`.
 
 use super::common::*;
-use crate::layout::Shell;
+use crate::layout::{Chrome, Shell};
 use leptos::prelude::*;
 
 /// What an administrator has just issued. `url` and `token` are the only
@@ -22,6 +22,10 @@ pub struct RecoveryLinkIssuedData {
     pub expires_at: chrono::DateTime<chrono::Utc>,
     pub invalidated: usize,
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's own name,
+    /// for the account menu — distinct from `username` above, which
+    /// names the user the link was issued for.
+    pub admin_username: String,
 }
 
 pub fn render_recovery_link_issued(
@@ -32,8 +36,9 @@ pub fn render_recovery_link_issued(
     render(move || {
         let t = lang.strings();
         let back = format!("/admin/users/{}", data.user_id);
+        let admin_username = data.admin_username.clone();
         view! {
-            <Shell title=t.recovery_link_issued_title.to_string() show_nav=true
+            <Shell title=t.recovery_link_issued_title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang
                    csrf_token=data.csrf_token.clone()>
                 <div class="auth-card max-w-card">
@@ -101,6 +106,9 @@ pub struct RecoveryLinkRefusedData {
     pub user_id: String,
     pub kind: RecoveryRefusedKind,
     pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub admin_username: String,
 }
 
 pub fn render_recovery_link_refused(
@@ -124,8 +132,9 @@ pub fn render_recovery_link_refused(
             RecoveryRefusedKind::NeedsSecondFactor => t.recovery_refused_needs_second_factor,
         };
         let back = format!("/admin/users/{}", data.user_id);
+        let admin_username = data.admin_username.clone();
         view! {
-            <Shell title=t.recovery_refused_title.to_string() show_nav=true
+            <Shell title=t.recovery_refused_title.to_string() nav=Chrome::Console{username: admin_username}
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang
                    csrf_token=data.csrf_token.clone()>
                 <div class="auth-card max-w-card">
