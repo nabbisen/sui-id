@@ -56,6 +56,23 @@ before upgrading across more than one or two of them.
 
 ## Version-specific notes
 
+### v0.92.x
+
+**No migration and no configuration change.** Upgrading from `0.91.x`
+runs no migration, so no pre-migration snapshot is taken. `sui-id.example.toml`
+gained comments naming keys that already existed; no key was added, renamed
+or removed.
+
+**The console looks different**: a new palette, larger text that follows
+the browser's font size, the account menu (with sign-out) on every page.
+
+For anyone building against the crates:
+
+- `sui-id-web`: `Shell` takes `nav: Chrome` in place of `show_nav` and
+  `admin_username`.
+- `sui-id-core`: `CreateClientSpec` has a required `consent_policy`.
+- `sui-id`: `CurrentAdmin` and `CurrentAdminOrAuditor` carry the username.
+
 ### v0.91.x
 
 **No migration and no configuration change.** Upgrading from `0.90.x`

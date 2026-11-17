@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.92.0] — 2026-11-17
+
+**The console is easier to read and to find things in**: AAA contrast in a
+new palette, text that follows the browser's font size, 44px controls, the
+account menu on every page, and labelled main actions. Also fixed: a
+missing `sui-id.toml` now says how to create one; destructive buttons'
+labels in dark mode, and disabled fields, were below contrast; a user's
+activity table and the *My account* pages showed their facts in the wrong
+place or run together. And a crash-injection harness now checks master-key
+rotation against a simulated power loss.
+
 ### Changed
 
 - **The main action on the users, apps and signing-keys pages now says
@@ -41,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A disabled form field's text was faint (2.34:1).** It was drawn at 38%
   opacity; it now uses the same explicit disabled colours as a disabled
   button.
+- **A user's recent activity showed values under the wrong headings**: three
+  column headings over six columns, so the actor's ID sat under *Action*.
+  It now has the audit log's own headings.
+- **The *My account* overview and MFA pages ran their facts together**
+  ("Passkeys0Active sessions1"). Each now has its own labelled row.
 
 ### Tests and CI
 

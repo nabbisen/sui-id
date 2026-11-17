@@ -1,9 +1,8 @@
 # Threat model
 
 > **Stale as of 2026-09-10.** This document is accurate as of
-> **v0.26.0**; the workspace is now **v0.90.0**. Security-relevant
-> capability has shipped since v0.26.0 that this document does not
-> analyze as a threat surface, including:
+> **v0.26.0**. Security-relevant capability has shipped since then that
+> this document does not analyze as a threat surface, including:
 >
 > - **Federation as an upstream OIDC relying party** (RFC 004, shipped
 >   v0.76.4) — sui-id can authenticate users against an external IdP
