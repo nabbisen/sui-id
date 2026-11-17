@@ -74,7 +74,8 @@ RFC 100 is, no later than authorized.
 | **N2** | **N2a landed 2026-11-16** — [`../144-legible-to-older-eyes/0.92.0-n2a-colour-2026-11-16.md`](../144-legible-to-older-eyes/0.92.0-n2a-colour-2026-11-16.md), colour and the gate; **N2b landed 2026-11-17** — [`../144-legible-to-older-eyes/0.92.0-n2b-size-and-structure-2026-11-16.md`](../144-legible-to-older-eyes/0.92.0-n2b-size-and-structure-2026-11-16.md), size and structure. **RFC 144** with palette B: the AAA gate over composed pairs (11 stylesheets); the `rem` type scale (5 tokens) and spacing; 44×44 controls; `prefers-contrast`; placeholders → hints (6); the account menu on all 39 pages; badges and denser tables | dev team | medium; probably two dispatches (tokens and gate; then the components and pages) |
 | **N3** | **Landed 2026-11-16** — [`../100-master-key-rotation/0.92.0-stage-0-the-harness-2026-11-16.md`](../100-master-key-rotation/0.92.0-stage-0-the-harness-2026-11-16.md). **RFC 100 stage 0**: the key-file adapter, Real, Failpoint and Simulated; materialization; today's rotation moved onto it; the prototype's results reproduced | dev team | medium; the largest single item. It changes no behaviour |
 | **P** | **Landed 2026-11-17** — [`release-0.92.0-preparation-2026-11-17.md`](release-0.92.0-preparation-2026-11-17.md). The preparation | dev team | small |
-| **S14** | stage 14 on P's commit | owner (browser) + architect | about 15 minutes of yours |
+| **N2c** | **Dispatched 2026-11-17** — [`../144-legible-to-older-eyes/0.92.0-n2c-a-person-outside-the-console-2026-11-17.md`](../144-legible-to-older-eyes/0.92.0-n2c-a-person-outside-the-console-2026-11-17.md). A person outside the console sees no console navigation; found in P's review, fixed before stage 14 | dev team | small |
+| **S14** | stage 14 on N2c's landing commit | owner (browser) + architect | about 15 minutes of yours |
 
 ## 4 — risks, stated
 
