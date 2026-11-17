@@ -2,7 +2,7 @@
 
 **RFC.** [`../../accepted/144-legible-to-older-eyes.md`](../../accepted/144-legible-to-older-eyes.md)
 **Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Built in `0.92.0` (cycle N), in two dispatches: **N2a, colour**, [landed 2026-11-16](0.92.0-n2a-colour-2026-11-16.md); **N2b, size and structure**, [landed 2026-11-17](0.92.0-n2b-size-and-structure-2026-11-16.md). **RFC 144 is built**, but for
-**N2c**, [dispatched 2026-11-17](0.92.0-n2c-a-person-outside-the-console-2026-11-17.md): a
+**N2c**, [landed 2026-11-17](0.92.0-n2c-a-person-outside-the-console-2026-11-17.md): a
 signed-in person outside the console saw the console's navigation on their
 own pages. Found while preparing stage 14; fixed in `0.92.0`, as decided.
 

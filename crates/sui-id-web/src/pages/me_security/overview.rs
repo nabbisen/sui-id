@@ -101,7 +101,7 @@ pub fn render_me_overview(
             view! { <p class="muted text-caption">{text}</p> }
         });
         view! {
-            <Shell title=t.me_tab_overview.to_string() nav=Chrome::Console{username: shell.username} current=Some("me".to_string()) lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.me_tab_overview.to_string() nav=Chrome::for_person(shell.username, shell.role) current=Some("me".to_string()) lang=lang csrf_token=data.csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_tab_overview}</h1>
                     {last_login_line}

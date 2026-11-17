@@ -219,6 +219,9 @@ pub struct MfaSetupData {
     /// RFC 144 (Refresh, §4): the signed-in user's name, for the
     /// account menu.
     pub username: String,
+    /// RFC 144 N2c: decides whether the chrome offers the console
+    /// links — see [`crate::layout::Chrome::for_person`].
+    pub role: sui_id_store::models::Role,
 }
 
 pub fn render_mfa_setup(
@@ -234,9 +237,10 @@ pub fn render_mfa_setup(
             qr_svg,
             secret_b32,
             username,
+            role,
         } = data;
         view! {
-            <Shell title=t.mfa_setup_shell_title.to_string() nav=Chrome::Console{username} current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.mfa_setup_shell_title.to_string() nav=Chrome::for_person(username, role) current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.mfa_setup_title}</h1>
@@ -292,6 +296,9 @@ pub fn render_mfa_setup(
 /// range — that's the caller's job.
 pub struct PasswordChangeData {
     pub username: String,
+    /// RFC 144 N2c: decides whether the chrome offers the console
+    /// links — see [`crate::layout::Chrome::for_person`].
+    pub role: sui_id_store::models::Role,
     /// Pre-filled checked value of "sign out other sessions". The
     /// caller hands it in so a re-render after a validation error
     /// keeps the user's previous choice.
@@ -308,6 +315,7 @@ pub fn render_password_change(
         let t = lang.strings();
         let PasswordChangeData {
             username,
+            role,
             revoke_others_default,
         } = data;
         let revoke_attr = if revoke_others_default {
@@ -319,7 +327,7 @@ pub fn render_password_change(
         view! {
             // RFC-MI-060: current="me" so the admin nav highlights
             // "Security". Tab strip added (deferred from RFC-MI-022).
-            <Shell title=t.password_change_title.to_owned() nav=Chrome::Console{username: username_for_nav} current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.password_change_title.to_owned() nav=Chrome::for_person(username_for_nav, role) current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 {me_security_tabs(MeTab::Password, lang)}
                 <header class="page-header">
                     <div>

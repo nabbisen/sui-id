@@ -20,25 +20,50 @@
 //!   ships.
 //! - The footer with the theme toggle (light / dark / auto) and the
 //!   accessibility badges.
-//! - The admin nav, with its account menu, for [`Chrome::Console`].
+//! - The admin nav, with its account menu, for [`Chrome::Console`]; the
+//!   account menu alone, for [`Chrome::Account`].
 
 use crate::components::components_css;
 use crate::tokens::TOKENS_CSS;
 use leptos::prelude::*;
 
 /// RFC 144, *Refresh*: the navigation **is** the signed-in person's
-/// name, or there is no navigation — there is no third state where a
-/// page shows the console chrome to someone the type system cannot
-/// name. Replaces the former `show_nav: bool` + `admin_username:
-/// Option<String>` pair on [`Shell`], which let 38 of 39 pages fall
-/// through to a bare *Sign out* with no account menu (measured
-/// 2026-11-15; see RFC 144's refresh and N2a's review, F5).
+/// name, or there is no navigation — there is no state where a page
+/// shows navigation to someone the type system cannot name. Replaces
+/// the former `show_nav: bool` + `admin_username: Option<String>` pair
+/// on [`Shell`], which let 38 of 39 pages fall through to a bare *Sign
+/// out* with no account menu (measured 2026-11-15; see RFC 144's
+/// refresh and N2a's review, F5).
+///
+/// RFC 144 N2c: the account menu is "about identity, not a place to
+/// go", so it does not imply the console links — [`Chrome::for_person`]
+/// picks between [`Chrome::Console`] and [`Chrome::Account`] by the same
+/// predicate the console's own gate uses, so the navigation offered and
+/// the access allowed cannot disagree.
 #[derive(Debug, Clone)]
 pub enum Chrome {
     /// The console navigation, with the account menu for `username`.
     Console { username: String },
+    /// RFC 144 N2c: a signed-in person outside the console (`role`
+    /// cannot read the admin console) — the account menu alone, with no
+    /// console links to a page the server would then refuse.
+    Account { username: String },
     /// No navigation: sign-in, setup, error pages.
     Bare,
+}
+
+impl Chrome {
+    /// Chosen by the same predicate the console's own gate uses
+    /// ([`sui_id_store::models::Role::can_read_admin`],
+    /// `CurrentAdminOrAuditor`'s check), so the navigation offered and
+    /// the access allowed cannot disagree.
+    pub fn for_person(username: String, role: sui_id_store::models::Role) -> Self {
+        if role.can_read_admin() {
+            Self::Console { username }
+        } else {
+            Self::Account { username }
+        }
+    }
 }
 
 /// Wrap a page body in the standard sui-id chrome.
@@ -96,7 +121,12 @@ pub fn Shell(
                             <Nav current=current.clone() lang=lang
                                  csrf_token=csrf_token.clone()
                                  username=username />
-                        }),
+                        }.into_any()),
+                        Chrome::Account { username } => Some(view! {
+                            <AccountNav lang=lang
+                                        csrf_token=csrf_token.clone()
+                                        username=username />
+                        }.into_any()),
                         Chrome::Bare => None,
                     }}</header>
                 <main class="app-main" id="main-content">{children()}</main>
@@ -184,28 +214,52 @@ fn Nav(
             </div>
 
             // RFC 074: user-menu dropdown — replaces the old flat
-            // "Security" link and "Sign out" button. Pure HTML
-            // (<details>/<summary>); no JavaScript required.
-            <details class="user-menu">
-                <summary class="app-nav__link user-menu__toggle">
-                    {username} " ▾"
-                </summary>
-                <div class="user-menu__panel" role="menu">
-                    <a class="user-menu__item" href="/me/security/overview"
-                       role="menuitem">
-                        {t.nav_my_account}
-                    </a>
-                    <form method="post" action="/admin/logout"
-                          class="user-menu__form">
-                        <input type="hidden" name="_csrf" value=csrf_token.clone() />
-                        <button type="submit" class="user-menu__item"
-                                role="menuitem">
-                            {t.nav_logout}
-                        </button>
-                    </form>
-                </div>
-            </details>
+            // "Security" link and "Sign out" button.
+            {user_menu(t, username, csrf_token)}
         </nav>
+    }
+}
+
+/// RFC 144 N2c: the account menu alone, for [`Chrome::Account`] — a
+/// signed-in person with no console to navigate.
+#[component]
+fn AccountNav(lang: sui_id_i18n::Locale, csrf_token: String, username: String) -> impl IntoView {
+    let t = lang.strings();
+    view! {
+        <nav class="app-nav" aria-label=t.nav_aria_main>
+            {user_menu(t, username, csrf_token)}
+        </nav>
+    }
+}
+
+/// The account-menu markup shared by [`Nav`] and [`AccountNav`]: the
+/// signed-in person's name, *My account*, and sign-out. Pure HTML
+/// (`<details>`/`<summary>`); no JavaScript required.
+fn user_menu(
+    t: &'static sui_id_i18n::Strings,
+    username: String,
+    csrf_token: String,
+) -> impl IntoView {
+    view! {
+        <details class="user-menu">
+            <summary class="app-nav__link user-menu__toggle">
+                {username} " ▾"
+            </summary>
+            <div class="user-menu__panel" role="menu">
+                <a class="user-menu__item" href="/me/security/overview"
+                   role="menuitem">
+                    {t.nav_my_account}
+                </a>
+                <form method="post" action="/admin/logout"
+                      class="user-menu__form">
+                    <input type="hidden" name="_csrf" value=csrf_token.clone() />
+                    <button type="submit" class="user-menu__item"
+                            role="menuitem">
+                        {t.nav_logout}
+                    </button>
+                </form>
+            </div>
+        </details>
     }
 }
 

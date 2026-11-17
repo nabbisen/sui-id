@@ -25,7 +25,7 @@ pub async fn passkeys_get(
         .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
     let shell = MeShellData {
         username: user.username,
-        is_admin: user.is_admin,
+        role: user.role,
         active_tab: MeTab::Passkey,
     };
     let factor_add_proof = crate::handlers::factor_add_proof_for_page(&app, user_id).await;

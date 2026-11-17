@@ -19,6 +19,9 @@ pub struct MeAppsData {
     /// RFC 144 (Refresh, §4): the signed-in user's name, for the
     /// account menu.
     pub username: String,
+    /// RFC 144 N2c: decides whether the chrome offers the console
+    /// links — see [`crate::layout::Chrome::for_person`].
+    pub role: sui_id_store::models::Role,
 }
 
 pub fn render_me_apps(data: MeAppsData, flash: Option<Flash>, lang: sui_id_i18n::Locale) -> String {
@@ -29,6 +32,7 @@ pub fn render_me_apps(data: MeAppsData, flash: Option<Flash>, lang: sui_id_i18n:
             csrf_token,
             dev_mode,
             username,
+            role,
         } = data;
 
         let grant_items: Vec<_> = grants
@@ -102,7 +106,7 @@ pub fn render_me_apps(data: MeAppsData, flash: Option<Flash>, lang: sui_id_i18n:
         view! {
             <crate::layout::Shell
                 title=t.me_apps_title.to_owned()
-                nav=crate::layout::Chrome::Console{username}
+                nav=crate::layout::Chrome::for_person(username, role)
                 current=Some("me".to_string())
                 lang=lang
                 csrf_token=csrf_token.clone()

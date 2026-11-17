@@ -30,6 +30,7 @@ pub async fn password_change_get(
     let html = sui_id_web::render_password_change(
         sui_id_web::PasswordChangeData {
             username: user.username,
+            role: user.role,
             revoke_others_default: true,
         },
         None,

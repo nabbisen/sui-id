@@ -15,7 +15,8 @@ account menu on every page, and labelled main actions. Also fixed: a
 missing `sui-id.toml` now says how to create one; destructive buttons'
 labels in dark mode, and disabled fields, were below contrast; a user's
 activity table and the *My account* pages showed their facts in the wrong
-place or run together. And a crash-injection harness now checks master-key
+place or run together; and people outside the console no longer see its
+links on their own pages. And a crash-injection harness now checks master-key
 rotation against a simulated power loss.
 
 ### Changed
@@ -57,6 +58,10 @@ rotation against a simulated power loss.
   It now has the audit log's own headings.
 - **The *My account* overview and MFA pages ran their facts together**
   ("Passkeys0Active sessions1"). Each now has its own labelled row.
+- **A person who is not an administrator saw the console's links on their
+  own *My account* pages** (Users, Settings and the rest), which then
+  refused them. They now see their account menu alone; administrators and
+  auditors keep the console.
 
 ### Tests and CI
 

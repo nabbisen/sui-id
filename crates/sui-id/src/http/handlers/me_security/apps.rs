@@ -48,6 +48,7 @@ pub async fn me_apps_get(
         csrf_token: token.clone(),
         dev_mode: app.is_dev_mode,
         username: user.username,
+        role: user.role,
     };
 
     let resp = Html(render_me_apps(data, None, lang)).into_response();

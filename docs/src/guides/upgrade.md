@@ -69,7 +69,7 @@ the browser's font size, the account menu (with sign-out) on every page.
 For anyone building against the crates:
 
 - `sui-id-web`: `Shell` takes `nav: Chrome` in place of `show_nav` and
-  `admin_username`.
+  `admin_username`; `MeShellData` carries `role` in place of `is_admin`.
 - `sui-id-core`: `CreateClientSpec` has a required `consent_policy`.
 - `sui-id`: `CurrentAdmin` and `CurrentAdminOrAuditor` carry the username.
 

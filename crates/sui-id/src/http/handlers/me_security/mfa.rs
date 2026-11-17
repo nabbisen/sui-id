@@ -26,7 +26,7 @@ pub async fn mfa_get(
         .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
     let shell = MeShellData {
         username: user.username,
-        is_admin: user.is_admin,
+        role: user.role,
         active_tab: MeTab::Mfa,
     };
     let factor_add_proof = crate::handlers::factor_add_proof_for_page(&app, user_id).await;
@@ -110,6 +110,7 @@ pub async fn mfa_enroll_start(
             qr_svg,
             secret_b32,
             username: user.username,
+            role: user.role,
         },
         None,
         token.clone(),
@@ -255,7 +256,7 @@ async fn render_mfa_tab_with_fresh_codes(
             .unwrap_or(0);
     let shell = sui_id_web::MeShellData {
         username: user.username,
-        is_admin: user.is_admin,
+        role: user.role,
         active_tab: sui_id_web::MeTab::Mfa,
     };
     let factor_add_proof = crate::handlers::factor_add_proof_for_page(app, user_id).await;

@@ -150,7 +150,7 @@ pub async fn sessions_tab_get(
         .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
     let shell = MeShellData {
         username: user.username,
-        is_admin: user.is_admin,
+        role: user.role,
         active_tab: MeTab::Sessions,
     };
 

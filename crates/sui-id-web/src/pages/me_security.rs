@@ -32,7 +32,12 @@ impl MeTab {
 
 pub struct MeShellData {
     pub username: String,
-    pub is_admin: bool,
+    /// RFC 144 N2c: the console's own gate predicate
+    /// ([`sui_id_store::models::Role::can_read_admin`]) decides whether
+    /// this page's chrome offers the console links — not the legacy
+    /// `is_admin` column, which is `false` for an auditor even though
+    /// an auditor keeps the console.
+    pub role: sui_id_store::models::Role,
     pub active_tab: MeTab,
 }
 
