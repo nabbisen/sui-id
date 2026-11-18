@@ -2,6 +2,11 @@
 
 **Proposed.** 2026-11-18, by the architect, after `0.92.0` was published
 (`ec1de8c`).
+> ## Decided 2026-11-19, on §3's two questions
+> 1. **The order is approved**: RFC 100 stage 1 (landed `92b3d01`), then RFC 148,
+>    then stages 2–4.
+> 2. **The account-creation run is later in cycle O**, not now. The architect
+>    raises it again before cycle O's preparation; RFC 097's draft waits for it.
 **Whose turn.** The owner's, for §3. The architect's, for the first
 dispatch, which does not wait for it (§2).
 **What already stands.** Cycle O is **authorized** and was re-scoped
@@ -42,8 +47,8 @@ secret are redacted, the rule the runbook kept for exactly this case.
 
 | # | Work | Why here |
 |---|---|---|
-| **O1** | **RFC 100 stage 1**: the sentinel and the startup key check, with the confirmed upgrade rule | The long pole goes first, as in cycle N. It touches startup and `resolve`, not the command parser |
-| **O2** | **RFC 148**: one command registry, `clap`; closes RFC 107 | Before stage 2, so `admin rotate-key --check` is written once, on the new parser, not twice |
+| **O1** | **Landed 2026-11-19** (`92b3d01`). **RFC 100 stage 1**: the sentinel and the startup key check, with the confirmed upgrade rule | The long pole goes first, as in cycle N. It touches startup and `resolve`, not the command parser |
+| **O2** | **RFC 148**: one command registry, `clap`; closes RFC 107. **O2a dispatched 2026-11-19** — [`../148-one-command-system/0.93.0-o2a-one-registry-2026-11-19.md`](../148-one-command-system/0.93.0-o2a-one-registry-2026-11-19.md); O2b (`init`, the first run) follows | Before stage 2, so `admin rotate-key --check` is written once, on the new parser, not twice |
 | **O3** | **RFC 100 stage 2**: preconditions, and `--check` | On `clap` |
 | **O4** | **RFC 100 stage 3**: the journal | |
 | **O5** | **RFC 100 stage 4**: startup recovery | Recovery lands before stage 5's write path, as the stage rules require |

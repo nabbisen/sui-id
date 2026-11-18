@@ -1,7 +1,7 @@
 # RFC 148 — handoff
 
 **RFC.** [`../../accepted/148-one-command-system.md`](../../accepted/148-one-command-system.md)
-**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Not yet dispatched: its build is scheduled in the ROADMAP's cycles N–P, authorized 2026-11-15.
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Built in `0.93.0` (cycle O), in two dispatches: **O2a**, one registry on `clap`, the tree, aliases and help, [dispatched 2026-11-19](0.93.0-o2a-one-registry-2026-11-19.md); **O2b**, `sui-id init` and the first-run conversation, to follow. RFC 107 closes with O2a.
 
 ## Before a dispatch
 
