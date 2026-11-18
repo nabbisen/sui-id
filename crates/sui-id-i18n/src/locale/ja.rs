@@ -164,7 +164,7 @@ pub static STRINGS_JA: Strings = Strings {
     login_fed_retry: "サインインを完了できませんでした。もう一度お試しください。",
     login_fed_contact_admin: "このアカウントまたはプロバイダーでサインインを完了できませんでした。管理者にお問い合わせください。",
     login_fed_link_required: "このサインインをローカルアカウントに自動的にリンクできませんでした。管理者にお問い合わせください。",
-    login_fed_unverified_email: "ID プロバイダーによると、メールアドレスが確認されていません。ID プロバイダー側でメールアドレスを確認してから、再度お試しください。",
+    login_fed_no_verified_email: "ID プロバイダーから確認済みのメールアドレスが届かなかったため、ここでアカウントを作成できませんでした。管理者にお問い合わせください。",
     login_federation_divider: "または",
     login_federation_button: "{name} でサインイン",
 

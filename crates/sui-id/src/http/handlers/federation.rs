@@ -1869,10 +1869,13 @@ enum FedErrorBucket {
     /// close. This is the one bucket whose membership is the security-
     /// relevant fact about this map, not an editorial grouping.
     LinkRequired,
-    /// `unverified_email` (P3) alone: the one value whose remedy the end
-    /// user can act on without an administrator, by verifying their
-    /// address with the upstream identity provider rather than with
-    /// sui-id.
+    /// `unverified_email` (P3) alone. N2d (2026-11-18): the message
+    /// used to send the person to verify their address with the
+    /// upstream provider, but sui-id cannot tell an absent email claim
+    /// from an unverified one (`verified_email: Option<…>`), so the
+    /// provider may have said nothing to verify — the remedy shown is
+    /// now to contact the administrator, like every other bucket but
+    /// [`Self::LinkRequired`].
     UnverifiedEmail,
 }
 
@@ -1898,7 +1901,7 @@ pub fn fed_error_message(fed_error: &str, t: &'static sui_id_i18n::Strings) -> s
         FedErrorBucket::Retry => t.login_fed_retry,
         FedErrorBucket::ContactAdmin => t.login_fed_contact_admin,
         FedErrorBucket::LinkRequired => t.login_fed_link_required,
-        FedErrorBucket::UnverifiedEmail => t.login_fed_unverified_email,
+        FedErrorBucket::UnverifiedEmail => t.login_fed_no_verified_email,
     };
     sui_id_web::Flash {
         kind: sui_id_web::FlashKind::Error,

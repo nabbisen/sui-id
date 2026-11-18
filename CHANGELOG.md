@@ -15,9 +15,11 @@ account menu on every page, and labelled main actions. Also fixed: a
 missing `sui-id.toml` now says how to create one; destructive buttons'
 labels in dark mode, and disabled fields, were below contrast; a user's
 activity table and the *My account* pages showed their facts in the wrong
-place or run together; and people outside the console no longer see its
-links on their own pages. And a crash-injection harness now checks master-key
-rotation against a simulated power loss.
+place or run together; people outside the console no longer see its
+links on their own pages; and a federated refusal for a missing verified
+email now says what happened, not what the provider never said. And a
+crash-injection harness now checks master-key rotation against a simulated
+power loss.
 
 ### Changed
 
@@ -62,6 +64,11 @@ rotation against a simulated power loss.
   own *My account* pages** (Users, Settings and the rest), which then
   refused them. They now see their account menu alone; administrators and
   auditors keep the console.
+- **A federated sign-in refused for want of a verified email now says what
+  happened** (the identity provider sent no verified email) **and what to
+  do** (contact the administrator), instead of claiming the provider
+  reported the email unverified — which it may never have said anything
+  about.
 
 ### Tests and CI
 

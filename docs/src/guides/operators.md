@@ -1734,7 +1734,12 @@ that fails one refuses to start, naming the provider and the field.
   approval — no date is set for that.
 - `provision_on_first_login` — a local account is created automatically on the
   user's first successful federated sign-in (requires `email_verified = true`
-  from the upstream; otherwise the sign-in is rejected).
+  from the upstream; otherwise the sign-in is rejected). **`email` and
+  `email_verified` must be in the ID token itself** — sui-id never calls the
+  upstream's userinfo endpoint (RFC 096). Some providers send these only from
+  userinfo by default; Duende IdentityServer is one, unless the client sets
+  [`AlwaysIncludeUserClaimsInIdToken`](https://docs.duendesoftware.com/identityserver/fundamentals/claims-lifecycle/)
+  (default `false`) to `true`.
 
 **Which to choose.** The question is who should be able to create an
 account.

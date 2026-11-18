@@ -267,6 +267,16 @@ providers for federated sign-in (the "Sign in with X" flow).
 > 0.90.0 this note said such a user was created disabled. That was never
 > true.)
 
+> **`email` and `email_verified` must be in the ID token.** sui-id never
+> calls the upstream's userinfo endpoint (RFC 096) — only claims present
+> in the verified ID token are read. Some providers send these claims
+> from userinfo by default and omit them from the ID token; Duende
+> IdentityServer is one, unless the client sets
+> [`AlwaysIncludeUserClaimsInIdToken`](https://docs.duendesoftware.com/identityserver/fundamentals/claims-lifecycle/)
+> (default `false`) to `true`. Without a verified email in the ID
+> token, every first sign-in through `provision_on_first_login` is
+> refused.
+
 > **Which fields take effect after the provider already exists.**
 > `display_name` is reconciled from this file on every boot, and applies
 > without disabling the provider — it is not part of its trust policy.

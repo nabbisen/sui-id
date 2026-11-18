@@ -255,11 +255,14 @@ pub struct Strings {
     /// account to link to at all, read the same sentence without either
     /// being told something false about their own case.
     pub login_fed_link_required: &'static str,
-    /// The one `fed_error` value the end user themselves can act on
-    /// without an administrator: `unverified_email` (RFC 096 P3), where
-    /// the remedy is verifying the address with the upstream identity
-    /// provider, not with sui-id.
-    pub login_fed_unverified_email: &'static str,
+    /// Shown for the `unverified_email` `fed_error` bucket (RFC 096 P3).
+    /// sui-id keeps only `verified_email: Option<…>`
+    /// (`http/identity_capability.rs`), so at render time it cannot tell
+    /// an absent email claim from one the provider sent but marked
+    /// unverified — the text must be true in both cases, so it claims
+    /// only that no verified email arrived, not that the provider said
+    /// anything about verification (N2d, 2026-11-18).
+    pub login_fed_no_verified_email: &'static str,
     /// RFC 096-B2 S5b: the divider label above the federation-provider
     /// buttons group, same `divider-with-label` shape the passkey option
     /// already uses above the password form.

@@ -71,10 +71,65 @@ async fn email_collision_and_link_required_render_identical_pages() {
     assert!(link_required.contains(needle));
 }
 
+async fn login_body_lang(fed_error: Option<&str>, accept_language: &str) -> String {
+    let state = test_app();
+    let uri = match fed_error {
+        Some(v) => {
+            use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+            format!(
+                "/admin/login?fed_error={}",
+                utf8_percent_encode(v, NON_ALPHANUMERIC)
+            )
+        }
+        None => "/admin/login".to_owned(),
+    };
+    let resp = build_router(state)
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(uri)
+                .header(axum::http::header::ACCEPT_LANGUAGE, accept_language)
+                .body(Body::empty())
+                .expect("req"),
+        )
+        .await
+        .expect("login GET");
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = read_body(resp.into_body()).await;
+    std::str::from_utf8(&bytes).expect("utf8").to_owned()
+}
+
+/// N2d (2026-10-18): the message must be true whether the provider sent
+/// no email claim at all or sent one marked unverified -- sui-id cannot
+/// tell the two apart (`http/identity_capability.rs`'s
+/// `verified_email: Option<…>`), so it no longer claims the provider
+/// "reports" anything or tells the person to act through the provider.
 #[tokio::test]
 async fn unverified_email_renders_its_own_message() {
     let body = login_body(Some("unverified_email")).await;
-    assert!(body.contains("Verify it with your identity provider"));
+    assert!(body.contains(
+        "Your identity provider did not send a verified email address, \
+         which is needed to create your account here. Contact your administrator."
+    ));
+    assert!(!body.contains("reports"));
+    assert!(!body.contains("Verify it"));
+}
+
+#[tokio::test]
+async fn unverified_email_renders_its_own_message_in_japanese() {
+    let body = login_body_lang(Some("unverified_email"), "ja").await;
+    assert!(body.contains(
+        "ID プロバイダーから確認済みのメールアドレスが届かなかったため、\
+         ここでアカウントを作成できませんでした。管理者にお問い合わせください。"
+    ));
+}
+
+#[tokio::test]
+async fn unverified_email_renders_its_own_message_in_simplified_chinese() {
+    let body = login_body_lang(Some("unverified_email"), "zh-Hans").await;
+    assert!(
+        body.contains("身份提供方未发送已验证的电子邮箱，因此无法在此创建您的账户。请联系管理员。")
+    );
 }
 
 #[tokio::test]
