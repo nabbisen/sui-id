@@ -375,6 +375,8 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     password_change_submit: "修改密码",
     password_change_wrong_current: "当前密码不正确。",
     password_change_done_flash: "密码已修改。",
+    password_match_yes: "两次输入的密码一致。",
+    password_match_not_yet: "两次输入的密码尚不一致。",
 
     // /me/security
     me_security_title: "账户安全",

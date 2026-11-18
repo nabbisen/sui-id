@@ -372,6 +372,8 @@ pub static STRINGS_JA: Strings = Strings {
     password_change_submit: "パスワードを変更",
     password_change_wrong_current: "現在のパスワードが正しくありません。",
     password_change_done_flash: "パスワードを変更しました。",
+    password_match_yes: "入力したパスワードが一致しています。",
+    password_match_not_yet: "入力したパスワードがまだ一致していません。",
 
     // /me/security
     me_security_title: "アカウントセキュリティ",

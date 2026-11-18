@@ -144,6 +144,8 @@ pub fn components_css() -> &'static str {
             utilities::EMPTY_STATE_CSS,
             utilities::COPY_FIELD_CSS,
             forms::ERROR_SUMMARY_CSS,
+            // ---- RFC 144 N2e: a chosen radio option is visible ----
+            forms::CHOSEN_OPTION_CSS,
         ]
         .concat()
     })

@@ -225,6 +225,26 @@ pub fn empty_state(data: EmptyStateData) -> impl IntoView {
     }
 }
 
+/// The status element `/static/password-match.js` toggles (RFC 144 N2e
+/// §2). `status_id` must be unique on the page; the confirmation
+/// input's own `aria-describedby` names it, and its `data-confirms`
+/// names the field it confirms — the script reads only those two
+/// attributes plus this element's two `data-*` strings, so it carries
+/// no page knowledge and no strings of its own. Rendered `hidden`;
+/// the script decides when to show it, and holds no password text at
+/// any point.
+pub(super) fn password_match_status(
+    t: &'static sui_id_i18n::Strings,
+    status_id: &'static str,
+) -> impl IntoView {
+    view! {
+        <p id=status_id class="field__hint" hidden=true
+           aria-live="polite"
+           data-match-text=t.password_match_yes
+           data-mismatch-text=t.password_match_not_yet></p>
+    }
+}
+
 /// Table-row variant of the empty-state primitive (RFC 064).
 pub fn table_empty_row(message: &'static str, colspan: usize) -> impl IntoView {
     view! {

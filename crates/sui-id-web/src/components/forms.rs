@@ -59,8 +59,19 @@ input:disabled, textarea:disabled, select:disabled {
   cursor: not-allowed;
 }
 
-input[type="checkbox"], input[type="radio"] {
+input[type="checkbox"] {
   width: auto;
+  accent-color: var(--accent-default);
+}
+/* RFC 144 N2e paragraph 1: drawn larger than the browser default
+ * (13x13 CSS px) so a chosen option's own dot reads at a glance, not
+ * just the label colour change below. The 44x44 target size applies to
+ * the label, the real click target -- see CHOSEN_OPTION_CSS and its
+ * EXEMPT entry in tokens/tests.rs's standalone_controls_reach_44px. */
+input[type="radio"] {
+  width: auto;
+  height: 1.25rem;
+  aspect-ratio: 1;
   accent-color: var(--accent-default);
 }
 
@@ -234,3 +245,47 @@ pub fn error_summary(
         </div>
     })
 }
+
+// ── RFC 144 N2e §1: a chosen radio option is visible, not only
+// functional ──────────────────────────────────────────────────────────
+//
+// Every radio below already toggles on a real pointer click at the
+// label text (native <label>/<input> behaviour) -- what was missing was
+// anything that showed the result. The three label classes are the only
+// places sui-id puts a radio inside a clickable label:
+//   - setup -> language   (pages/setup/lang.rs)
+//   - setup -> HIBP policy (pages/setup/hibp.rs)
+//   - My account -> language (pages/me_security/language.rs)
+pub(crate) const CHOSEN_OPTION_CSS: &str = r#"
+label.row-gap2-center-clickable:has(input[type="radio"]:checked),
+label.row.row-gap2-center:has(input[type="radio"]:checked) {
+  border: var(--border-width-default) solid var(--border-accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-subtle);
+}
+/* .card already draws a 1px border and its own radius; only the colour
+ * and fill change on selection, so the HIBP cards keep card radius-md,
+ * not the radius-sm the two border-less label types get above. */
+label.card.clickable-block:has(input[type="radio"]:checked) {
+  border-color: var(--border-accent);
+  background: var(--accent-subtle);
+}
+/* RFC 144 rule 5: a tint alone marks the choice; under prefers-contrast:
+ * more it also gets a thicker, explicitly solid border -- the same
+ * pattern as the current nav item and .badge--accent. */
+@media (prefers-contrast: more) {
+  label.row-gap2-center-clickable:has(input[type="radio"]:checked),
+  label.row.row-gap2-center:has(input[type="radio"]:checked),
+  label.card.clickable-block:has(input[type="radio"]:checked) {
+    border-style: solid;
+    border-width: var(--border-width-emphasis);
+  }
+}
+/* The label is the target, not the radio inside it -- a floor, not a
+ * fixed height, same convention as every other 44x44 rule. */
+label.row-gap2-center-clickable,
+label.row.row-gap2-center,
+label.card.clickable-block {
+  min-height: 2.75rem;
+}
+"#;

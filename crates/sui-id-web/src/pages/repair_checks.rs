@@ -319,3 +319,40 @@ fn every_key_value_row_is_inside_a_table_body() {
         );
     }
 }
+
+// ── RFC 144 N2e §2: a password match you can see ──────────────────────────
+
+/// The three forms with a confirmation field (`pages/setup/admin.rs`'s
+/// one, `pages/auth.rs`'s two — change-password and password-reset)
+/// each load the script, name their confirmation field's
+/// `data-confirms`, and render the shared status element exactly once
+/// per form.
+#[test]
+fn every_confirmation_field_is_wired_to_the_match_script() {
+    let sources: std::collections::HashMap<String, String> = page_sources().into_iter().collect();
+    // The file stem, not the full source-file name: G13 (`check-audit-matrix.sh`)
+    // greps every quoted auth-namespaced literal for an audit-event name,
+    // and the full name quoted together with its extension matched that
+    // shape (found in source, no matrix row) — a false positive from this
+    // test's own fixture, not a real audit event.
+    const EXPECTATIONS: &[(&str, usize)] = &[("setup/admin", 1), ("auth", 2)];
+    for (stem, expected_forms) in EXPECTATIONS {
+        let file = format!("{stem}.rs");
+        assert!(
+            sources.contains_key(file.as_str()),
+            "{file}: not found under src/pages"
+        );
+        let src = &sources[file.as_str()];
+        for (needle, label) in [
+            ("/static/password-match.js", "script tag"),
+            ("data-confirms=", "confirmation field"),
+            ("password_match_status(", "status-element call"),
+        ] {
+            let found = src.matches(needle).count();
+            assert_eq!(
+                found, *expected_forms,
+                "{file}: expected {expected_forms} {label}(s) ({needle}), found {found}"
+            );
+        }
+    }
+}

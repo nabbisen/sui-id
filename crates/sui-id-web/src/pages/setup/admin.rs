@@ -1,4 +1,4 @@
-use crate::pages::common::{Flash, flash_banner, render};
+use crate::pages::common::{Flash, flash_banner, password_match_status, render};
 use leptos::prelude::*;
 
 use super::setup_step_indicator;
@@ -43,13 +43,17 @@ pub fn render_setup_admin(flash: Option<Flash>, lang: sui_id_i18n::Locale, token
                     <div class="field">
                         <label for="confirm_password" class="field__label">{t.setup_admin_confirm_label}</label>
                         <input id="confirm_password" name="confirm_password" type="password"
-                               required=true minlength="12" autocomplete="new-password" />
+                               required=true minlength="12" autocomplete="new-password"
+                               data-confirms="password"
+                               aria-describedby="confirm-password-match-status" />
+                        {password_match_status(t, "confirm-password-match-status")}
                     </div>
                     <div class="row">
                         <a href="/setup" class="button secondary">{t.button_back}</a>
                         <button type="submit">{t.setup_admin_submit}</button>
                     </div>
                 </form>
+                <script src="/static/password-match.js"></script>
             </crate::layout::AuthShell>
         }
     })

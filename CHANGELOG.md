@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **The console is easier to read and to find things in**: AAA contrast in a
 new palette, text that follows the browser's font size, 44px controls, the
-account menu on every page, and labelled main actions. Also fixed: a
+account menu on every page, labelled main actions, a chosen option you can
+see, and a password-match indicator as you type. Also fixed: a
 missing `sui-id.toml` now says how to create one; destructive buttons'
 labels in dark mode, and disabled fields, were below contrast; a user's
 activity table and the *My account* pages showed their facts in the wrong
@@ -44,6 +45,13 @@ power loss.
   Your account menu, with sign-out, is on every page, set apart from
   the navigation. A confirmation's optional reason no longer says
   "disabling" when the action isn't one.
+- **A chosen option is now clearly marked** — the setup wizard's language
+  and password-security steps, and *My account*'s language setting —
+  with a border and tint, not only the browser's own radio dot.
+  **Password forms say whether the confirmation matches as you type**,
+  on setup, password change, and password reset: "The passwords match."
+  or "The passwords do not match yet." Nothing is sent anywhere; the
+  comparison runs in the page.
 
 ### Fixed
 

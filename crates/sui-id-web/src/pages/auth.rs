@@ -360,7 +360,10 @@ pub fn render_password_change(
                         <div class="field">
                             <label for="confirm_password" class="field__label">{t.password_change_confirm_label}</label>
                             <input type="password" id="confirm_password" name="confirm_password"
-                                   required autocomplete="new-password" minlength="12" />
+                                   required autocomplete="new-password" minlength="12"
+                                   data-confirms="new_password"
+                                   aria-describedby="confirm-password-match-status" />
+                            {password_match_status(t, "confirm-password-match-status")}
                         </div>
 
                         <div class="field">
@@ -378,6 +381,7 @@ pub fn render_password_change(
                         </div>
                     </form>
                 </div>
+                <script src="/static/password-match.js"></script>
             </Shell>
         }
     })
@@ -543,11 +547,15 @@ pub fn render_reset_password(
                         <label for="confirm_password" class="field__label">{t.reset_password_confirm_label}</label>
                         <input id="confirm_password" name="confirm_password" type="password"
                                required=true minlength="12"
-                               autocomplete="new-password" />
+                               autocomplete="new-password"
+                               data-confirms="password"
+                               aria-describedby="confirm-password-match-status" />
+                        {password_match_status(t, "confirm-password-match-status")}
                     </div>
                     <button type="submit">{t.reset_password_submit}</button>
                 </form>
                 <script src="/static/reset-password.js"></script>
+                <script src="/static/password-match.js"></script>
             </crate::layout::AuthShell>
         }
     })

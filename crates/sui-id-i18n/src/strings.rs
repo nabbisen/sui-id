@@ -526,6 +526,12 @@ pub struct Strings {
     pub password_change_submit: &'static str,
     pub password_change_wrong_current: &'static str,
     pub password_change_done_flash: &'static str,
+    /// RFC 144 N2e §2: shown by `/static/password-match.js` once a
+    /// confirmation field has content and matches the field it
+    /// confirms. Never sent anywhere; the comparison runs in the page.
+    pub password_match_yes: &'static str,
+    /// Same as [`Self::password_match_yes`], for the non-matching case.
+    pub password_match_not_yet: &'static str,
 
     // ---- /me/security (self-service security page) ----
     pub me_security_title: &'static str,

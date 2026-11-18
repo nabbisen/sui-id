@@ -850,7 +850,9 @@ fn no_font_size_or_space_token_is_in_px() {
 /// `.theme-toggle__btn`, and that sets `min-height` or `height`, sets
 /// at least 44px (2.75rem) — standalone controls reach the WCAG 2.5.5
 /// (AAA) target size. `.link-button` is the one named exception: an
-/// inline link in running text, which WCAG 2.5.8 exempts.
+/// inline link in running text, which WCAG 2.5.8 exempts. `input[type="radio"]`
+/// (N2e) is the other: the label around it is the real target, checked
+/// instead by [`chosen_option_label_reaches_44px`].
 #[test]
 fn standalone_controls_reach_44px() {
     const NAMED: &[&str] = &[
@@ -861,7 +863,7 @@ fn standalone_controls_reach_44px() {
         ".user-menu__item",
         ".theme-toggle__btn",
     ];
-    const EXEMPT: &[&str] = &[".link-button"];
+    const EXEMPT: &[&str] = &[".link-button", "input[type=\"radio\"]"];
     let mut failures = vec![];
     for (selector, decls) in extract_rules_with_selector(&unwrap_media_blocks(&strip_css_comments(
         crate::components::components_css(),
@@ -888,6 +890,93 @@ fn standalone_controls_reach_44px() {
     assert!(
         failures.is_empty(),
         "standalone control(s) below the 44px target size:\n{}",
+        failures.join("\n")
+    );
+}
+
+/// RFC 144 N2e §1: `components_css()` holds a `:has(input[type="radio"]:checked)`
+/// rule for each of the three label classes a chosen option must be
+/// visible on — a selector that exists is the only thing a removed
+/// rule (the mutation this test is written against) can falsify; the
+/// styling itself is covered by [`every_composed_pair_in_components_css_clears_aaa`].
+#[test]
+fn every_chosen_option_label_has_a_checked_rule() {
+    let css = unwrap_media_blocks(&strip_css_comments(crate::components::components_css()));
+    let mut missing = vec![];
+    for label in [
+        "label.row-gap2-center-clickable",
+        "label.row.row-gap2-center",
+        "label.card.clickable-block",
+    ] {
+        let found = extract_rules_with_selector(&css)
+            .into_iter()
+            .any(|(selector, _)| {
+                selector.contains(":has(")
+                    && selector.contains("checked")
+                    && selector.split(',').map(str::trim).any(|part| {
+                        part.starts_with(label) && part[label.len()..].starts_with(":has(")
+                    })
+            });
+        if !found {
+            missing.push(label);
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "no `:has(input[type=\"radio\"]:checked)` rule for: {}",
+        missing.join(", ")
+    );
+}
+
+/// RFC 144 N2e §1: the three labels that hold a radio and nothing else
+/// clickable (`label.row-gap2-center-clickable`,
+/// `label.row.row-gap2-center`, `label.card.clickable-block`) are
+/// themselves at least 44px (2.75rem) tall — the label is what a
+/// pointer aims at, not the radio `standalone_controls_reach_44px`
+/// exempts.
+#[test]
+fn chosen_option_label_reaches_44px() {
+    const NAMED: &[&str] = &[
+        "label.row-gap2-center-clickable",
+        "label.row.row-gap2-center",
+        "label.card.clickable-block",
+    ];
+    let mut seen: std::collections::HashSet<&str> = NAMED.iter().copied().collect();
+    let mut failures = vec![];
+    for (selector, decls) in extract_rules_with_selector(&unwrap_media_blocks(&strip_css_comments(
+        crate::components::components_css(),
+    ))) {
+        if !selector_names_any(&selector, NAMED) {
+            continue;
+        }
+        // `:has(input[type="radio"]:checked)` variants name the same
+        // label prefix but style the chosen state, not the floor height;
+        // only the bare label rule is this test's concern.
+        if selector.contains(":has(") {
+            continue;
+        }
+        for part in selector.split(',').map(str::trim) {
+            seen.remove(part);
+        }
+        match find_decl(&decls, "min-height") {
+            Some(value) => match length_to_px(&value) {
+                Some(px) if px + 1e-9 >= 44.0 => {}
+                Some(px) => failures.push(format!(
+                    "{selector} {{ min-height: {value}; }} -- {px}px, below 44px"
+                )),
+                None => {} // "auto": no floor claimed
+            },
+            None => failures.push(format!("{selector}: no min-height rule at all")),
+        }
+    }
+    for missing in &seen {
+        failures.push(format!(
+            "{missing}: no rule in components_css() names it at all"
+        ));
+    }
+    assert!(
+        failures.is_empty(),
+        "chosen-option label(s) below the 44px target size:\n{}",
         failures.join("\n")
     );
 }

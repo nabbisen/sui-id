@@ -5,7 +5,7 @@
 **N2c**, [landed 2026-11-17](0.92.0-n2c-a-person-outside-the-console-2026-11-17.md): a
 signed-in person outside the console saw the console's navigation on their
 own pages. Found while preparing stage 14; fixed in `0.92.0`, as decided.
-And **N2e**, [dispatched 2026-11-18](0.92.0-n2e-a-choice-you-can-see-2026-11-18.md): a chosen
+And **N2e**, [landed 2026-11-18](0.92.0-n2e-a-choice-you-can-see-2026-11-18.md): a chosen
 radio option is visibly marked, and the three password forms show whether
 the confirmation matches. Raised on the setup wizard; in `0.92.0`, as decided.
 
