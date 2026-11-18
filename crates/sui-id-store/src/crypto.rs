@@ -120,5 +120,34 @@ pub fn open(key: &MasterKey, sealed: &[u8], aad: &[u8]) -> StoreResult<Vec<u8>> 
         .map_err(|_| StoreError::Crypto)
 }
 
+/// RFC 100 §2: a non-secret identifier for a master key, safe to log, to
+/// print in a refusal, or to store in the clear — `HMAC-SHA256(key,
+/// "sui-id/master-key-fingerprint/v1")`, its first 8 bytes as lowercase
+/// hex (16 characters). Keyed and domain-separated: it identifies a key
+/// without revealing anything usable about it, and two different
+/// purposes keyed on the same bytes (were there ever another) could
+/// never collide into the same tag family.
+const FINGERPRINT_DOMAIN: &[u8] = b"sui-id/master-key-fingerprint/v1";
+
+pub fn fingerprint(key: &MasterKey) -> String {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    // A key of any length is accepted by HMAC's own construction; ours is
+    // always exactly 32 bytes, so this never fails.
+    #[allow(clippy::expect_used)]
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(key.as_bytes()).expect("HMAC accepts any key length");
+    mac.update(FINGERPRINT_DOMAIN);
+    let tag = mac.finalize().into_bytes();
+    let mut out = String::with_capacity(16);
+    for byte in &tag[..8] {
+        use std::fmt::Write;
+        // A two-digit hex write into a String never fails.
+        #[allow(clippy::expect_used)]
+        write!(out, "{byte:02x}").expect("fmt::Write to String cannot fail");
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests;

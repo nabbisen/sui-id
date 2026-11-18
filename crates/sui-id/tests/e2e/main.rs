@@ -53,6 +53,7 @@ mod n2b_account_menu;
 mod n2b_signed_out;
 mod n2c_account_chrome;
 mod n2e_choice_and_match;
+mod o1_startup_key_check;
 mod oidc_flow;
 mod password_change;
 mod r094_cycle_i_u20_revoke_idempotent;

@@ -126,3 +126,42 @@ proptest! {
         prop_assert_eq!(sealed.len(), plaintext.len() + 24 + 16);
     }
 }
+
+// ── RFC 100 §2: the master-key fingerprint ──────────────────────────────
+
+#[test]
+fn two_different_keys_give_two_different_fingerprints() {
+    let a = fingerprint(&MasterKey::generate());
+    let b = fingerprint(&MasterKey::generate());
+    assert_ne!(a, b);
+}
+
+#[test]
+fn the_same_key_gives_the_same_fingerprint_every_time() {
+    let key = MasterKey::from_bytes([7u8; 32]);
+    assert_eq!(fingerprint(&key), fingerprint(&key));
+}
+
+/// A vector computed independently (Python's `hmac`/`hashlib`, not this
+/// crate), against the key bytes `0..=31` and this module's own domain
+/// string: `hmac.new(bytes(range(32)), b"sui-id/master-key-fingerprint/v1",
+/// hashlib.sha256).digest()[:8].hex()` → `2c0ce5111113ca77`.
+#[test]
+fn a_known_key_gives_a_known_fingerprint() {
+    let mut bytes = [0u8; 32];
+    for (i, b) in bytes.iter_mut().enumerate() {
+        *b = i as u8;
+    }
+    let key = MasterKey::from_bytes(bytes);
+    assert_eq!(fingerprint(&key), "2c0ce5111113ca77");
+}
+
+#[test]
+fn fingerprint_is_sixteen_lowercase_hex_characters() {
+    let fp = fingerprint(&MasterKey::generate());
+    assert_eq!(fp.len(), 16);
+    assert!(
+        fp.chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    );
+}

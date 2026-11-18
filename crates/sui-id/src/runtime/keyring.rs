@@ -14,6 +14,7 @@ use crate::key_adapter::{self, KeyFileOps};
 use anyhow::{Context, Result};
 use std::path::Path;
 use sui_id_store::crypto::MasterKey;
+use sui_id_store::master_key_check::{self, Inspection, KeyCheckDecision};
 
 const ENV_VAR: &str = "SUI_ID_MASTER_KEY";
 
@@ -40,30 +41,9 @@ pub fn resolve(key_file: &Path) -> Result<ResolvedKey> {
 ///
 /// [`Real`]: key_adapter::Real
 pub fn resolve_impl(adapter: &dyn KeyFileOps, key_file: &Path) -> Result<ResolvedKey> {
-    if let Ok(env_value) = std::env::var(ENV_VAR) {
-        let key = MasterKey::from_base64(env_value.trim()).with_context(|| {
-            format!("environment variable {ENV_VAR} did not contain a valid 32-byte base64 key")
-        })?;
-        // The variable is left set: nothing here removes it. sui-id spawns
-        // no child process outside tests, so none inherits it. Operators
-        // are expected to scope it tightly in the deployment system.
-        return Ok(ResolvedKey {
-            key,
-            origin: KeyOrigin::Env,
-        });
-    }
-    match adapter.read("keyring.resolve.read", key_file) {
-        Ok(bytes) => {
-            let s = String::from_utf8(bytes)
-                .with_context(|| format!("key file {} is not valid UTF-8", key_file.display()))?;
-            let key = MasterKey::from_base64(s.trim())
-                .with_context(|| format!("key file {} is malformed", key_file.display()))?;
-            Ok(ResolvedKey {
-                key,
-                origin: KeyOrigin::KeyFile,
-            })
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+    match read_existing_impl(adapter, key_file)? {
+        Some(resolved) => Ok(resolved),
+        None => {
             // Generate a new key, persist with restrictive permissions, and
             // tell the caller. The startup wrapper logs a prominent notice.
             let new_key = MasterKey::generate();
@@ -73,8 +53,211 @@ pub fn resolve_impl(adapter: &dyn KeyFileOps, key_file: &Path) -> Result<Resolve
                 origin: KeyOrigin::GeneratedNew,
             })
         }
+    }
+}
+
+/// The environment-or-file read half of [`resolve_impl`], without the
+/// generate-on-missing fallback — RFC 100 stage 1's [`resolve_checked_impl`]
+/// needs to know whether a key is *present* before it is safe to decide
+/// whether generating one would be safe, which `resolve_impl`'s original,
+/// fused behaviour could not answer.
+fn read_existing_impl(adapter: &dyn KeyFileOps, key_file: &Path) -> Result<Option<ResolvedKey>> {
+    if let Ok(env_value) = std::env::var(ENV_VAR) {
+        let key = MasterKey::from_base64(env_value.trim()).with_context(|| {
+            format!("environment variable {ENV_VAR} did not contain a valid 32-byte base64 key")
+        })?;
+        // The variable is left set: nothing here removes it. sui-id spawns
+        // no child process outside tests, so none inherits it. Operators
+        // are expected to scope it tightly in the deployment system.
+        return Ok(Some(ResolvedKey {
+            key,
+            origin: KeyOrigin::Env,
+        }));
+    }
+    match adapter.read("keyring.resolve.read", key_file) {
+        Ok(bytes) => {
+            let s = String::from_utf8(bytes)
+                .with_context(|| format!("key file {} is not valid UTF-8", key_file.display()))?;
+            let key = MasterKey::from_base64(s.trim())
+                .with_context(|| format!("key file {} is malformed", key_file.display()))?;
+            Ok(Some(ResolvedKey {
+                key,
+                origin: KeyOrigin::KeyFile,
+            }))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(anyhow::Error::new(e))
             .with_context(|| format!("failed to read key file {}", key_file.display())),
+    }
+}
+
+/// RFC 100 stage 1: the one function every caller uses to get a master
+/// key before opening the database — `startup::prepare`, every simple
+/// `cli.rs` command (through [`crate::database::open_checked`]), and
+/// rotation's old-key load directly. Reads the database read-only
+/// first, decides from its state and whether a key is present whether
+/// generating one is safe, verifies an existing key against the
+/// sentinel or one sealed row when either exists, and refuses — before
+/// any migration, writing nothing — when the key is wrong, or missing
+/// over data that needs it. `key_adapter::resolve(` and `::resolve_impl(`
+/// no longer have any caller outside this module and its own tests;
+/// this function is the replacement, named differently so the "only
+/// path" grep (`key_adapter::tests::nothing_touches_a_key_file_outside_the_adapter`'s
+/// sibling for this stage, `tests::resolve_is_only_called_from_the_keyring_module`)
+/// has one name to look for.
+pub fn resolve_checked(key_file: &Path, db_path: &Path) -> Result<ResolvedKey> {
+    resolve_checked_impl(key_adapter::default_adapter().as_ref(), key_file, db_path)
+}
+
+/// [`resolve_checked`]'s body, parameterized over the adapter the same
+/// way [`resolve_impl`] is — a test reaches this directly with
+/// [`key_adapter::simulated::Simulated`].
+///
+/// The `expect`s below each state an invariant [`master_key_check::decide`]'s
+/// own match already guarantees (a given [`KeyCheckDecision`] variant
+/// always pairs with the `Inspection`/key-presence combination its own
+/// arm matched on) — a real panic here would mean `decide` and this
+/// function's `match` have drifted apart, not a reachable runtime state.
+#[allow(clippy::expect_used)]
+pub fn resolve_checked_impl(
+    adapter: &dyn KeyFileOps,
+    key_file: &Path,
+    db_path: &Path,
+) -> Result<ResolvedKey> {
+    let existing = read_existing_impl(adapter, key_file)?;
+    let inspection = inspect_database(db_path)?;
+    let decision = master_key_check::decide(existing.is_some(), &inspection);
+    match decision {
+        KeyCheckDecision::UseThenWriteSentinel => {
+            Ok(existing.expect("UseThenWriteSentinel implies a key was read"))
+        }
+        KeyCheckDecision::GenerateThenWriteSentinel => {
+            let new_key = MasterKey::generate();
+            write_key_file_impl(adapter, "keyring.generate", key_file, &new_key.to_base64())?;
+            Ok(ResolvedKey {
+                key: new_key,
+                origin: KeyOrigin::GeneratedNew,
+            })
+        }
+        KeyCheckDecision::VerifyAgainstSentinel => {
+            let resolved = existing.expect("VerifyAgainstSentinel implies a key was read");
+            let Inspection::Sentinel(row) = &inspection else {
+                unreachable!("VerifyAgainstSentinel only pairs with Inspection::Sentinel")
+            };
+            if master_key_check::sentinel_opens(&resolved.key, &row.sealed) {
+                Ok(resolved)
+            } else {
+                Err(crate::database::DatabaseRefused::new(wrong_key_line(
+                    key_file,
+                    &resolved.key,
+                    Some(&row.key_fingerprint),
+                ))
+                .into())
+            }
+        }
+        KeyCheckDecision::VerifyOneSealedRowThenWriteSentinel => {
+            let resolved =
+                existing.expect("VerifyOneSealedRowThenWriteSentinel implies a key was read");
+            let Inspection::SealedNoSentinel { sample, aad } = &inspection else {
+                unreachable!(
+                    "VerifyOneSealedRowThenWriteSentinel only pairs with Inspection::SealedNoSentinel"
+                )
+            };
+            if sui_id_store::crypto::open(&resolved.key, sample, aad).is_ok() {
+                Ok(resolved)
+            } else {
+                Err(crate::database::DatabaseRefused::new(wrong_key_line(
+                    key_file,
+                    &resolved.key,
+                    None,
+                ))
+                .into())
+            }
+        }
+        KeyCheckDecision::RefuseMissingKeyOverSentinel => {
+            let Inspection::Sentinel(row) = &inspection else {
+                unreachable!("RefuseMissingKeyOverSentinel only pairs with Inspection::Sentinel")
+            };
+            Err(crate::database::DatabaseRefused::new(missing_key_line(
+                key_file,
+                Some(&row.key_fingerprint),
+            ))
+            .into())
+        }
+        KeyCheckDecision::RefuseMissingKeyOverSealedRows => {
+            Err(crate::database::DatabaseRefused::new(missing_key_line(key_file, None)).into())
+        }
+    }
+}
+
+/// Read the database read-only, before any migration, and say what it
+/// says about whether it has ever been sealed — [`Inspection::NoFile`]
+/// if the path does not exist at all (the one fact
+/// [`sui_id_store::master_key_check::inspect`] cannot answer itself; it
+/// needs a connection to ask).
+fn inspect_database(db_path: &Path) -> Result<Inspection> {
+    if !db_path.exists() {
+        return Ok(Inspection::NoFile);
+    }
+    let conn = sui_id_store::migrations::open_preview_connection(db_path).with_context(|| {
+        format!(
+            "opening {} read-only to check the master key",
+            db_path.display()
+        )
+    })?;
+    master_key_check::inspect(&conn).with_context(|| {
+        format!(
+            "reading the master key check state of {}",
+            db_path.display()
+        )
+    })
+}
+
+/// The refusal line for a key that does not open what it should —
+/// RFC 100's own example (`implementation.md`'s dispatch): names the
+/// candidate key's fingerprint always, and the sentinel's stored
+/// fingerprint when one exists to name (`None` in the upgrade case,
+/// where the key failed against one sealed row rather than a sentinel).
+fn wrong_key_line(
+    key_file: &Path,
+    candidate: &MasterKey,
+    stored_fingerprint: Option<&str>,
+) -> String {
+    let candidate_fp = sui_id_store::crypto::fingerprint(candidate);
+    match stored_fingerprint {
+        Some(stored_fp) => format!(
+            "the master key in {} (fingerprint {candidate_fp}) does not open this database, \
+             whose sentinel was written under fingerprint {stored_fp}; restore the matching key \
+             file, or set {ENV_VAR} to it.",
+            key_file.display(),
+        ),
+        None => format!(
+            "the master key in {} (fingerprint {candidate_fp}) does not open this database, \
+             which holds data sealed under another master key; restore the matching key file, \
+             or set {ENV_VAR} to it.",
+            key_file.display(),
+        ),
+    }
+}
+
+/// The refusal line for a missing key over data that needs one —
+/// RFC 100's own example: names the sentinel's stored fingerprint when
+/// one exists (`None` in the upgrade case, where there is no sentinel
+/// yet to name one from).
+fn missing_key_line(key_file: &Path, stored_fingerprint: Option<&str>) -> String {
+    match stored_fingerprint {
+        Some(stored_fp) => format!(
+            "no master key file at {}, but this database holds data sealed under a master key \
+             (fingerprint {stored_fp}). Generating a new key would make it unreadable. Restore \
+             the key file.",
+            key_file.display(),
+        ),
+        None => format!(
+            "no master key file at {}, but this database holds data sealed under a master key \
+             (no sentinel has been written yet, so its fingerprint cannot be named). Generating \
+             a new key would make it unreadable. Restore the key file.",
+            key_file.display(),
+        ),
     }
 }
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **sui-id now checks the master key at every start, and refuses a key
+  that does not open the database instead of failing later at
+  sign-in**; a missing key file over existing data is refused instead
+  of being silently replaced by a new key, which would have made that
+  data unreadable.
+
 ## [0.92.0] — 2026-11-18
 
 **The console is easier to read and to find things in**: AAA contrast in a

@@ -42,6 +42,10 @@ rand                        = { workspace = true }
 getrandom                   = { workspace = true }
 base64ct                    = { workspace = true }
 sha2                        = { workspace = true }
+# RFC 100 §2: the master-key fingerprint, HMAC-SHA256 keyed and
+# domain-separated -- already a workspace dependency (sui-id-core's TOTP)
+# and already in Cargo.lock, so this adds no new crate to the build.
+hmac                        = { workspace = true }
 subtle                      = { workspace = true }
 # RFC 096-B2 S2a: `federation_policy`'s canonical-URL rules for the
 # issuer and endpoint origins (the same crate `sui-id`'s own discovery

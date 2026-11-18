@@ -67,6 +67,18 @@ async fn on_disk_instance(dir: &Path) -> (std::path::PathBuf, UserId) {
     db.with_conn(move |c| Ok(c.execute_batch(&sql)?))
         .await
         .expect("seed factors");
+    // RFC 100 stage 1: this fixture builds the database directly
+    // (`Database::open`, not through `database::open_checked`), so no
+    // startup has ever written the sentinel the way a real instance's
+    // first real start always has by the time an operator runs a CLI
+    // command against it. Without this, the CLI subcommand below would
+    // see sealed rows and no sentinel (the upgrade path) and try to
+    // verify the key against this fixture's placeholder `X'00'` bytes,
+    // which are not real sealed ciphertext and fail to open under any
+    // key, real or not.
+    sui_id_store::master_key_check::ensure_sentinel_written(&db, db.key())
+        .await
+        .expect("write the sentinel the fixture's own direct open skipped");
     drop(db);
 
     let toml = format!(

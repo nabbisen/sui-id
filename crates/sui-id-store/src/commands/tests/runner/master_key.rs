@@ -334,3 +334,95 @@ async fn k07_refuses_as_not_durable_when_another_connection_holds_the_wal_open()
         "the transaction committed even though the checkpoint did not"
     );
 }
+
+// ── K07 and the master-key sentinel (RFC 100 stage 1, 0.93.0) ─────────────
+//
+// The sentinel moves with the data, in K07's one transaction, so it always
+// names the key the data is sealed under. A rewrite after the rotation
+// (the stage-1 return's first approach) let a crash between K07's commit and
+// the key-file swap leave the sentinel under the old key over data sealed
+// under the new: the startup check would then pass, over data it could not
+// read.
+
+async fn sentinel_of(db: &Database) -> crate::master_key_check::SentinelRow {
+    db.with_conn(|conn| Ok(crate::master_key_check::read_sentinel(conn)?))
+        .await
+        .expect("with_conn")
+        .expect("a sentinel row")
+}
+
+#[tokio::test]
+async fn k07_reseals_the_sentinel_with_the_data_in_one_transaction() {
+    let db = fresh_db();
+    seed_a_signing_key(&db).await;
+    crate::master_key_check::ensure_sentinel_written(&db, db.key())
+        .await
+        .expect("sentinel");
+    let old_fingerprint = crate::crypto::fingerprint(db.key());
+    assert_eq!(sentinel_of(&db).await.key_fingerprint, old_fingerprint);
+
+    let new_key = MasterKey::generate();
+    crate::commands::reseal_master_key(&db, &new_key)
+        .await
+        .expect("reseal");
+
+    let after = sentinel_of(&db).await;
+    assert_eq!(after.key_fingerprint, crate::crypto::fingerprint(&new_key));
+    assert!(crate::master_key_check::sentinel_opens(
+        &new_key,
+        &after.sealed
+    ));
+    assert!(
+        !crate::master_key_check::sentinel_opens(db.key(), &after.sealed),
+        "the key rotated from must no longer open it"
+    );
+}
+
+#[tokio::test]
+async fn k07_writes_a_sentinel_under_the_new_key_when_none_exists() {
+    let db = fresh_db();
+    seed_a_signing_key(&db).await;
+    let new_key = MasterKey::generate();
+    crate::commands::reseal_master_key(&db, &new_key)
+        .await
+        .expect("reseal");
+    let after = sentinel_of(&db).await;
+    assert!(crate::master_key_check::sentinel_opens(
+        &new_key,
+        &after.sealed
+    ));
+}
+
+#[tokio::test]
+async fn k07_refuses_and_changes_nothing_when_the_sentinel_is_not_the_old_keys() {
+    let db = fresh_db();
+    seed_a_signing_key(&db).await;
+    // A sentinel sealed under a third key: the key being rotated from is
+    // not the key this database records.
+    let stranger = MasterKey::generate();
+    crate::master_key_check::ensure_sentinel_written(&db, &stranger)
+        .await
+        .expect("sentinel");
+    let sentinel_before = sentinel_of(&db).await;
+    let signing_before = repos::signing_keys::active(&db).await.expect("active");
+    let audit_before = audit_rows(&db).await;
+
+    let result = crate::commands::reseal_master_key(&db, &MasterKey::generate()).await;
+    assert!(
+        result.is_err(),
+        "a sentinel the old key cannot open aborts K07"
+    );
+
+    let sentinel_after = sentinel_of(&db).await;
+    assert_eq!(sentinel_after.sealed, sentinel_before.sealed);
+    assert_eq!(
+        sentinel_after.key_fingerprint,
+        sentinel_before.key_fingerprint
+    );
+    let signing_after = repos::signing_keys::active(&db).await.expect("active");
+    assert_eq!(
+        signing_after.private_key_enc, signing_before.private_key_enc,
+        "the signing key was not resealed"
+    );
+    assert_eq!(audit_rows(&db).await, audit_before, "no audit row");
+}

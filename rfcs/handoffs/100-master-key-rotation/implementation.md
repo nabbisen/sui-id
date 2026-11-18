@@ -74,7 +74,7 @@ fixed order (`0.91.0`), with A2's checkpoint.
 
 ## Stage 1 — the startup key check, and no key generated over a sealed database
 
-**Dispatched 2026-11-18** — [`0.93.0-stage-1-the-startup-key-check-2026-11-18.md`](0.93.0-stage-1-the-startup-key-check-2026-11-18.md), cycle O's O1. It fixes the fingerprint's format (§2 there), which the RFC left open.
+**Landed 2026-11-18** — [`0.93.0-stage-1-the-startup-key-check-2026-11-18.md`](0.93.0-stage-1-the-startup-key-check-2026-11-18.md), cycle O's O1. It fixes the fingerprint's format (§2 there), which the RFC left open. **It also brings forward one part of stage 6: K07 reseals the sentinel in its own transaction** (`master_key_check::reseal_sentinel_within_tx`), because once a sentinel exists, a sentinel rewritten after the rotation can disagree with the data (review, F1).
 
 **Surfaces:** a migration (the sentinel, the `master_key_rotation` row);
 `runtime/keyring.rs`; `runtime/startup.rs`; every CLI command that calls
@@ -182,7 +182,8 @@ disposition.
 
 ## Stage 6 — K07 extended, activation, K05
 
-- **K07** reseals the sentinel with every sealed column, writes the
+- **K07** reseals the sentinel with every sealed column (**done in stage 1**,
+  `0.93.0`), writes the
   `master_key_rotation` row as `db_committed_pending_activation`, and appends
   `admin.master_key.resealed`, all in its one Class-A transaction. It is then
   **made durable before it returns** (`0.91.0` stage 1, A2).

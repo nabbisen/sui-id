@@ -206,3 +206,24 @@ pub fn reseal_all(
     )?;
     Ok(1)
 }
+
+/// RFC 100 stage 1: the sealed `password_enc` value and its AAD, for the
+/// startup key check's "open one sealed row" step — see
+/// `signing_keys::first_for_key_check`'s doc comment for the shared
+/// rationale. The singleton row's `password_enc` is nullable (no SMTP
+/// configured yet), so a present row with a `NULL` password does not
+/// count as a sealed row — `reseal_all` makes exactly this same
+/// distinction just above.
+pub fn first_for_key_check(
+    conn: &rusqlite::Connection,
+) -> rusqlite::Result<Option<(Vec<u8>, &'static [u8])>> {
+    use rusqlite::OptionalExtension;
+    let row: Option<Option<Vec<u8>>> = conn
+        .query_row(
+            "SELECT password_enc FROM smtp_config WHERE id = 'singleton'",
+            [],
+            |r| r.get::<_, Option<Vec<u8>>>(0),
+        )
+        .optional()?;
+    Ok(row.flatten().map(|enc| (enc, SMTP_PASSWORD_AAD)))
+}

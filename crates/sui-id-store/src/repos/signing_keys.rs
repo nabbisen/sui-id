@@ -228,6 +228,22 @@ pub fn reseal_all(
     Ok(count)
 }
 
+/// RFC 100 stage 1: one sealed `private_key_enc` value and its AAD, for
+/// the startup key check's "open one sealed row" step — the exact same
+/// column and [`AAD`] [`reseal_all`] re-seals, read on a read-only
+/// connection with no transaction, since this never writes.
+pub fn first_for_key_check(
+    conn: &rusqlite::Connection,
+) -> rusqlite::Result<Option<(Vec<u8>, &'static [u8])>> {
+    conn.query_row(
+        "SELECT private_key_enc FROM signing_keys LIMIT 1",
+        [],
+        |r| r.get::<_, Vec<u8>>(0),
+    )
+    .optional()
+    .map(|opt| opt.map(|enc| (enc, AAD)))
+}
+
 /// Seal a signing key's private half for storage. Sealing needs only the
 /// master key, so the caller does it before K01's transaction (RFC 094:
 /// crypto work stays outside the write lock).

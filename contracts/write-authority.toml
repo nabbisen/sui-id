@@ -82,6 +82,15 @@ allowed_files = [
     "crates/sui-id-store/src/read_conn.rs",
     "crates/sui-id-store/src/registry.rs",
     "crates/sui-id-store/src/commands.rs",
+    # RFC 100 stage 1 (2026-11-18): the master-key sentinel and the
+    # read-only "is this database sealed" probe, both read/written the
+    # same way a `repos/*.rs` file reads/writes its own table — a raw
+    # `&rusqlite::Connection` for the read-only preview-connection path
+    # (startup has no migrated `Database` yet to ask), and
+    # `Database::with_tx` for its one write (`ensure_sentinel_written`),
+    # its own transaction per RFC 100 §4. The sentinel's reseal at
+    # rotation runs inside K07's transaction (`commands.rs`), not here.
+    "crates/sui-id-store/src/master_key_check.rs",
     "crates/sui-id-store/src/repos/audit.rs",
     "crates/sui-id-store/src/repos/auth_codes.rs",
     "crates/sui-id-store/src/repos/client_registration_token.rs",

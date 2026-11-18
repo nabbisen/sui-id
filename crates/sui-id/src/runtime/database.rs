@@ -43,6 +43,15 @@ impl DatabaseRefused {
     pub fn line(&self) -> &str {
         &self.line
     }
+
+    /// RFC 100 stage 1: `runtime::keyring`'s own refusals (a wrong or
+    /// missing master key) use the same type, same exit-code convention,
+    /// and same "first and alone on stderr" property as this crate's two
+    /// schema refusals — there is one way to refuse to open the
+    /// database, not two.
+    pub(crate) fn new(line: String) -> Self {
+        Self { line }
+    }
 }
 
 impl std::fmt::Display for DatabaseRefused {
@@ -195,6 +204,31 @@ pub fn open(path: &Path, key: MasterKey, backup: PreMigrationBackup) -> anyhow::
             None => Err(anyhow::Error::new(err)).context("opening database"),
         },
     }
+}
+
+/// RFC 100 stage 1: resolves the master key with it checked against the
+/// database (never generating one over data that needs it, never
+/// opening a database a wrong key does not belong to), opens the
+/// database (as [`open`] does), and writes the sentinel if this is the
+/// first time the resulting key has ever opened it. The single call
+/// every simple caller — `startup::prepare` and every `cli.rs` command
+/// that does not need anything more than "give me a checked key and an
+/// open database" — replaces its own `keyring::resolve` + [`open`] pair
+/// with. Rotation's old-key load keeps calling
+/// [`crate::keyring::resolve_checked`] directly, because it must refuse
+/// an `Env`-origin key *before* opening the database, which this
+/// function's fixed order cannot do for it.
+pub async fn open_checked(
+    path: &Path,
+    key_file: &Path,
+    backup: PreMigrationBackup,
+) -> anyhow::Result<(Database, crate::keyring::KeyOrigin)> {
+    let resolved = crate::keyring::resolve_checked(key_file, path)?;
+    let db = open(path, resolved.key, backup)?;
+    sui_id_store::master_key_check::ensure_sentinel_written(&db, db.key())
+        .await
+        .context("writing the master key sentinel")?;
+    Ok((db, resolved.origin))
 }
 
 /// A size for an operator-facing line. sui-id databases are often smaller

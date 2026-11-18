@@ -1263,9 +1263,9 @@ status = "implemented"  # implemented | target-absent | target-legacy
 sealed = true
 owner = "Re-seal all column-encrypted values under a new master key"
 rationale = "`admin.master_key.resealed`, not attribute-free -- carries the per-table re-seal counts as attributes. CLI-only (`sui-id admin rotate-key`); the operator's authority is possession of the master key and filesystem access, not an authenticated user, so `system_principal: permitted`, actor none -- the shape U08, C22 and S05 use. RFC 094 cycle J stage 4, closing M2b criterion 2: moved from the bare, downstream `sui_id_core::oidc::key_rotation::rotate_master_key`, which could not be sealed in place (`declare_write_command!` is defined in this crate, not `sui-id-core`). Distinct from `admin.master_key.rotated`, unchanged by this stage -- that event fires after the key file is replaced, best-effort, outside any transaction, and is not this row."
-mutation_surface = "`signing_keys::reseal_all`, `refresh_tokens::reseal_all`, `user_totp::reseal_all`, `user_webauthn_credentials::reseal_all`, `smtp_config::reseal_all`, `email_outbox::reseal_all` (via `commands::reseal_master_key`)"
+mutation_surface = "`signing_keys::reseal_all`, `refresh_tokens::reseal_all`, `user_totp::reseal_all`, `user_webauthn_credentials::reseal_all`, `smtp_config::reseal_all`, `email_outbox::reseal_all`, `master_key_check::reseal_sentinel_within_tx` (via `commands::reseal_master_key`; the sentinel moves with the data, RFC 100 stage 1)"
 files = ["crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-store/src/repos/smtp_config.rs", "crates/sui-id-store/src/repos/email_outbox.rs"]
-test_id = "`k07_reseal_master_key_appends_exactly_one_audit_row`"
+test_id = "`k07_reseal_master_key_appends_exactly_one_audit_row`, `k07_reseals_the_sentinel_with_the_data_in_one_transaction`, `k07_refuses_and_changes_nothing_when_the_sentinel_is_not_the_old_keys`"
 event = ["admin.master_key.resealed"]
 descriptor = ["K07_RESEALED"]
 
@@ -1345,6 +1345,17 @@ rationale = "automatic pre-migration snapshot; no domain mutation in the live da
 mutation_surface = "`backup::ops::pre_migration_snapshot` destination"
 files = ["crates/sui-id-store/src/backup/ops.rs"]
 test_id = "`it_happens_exactly_one_valid_snapshot_at_the_pre_migration_version_mode_0600` (e2e)"
+
+[[command]]
+id = "O08"
+class = "O"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = false
+owner = "Master key sentinel write"
+rationale = "RFC 100 stage 1 (§4): a sentinel read/write is not a domain mutation and the RFC's own dispatch says it 'needs no stronger durability' and carries 'no audit event' -- the key-check decision that leads to it (startup's own refusal-or-proceed) is the security-relevant fact, already visible in the one INFO line each function logs and in the `DatabaseRefused` exit path when it refuses instead"
+mutation_surface = "`master_key_check::ensure_sentinel_written` (fills an absent sentinel after a verified open or a fresh generation)"
+files = ["crates/sui-id-store/src/master_key_check.rs"]
+test_id = "`ensure_sentinel_written_writes_once_and_is_idempotent`"
 
 [[command]]
 id = "X01"

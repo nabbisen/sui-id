@@ -300,3 +300,19 @@ pub fn reseal_all(
     }
     Ok((secrets, recoveries))
 }
+
+/// RFC 100 stage 1: one sealed `secret_enc` value and its AAD, for the
+/// startup key check's "open one sealed row" step — see
+/// `signing_keys::first_for_key_check`'s doc comment for the shared
+/// rationale. `recovery_codes_enc` is not probed: `secret_enc` is
+/// `NOT NULL` on every row this table has, so it alone is enough to tell
+/// "this table has a sealed row."
+pub fn first_for_key_check(
+    conn: &rusqlite::Connection,
+) -> rusqlite::Result<Option<(Vec<u8>, &'static [u8])>> {
+    conn.query_row("SELECT secret_enc FROM user_totp LIMIT 1", [], |r| {
+        r.get::<_, Vec<u8>>(0)
+    })
+    .optional()
+    .map(|opt| opt.map(|enc| (enc, AAD)))
+}

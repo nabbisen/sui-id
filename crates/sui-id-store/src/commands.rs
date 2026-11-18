@@ -6785,6 +6785,10 @@ pub async fn reseal_master_key(
                     crate::repos::smtp_config::reseal_all(tx.tx(), &old_key, &new_key)?;
                 let email_outbox_rows =
                     crate::repos::email_outbox::reseal_all(tx.tx(), &old_key, &new_key)? as u64;
+                // RFC 100 stage 1 (0.93.0): the sentinel moves with the data,
+                // in this same transaction, so it always names the key the
+                // data is sealed under.
+                crate::master_key_check::reseal_sentinel_within_tx(tx.tx(), &old_key, &new_key)?;
                 let report = RotationReport {
                     signing_keys,
                     refresh_tokens,

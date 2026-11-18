@@ -49,6 +49,7 @@ pub mod commands;
 pub mod db;
 pub mod errors;
 pub mod federation_policy;
+pub mod master_key_check;
 pub mod metrics;
 pub mod migrations;
 pub mod models;

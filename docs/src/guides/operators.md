@@ -105,8 +105,9 @@ resolves it in this order:
 
 1. `SUI_ID_MASTER_KEY` environment variable, base64-encoded.
 2. The `key_file` path from config.
-3. If neither is present, sui-id generates a fresh key, writes it to the
-   `key_file` path with permissions `0600`, and logs a warning.
+3. If neither is present **and the database has never been sealed**,
+   sui-id generates a fresh key, writes it to the `key_file` path with
+   permissions `0600`, and logs a warning.
 
 **The key is not stored in the SQLite file.** This is the whole point of the
 arrangement: an attacker who gets only the database file cannot decrypt
@@ -115,6 +116,20 @@ refresh tokens or signing-key material.
 **Back the key up.** Without it, the encrypted columns are unrecoverable.
 Keep at least one offline copy in your normal secrets store. Treat it the
 same way you would treat a TLS private key.
+
+**The key is checked at every start**, before the database is ready: a
+small sealed value (the "sentinel") is checked against whatever key was
+resolved above. Two refusals follow from this, both before anything is
+migrated or written, and both naming the fingerprints involved — a short,
+non-secret identifier, never the key itself:
+- **A key that does not open the database refuses.** This is what a
+  typo'd `SUI_ID_MASTER_KEY`, or a `key_file` restored from the wrong
+  backup, looks like. Restore the correct key, or correct the
+  environment variable.
+- **A missing key over a database that holds sealed data refuses,
+  instead of generating a new key over it.** A generated key would make
+  every encrypted column permanently unreadable. Restore the `key_file`
+  from your backup.
 
 ### Rotating the master key
 

@@ -4,8 +4,8 @@
 
 use crate::AppState;
 use crate::config::Config;
-use crate::keyring::{self, KeyOrigin};
-use anyhow::{Context, Result};
+use crate::keyring::KeyOrigin;
+use anyhow::Result;
 use base64ct::{Base64, Encoding};
 use getrandom;
 use std::sync::Once;
@@ -164,9 +164,21 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
     let log_guard = init_tracing(&cfg.log);
     warn_if_no_tls_roots();
 
-    // 1. Resolve master key.
-    let resolved = keyring::resolve(&cfg.storage.key_file).context("resolving master key")?;
-    match resolved.origin {
+    // 1 & 2. RFC 100 stage 1: resolve the master key with it checked
+    // against the database (never generated over data that needs it),
+    // then open the database (runs migrations; RFC 142 stage 5: takes a
+    // pre-migration backup first, unless `backup` declines it), then
+    // write the sentinel if this is the first time this key has opened
+    // it — all one call now; `keyring::resolve` is no longer called
+    // directly here.
+    if let Some(parent) = cfg.storage.db_path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).ok();
+    }
+    let (db, key_origin) =
+        crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, backup).await?;
+    match key_origin {
         KeyOrigin::Env => {
             tracing::info!("master key loaded from SUI_ID_MASTER_KEY environment variable");
         }
@@ -181,15 +193,6 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
             );
         }
     }
-
-    // 2. Open the database (runs migrations; RFC 142 stage 5: takes a
-    // pre-migration backup first, unless `backup` declines it).
-    if let Some(parent) = cfg.storage.db_path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        std::fs::create_dir_all(parent).ok();
-    }
-    let db = crate::database::open(&cfg.storage.db_path, resolved.key, backup)?;
 
     // Verify the tail of the audit-log hash chain. A mismatch here
     // indicates DB-level tampering since the most recent restart;

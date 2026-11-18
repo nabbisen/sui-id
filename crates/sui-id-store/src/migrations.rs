@@ -278,6 +278,11 @@ const MIGRATIONS: &[Migration] = &[
             "./migrations/0051_federation_provider_id_token_algs_and_enabled_check.sql"
         ),
     },
+    Migration {
+        version: 52,
+        name: "0052_master_key_sentinel",
+        sql: include_str!("./migrations/0052_master_key_sentinel.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

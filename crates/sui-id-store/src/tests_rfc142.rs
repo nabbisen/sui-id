@@ -77,6 +77,14 @@ const EXCLUDED_TABLES: &[&str] = &[
     "federation_mfa_pending",
     "federation_webauthn_ceremony",
     "forgot_password_requests",
+    // RFC 100 stage 1 (migration 0052): `master_key_sentinel` is a
+    // system-written singleton the server itself seals and checks, not
+    // operator- or end-user-authored data -- the same footing as
+    // `sui_meta` above. `master_key_rotation` is unused bookkeeping
+    // until stage 6 writes to it; neither holds anything this corpus
+    // needs to prove survives a migration intact.
+    "master_key_sentinel",
+    "master_key_rotation",
     // Transient staging names for the rename-rebuild idiom (migration
     // 0022): the effective rebuilt table is the post-RENAME name, which
     // is already in SEEDED_TABLES; these staging names never exist once
@@ -530,7 +538,13 @@ fn derive_ranges_matches_the_accepted_stage1_table() {
         // file's own doc comment: "this test either keeps passing ... or
         // fails naming exactly what it found" -- it kept passing, once
         // `derive_ranges`'s output was read rather than assumed).
-        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 51],
+        // RFC 100 stage 1 (migration 0052): extends it again, to 52.
+        // 0052 creates two tables, `master_key_sentinel` and
+        // `master_key_rotation` -- both in EXCLUDED_TABLES, neither
+        // seeded data -- so it opens no new boundary; it only moves the
+        // last range's end to the new head, the same mechanical move
+        // 0050 made.
+        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 52],
         "range ends changed -- full ranges: {ranges:#?}"
     );
 
