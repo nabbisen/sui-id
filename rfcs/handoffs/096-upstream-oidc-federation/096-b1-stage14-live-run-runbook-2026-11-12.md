@@ -1,5 +1,13 @@
 # 096-B1 stage 14 — the live run against a real upstream: a runbook
 
+> ## Run 2026-11-18 on `c30056b` — [the record](096-b1-stage14-live-run-record-2026-11-18.md)
+> Steps 1–6, 11 and 12 passed. Step 7 was a designed refusal: Duende's demo
+> client sends `email` from userinfo, not in the ID token, and sui-id reads
+> only the ID token (RFC 096). So account creation (steps 7–10) is **not yet
+> proven live**, and **M4-B stays open** until it is, against an upstream that
+> puts the email in the ID token, early in cycle O. `0.92.0`'s tag proceeds
+> on this record, after N2d (R1, R2).
+
 > ## Its slot now: `0.92.0`'s prepared commit, **`c30056b`** (2026-11-17)
 > Cycle N's prepared commit, the slot set 2026-11-15. The preparation landed
 > as `2a4e4a6`; `9aa4665` fixed its G16; and N2c, decided for `0.92.0` before

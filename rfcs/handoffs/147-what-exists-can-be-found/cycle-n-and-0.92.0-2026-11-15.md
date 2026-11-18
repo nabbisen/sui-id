@@ -75,7 +75,8 @@ RFC 100 is, no later than authorized.
 | **N3** | **Landed 2026-11-16** — [`../100-master-key-rotation/0.92.0-stage-0-the-harness-2026-11-16.md`](../100-master-key-rotation/0.92.0-stage-0-the-harness-2026-11-16.md). **RFC 100 stage 0**: the key-file adapter, Real, Failpoint and Simulated; materialization; today's rotation moved onto it; the prototype's results reproduced | dev team | medium; the largest single item. It changes no behaviour |
 | **P** | **Landed 2026-11-17** — [`release-0.92.0-preparation-2026-11-17.md`](release-0.92.0-preparation-2026-11-17.md). The preparation | dev team | small |
 | **N2c** | **Landed 2026-11-17** — [`../144-legible-to-older-eyes/0.92.0-n2c-a-person-outside-the-console-2026-11-17.md`](../144-legible-to-older-eyes/0.92.0-n2c-a-person-outside-the-console-2026-11-17.md). A person outside the console sees no console navigation; found in P's review, fixed before stage 14 | dev team | small |
-| **S14** | stage 14 on N2c's landing commit | owner (browser) + architect | about 15 minutes of yours |
+| **S14** | **Run 2026-11-18** on `c30056b` — [record](../096-upstream-oidc-federation/096-b1-stage14-live-run-record-2026-11-18.md): the security path, refusal, disable and delete passed live; account creation not provable with the demo, so M4-B waits for a run early in O. Stage 14 on N2c's landing commit |
+| **N2d** | **Dispatched 2026-11-18** — [`../096-upstream-oidc-federation/0.92.0-n2d-an-honest-refusal-2026-11-18.md`](../096-upstream-oidc-federation/0.92.0-n2d-an-honest-refusal-2026-11-18.md). Stage 14's R1 and R2, before the tag | dev team | small | owner (browser) + architect | about 15 minutes of yours |
 
 ## 4 — risks, stated
 
