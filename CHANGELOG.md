@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.92.0] — 2026-11-17
+## [0.92.0] — 2026-11-18
 
 **The console is easier to read and to find things in**: AAA contrast in a
 new palette, text that follows the browser's font size, 44px controls, the
