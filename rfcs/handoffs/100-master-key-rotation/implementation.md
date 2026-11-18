@@ -74,6 +74,8 @@ fixed order (`0.91.0`), with A2's checkpoint.
 
 ## Stage 1 — the startup key check, and no key generated over a sealed database
 
+**Dispatched 2026-11-18** — [`0.93.0-stage-1-the-startup-key-check-2026-11-18.md`](0.93.0-stage-1-the-startup-key-check-2026-11-18.md), cycle O's O1. It fixes the fingerprint's format (§2 there), which the RFC left open.
+
 **Surfaces:** a migration (the sentinel, the `master_key_rotation` row);
 `runtime/keyring.rs`; `runtime/startup.rs`; every CLI command that calls
 `resolve`.
