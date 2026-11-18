@@ -2,6 +2,14 @@
 
 **Proposed.** 2026-11-15, by the architect, on `@nabbisen`'s *"Scope 0.92
 carefully."*, after `0.91.1` was published (`d62424e`).
+> ## Released and published 2026-11-18, as `0.92.0`
+> Tag `0.92.0` at `45cb6a4`, annotated and signed. Level B CI
+> `44284589168`, `Security audit` `44284594093`; publish run `44293024152`,
+> 8 of 8 jobs green: six crates on crates.io, and a Release with
+> `SHA256SUMS` and two musl binaries. Beyond §3's plan, the cycle also
+> carried N2c, N2d and N2e. Stage 14's record holds M4-B open for a live
+> account-creation run early in cycle O.
+
 > ## Decided 2026-11-16 (`@nabbisen`: *"Yes to all."*)
 > All three of §5, as recommended: the reordering of §2; RFC 144 with palette
 > B's values; and F4's upgrade rule. The ROADMAP's rows N, O and P are

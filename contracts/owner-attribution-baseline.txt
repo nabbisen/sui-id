@@ -55,7 +55,6 @@ ROADMAP.md	68a3e3ed97de6ca9d6583624727828adfc39a44555bbbb185c9180166cba96e7	1	Wh
 ROADMAP.md	68f7f61d1d322987878c8ea251c35a35b403b80d9d47c1a6b47224c1985e1328	1	Decided 2026-11-14 ( @nabbisen : "Authorized." ): write the RFC now and build after the soak, with no freeze exception.
 ROADMAP.md	6e364cabaa11522c5c854bd5ae883cd048fd57c65b877741fc33ee0d474451fd	1	Cycle D proposed by the architect and authorized by @nabbisen on 2026-10-15, in his words: "Your recommendation is accepted." He also restat
 ROADMAP.md	766450b57c4bb79e356dfd9ac065f79cbec7c49ef087e3ca6fa8ba0c5afad2b6	1	#### S1a — The workflow, ruled by @nabbisen on 2026-10-01
-ROADMAP.md	782a33f5067495dc8eadabb2e81314b7cddce4c9b580e1b365cf3c005c3ac22e	1	N — M2c's harness, and what exists can be found v0.92.0 Authorized 2026-11-15 ( @nabbisen : "Authorized." ); re-scoped 2026-11-16 ( @nabbise
 ROADMAP.md	7ad76e9c59033d37b81b763b1549dd4d58140478893bcafa484220ece91b1f9e	1	M2b — Remaining conversion and authority switch — CLOSED 2026-11-08 — Convert settings, pending settings, federation configuration, client m
 ROADMAP.md	7bf01030bba5c1444aac63224dc31c2ef317ce3de4de3c2765e7cdb53cbcef92	1	Track 2 : the Verus scoping note is written (2026-11-14, [ verification/verus-scoping-note-2026-11-14.md ](verification/verus-scoping-note-2
 ROADMAP.md	7c3b4d73cf9008f591c43f49ceb79d4570fa262c5fa82e72506f9abea4c17ebb	1	All remain Proposed , no schedule, require owner direction + soak.
@@ -67,6 +66,7 @@ ROADMAP.md	90273563132b9632fdcaa2d6243a1cf0e859c2f6e0ac78a3a0efa4e291cc43e2	1	09
 ROADMAP.md	91eb442f6e3b8b69ef147597c0d2f7f0111b3dbc5c4765e4b9cc09fcd239eba0	1	Authorized 2026-11-14 ( @nabbisen : "Accepted." , on the scope and on the Kani harnesses' removal).
 ROADMAP.md	92e87f0d49a150a6963709d59e47d782889e1336a93d3eedfb51fcdb52347651	1	They must: because owner-requested self-review is legitimate, a gate that rejected every self-review would reject work this ruling permits.
 ROADMAP.md	98ceb61a86f24277ce9291924a6e17133bb443462bede8d98ec302a9c90aff71	1	Lane B is authorized to run concurrently with Lane A once the overlap rule's conditions are met: all designs are Accepted or in re-review af
+ROADMAP.md	9f4ded37a02e6e5b2d48477c645b6c451d07b109cc7c472f6c1010522d6c35e3	1	Authorized 2026-11-15 ( @nabbisen : "Authorized." ); re-scoped 2026-11-16 ( @nabbisen : "Yes to all." , on [ cycle-n-and-0.92.0-2026-11-15.m
 ROADMAP.md	a9bbc3d5025b4c0528bdbca925b2a6d6b32f670b9b1391a0c5e6ca7c07a456e4	1	RFC 115's three open questions stay open: they are design forks for @nabbisen , and the design review is asked for its view on each as an in
 ROADMAP.md	b47cd980c89ef41abd8de0e517a02478a2c05f57670c73373d4075e5a12650b1	1	This schedule is the architect's proposal. It is recorded here so it can be argued with; it becomes a plan when @nabbisen authorizes it.
 ROADMAP.md	b896eddb59d1bc16048f69a92af1c552c0e99023d5a710c6021e4b4c4096611c	1	Correction, 2026-08-26 — this entry was previously wrong about its own provenance. The version written on 2026-07-30 in 1e59e3d recorded a t
