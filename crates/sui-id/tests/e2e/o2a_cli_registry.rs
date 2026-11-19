@@ -178,7 +178,11 @@ fn dev_flag_alias_prints_notice_and_actually_starts() {
             let _ = child.kill();
             return;
         }
-        if start.elapsed() > Duration::from_secs(20) {
+        // A hang guard, not a speed assertion: the loop returns as soon as
+        // the line appears. 20s failed under a loaded CI runner (0.93.0
+        // O2b, run 44541738891: dev mode's seeding hashes passwords, slow
+        // in a debug build), so the bound is generous.
+        if start.elapsed() > Duration::from_secs(180) {
             let _ = child.kill();
             panic!(
                 "sui-id --dev never printed both the notice and a listening line: \
@@ -436,7 +440,11 @@ fn bare_config_serves_and_prints_no_notice() {
             );
             return;
         }
-        if start.elapsed() > Duration::from_secs(20) {
+        // A hang guard, not a speed assertion: the loop returns as soon as
+        // the line appears. 20s failed under a loaded CI runner (0.93.0
+        // O2b, run 44541738891: dev mode's seeding hashes passwords, slow
+        // in a debug build), so the bound is generous.
+        if start.elapsed() > Duration::from_secs(180) {
             let _ = child.kill();
             panic!("bare `sui-id --config` never listened: stdout={out_text} stderr={err_text}");
         }

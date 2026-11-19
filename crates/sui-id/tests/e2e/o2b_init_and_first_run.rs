@@ -38,7 +38,11 @@ fn run_bounded(args: &[&str], dir: &std::path::Path) -> Output {
         if let Some(_status) = child.try_wait().expect("wait") {
             return child.wait_with_output().expect("output");
         }
-        if start.elapsed() > Duration::from_secs(10) {
+        // A hang guard, not a speed assertion: stdin is closed, so a
+        // command that waited for input would wait forever, and one that
+        // works exits as soon as it has printed. Generous for a loaded
+        // runner (see o2a_cli_registry's listening waits).
+        if start.elapsed() > Duration::from_secs(60) {
             let _ = child.kill();
             panic!("{args:?} did not exit promptly -- it must never wait without a terminal");
         }
