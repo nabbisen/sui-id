@@ -92,7 +92,7 @@ Or copy the binary from a release archive when one is published.
 sui-id reads a single TOML file. Generate a starter:
 
 ```bash
-sui-id --print-sample-config > /etc/sui-id/sui-id.toml
+sui-id init --production --output /etc/sui-id/sui-id.toml
 ```
 
 Every field, with its type and default, is in
@@ -133,7 +133,7 @@ non-secret identifier, never the key itself:
 
 ### Rotating the master key
 
-`sui-id admin rotate-key` re-seals every encrypted column under a new
+`sui-id admin master-key rotate` re-seals every encrypted column under a new
 32-byte XChaCha20-Poly1305 master key, archives the old key file beside
 the new one, and exits. Use it when:
 
@@ -165,10 +165,10 @@ systemctl stop sui-id
 # 2. Take a fresh backup. Rotation is atomic, but having a backup
 #    that pairs the OLD DB with the OLD key is the simplest fallback
 #    if anything in the workflow goes wrong.
-sui-id backup --to backup-pre-rotation.tar --encrypt
+sui-id backup create --to backup-pre-rotation.tar --encrypt
 
 # 3. Run the rotation. By default the CLI mints a fresh key.
-sui-id admin rotate-key
+sui-id admin master-key rotate
 
 # 4. Confirm at the prompt: type `yes`. Skip the prompt with --yes
 #    in scripts. The CLI prints a per-table count of re-sealed rows
@@ -184,7 +184,7 @@ HSM, a key-management server, or a reproducible derivation):
 
 ```sh
 # Prepare a base64-encoded 32-byte key in a file:
-sui-id admin rotate-key --new-key /secure/new-master.key
+sui-id admin master-key rotate --new-key /secure/new-master.key
 ```
 
 After rotation:
@@ -314,8 +314,8 @@ release that was running at the time before concluding otherwise.
 > head -c 32 /dev/urandom | base64 > /secure/backup/sui-id-master-key.b64
 >
 > # 2. Rotate using it.
-> sui-id admin rotate-key --config /etc/sui-id/sui-id.toml \
->                         --new-key /secure/backup/sui-id-master-key.b64
+> sui-id admin master-key rotate --config /etc/sui-id/sui-id.toml \
+>                                 --new-key /secure/backup/sui-id-master-key.b64
 > ```
 >
 > **Take a backup before rotating, either way.** The old key file is
@@ -325,11 +325,11 @@ release that was running at the time before concluding otherwise.
 ## Dev mode for local testing
 
 If you're building a relying party (RP) and just want a working
-OIDC provider for local development, sui-id has a `--dev` flag
+OIDC provider for local development, sui-id has a `dev` command
 that skips the setup wizard entirely:
 
 ```sh
-sui-id --dev
+sui-id dev
 ```
 
 This:
@@ -357,11 +357,11 @@ match hold the same as in production.
 
 Three sources, in priority order (highest first):
 
-1. **TOML file** via `--dev-seed PATH`. Full schema in
+1. **TOML file** via `--seed PATH`. Full schema in
    `samples/dev-seed.toml`. Sections that aren't in the file
    fall back to defaults.
-2. **CLI flag overrides**: `--dev-admin-password STR`,
-   `--dev-client-secret STR`.
+2. **CLI flag overrides**: `--admin-password STR`,
+   `--client-secret STR`.
 3. **Hardcoded defaults**: `admin / admin-admin-admin`,
    `alice / alice-alice-alice`, `bob / bob-bob-bob-bob`, plus
    one confidential test client with redirect URIs at
@@ -383,12 +383,12 @@ public = true
 allowed_scopes = "openid profile email"
 TOML
 
-sui-id --dev --dev-seed /tmp/spa-seed.toml
+sui-id dev --seed /tmp/spa-seed.toml
 ```
 
 ### Persisting dev state
 
-`--dev-db PATH` pins the database to a file. The file is
+`--db PATH` pins the database to a file. The file is
 truncated on each restart (a fresh master key is generated, so
 re-using the old SQLite file would just produce ciphertext
 nobody can decrypt). If you want persistence across restarts,
@@ -397,10 +397,10 @@ you want a regular sui-id installation, not dev mode.
 ### Binding outside loopback
 
 The default bind is `127.0.0.1:8801`. You can change it with
-`--dev-bind`:
+`--bind`:
 
 ```sh
-sui-id --dev --dev-bind 0.0.0.0:8801
+sui-id dev --bind 0.0.0.0:8801
 ```
 
 Any non-loopback bind requires explicit `yes` typed at the
@@ -511,7 +511,7 @@ for the reasoning.
 
 To rotate the master key, see
 [Rotating the master key](#rotating-the-master-key) above: it runs
-offline with `sui-id admin rotate-key`.
+offline with `sui-id admin master-key rotate`.
 
 ## Email features
 
@@ -639,7 +639,7 @@ exports `sui_id_email_outbox_enqueued_total` and
 `sui_id_email_outbox_failed_total`, the latter labelled by `reason`.
 There is no queue-depth gauge: a rising failed count is the signal.
 
-Dev mode (`--dev`) does not use the outbox; it sends directly and
+Dev mode (`sui-id dev`) does not use the outbox; it sends directly and
 does not retry.
 
 ### Token model
@@ -672,7 +672,7 @@ that records what version produced it. sui-id bundles all three
 into a single tarball:
 
 ```bash
-sui-id backup --to /var/backups/sui-id-$(date +%F).tar --config /etc/sui-id/sui-id.toml
+sui-id backup create --to /var/backups/sui-id-$(date +%F).tar --config /etc/sui-id/sui-id.toml
 ```
 
 The output file is created with mode `0600`. The SQLite snapshot
@@ -686,7 +686,7 @@ The manifest is human-readable JSON and contains:
 - `schema_version` — the database schema version at backup time.
 - `created_at`, `hostname`, `issuer` — provenance.
 
-`sui-id restore` reads this manifest before doing anything destructive.
+`sui-id backup restore` reads this manifest before doing anything destructive.
 A backup whose `format_version` or `schema_version` is **newer** than
 the current binary supports is refused outright — the operator must
 upgrade the binary first.
@@ -700,8 +700,8 @@ cloud object storage, off-site media, email — wrap the tarball in
 sui-id's encrypted envelope:
 
 ```bash
-sui-id backup --to /tmp/backup.tar.enc --encrypt \
-              --config /etc/sui-id/sui-id.toml
+sui-id backup create --to /tmp/backup.tar.enc --encrypt \
+                      --config /etc/sui-id/sui-id.toml
 # Encryption passphrase: ******
 # Encryption passphrase (again): ******
 ```
@@ -710,8 +710,8 @@ Or non-interactively for cron / scripts:
 
 ```bash
 SUI_ID_BACKUP_PASSPHRASE='hunter2-correct-horse' \
-  sui-id backup --to /tmp/backup.tar.enc --encrypt \
-                --config /etc/sui-id/sui-id.toml
+  sui-id backup create --to /tmp/backup.tar.enc --encrypt \
+                        --config /etc/sui-id/sui-id.toml
 ```
 
 The envelope is XChaCha20-Poly1305 keyed by an Argon2id derivation
@@ -729,7 +729,7 @@ Before committing to a real restore — especially when migrating to
 a new host — check the file is what you think it is:
 
 ```bash
-sui-id verify-backup --from /tmp/backup.tar.enc --decrypt
+sui-id backup verify --from /tmp/backup.tar.enc --decrypt
 # Format version: 1
 # sui-id version: 0.12.0
 # Schema version: 5
@@ -745,7 +745,7 @@ sui-id verify-backup --from /tmp/backup.tar.enc --decrypt
 # ✓ Decrypted with provided passphrase
 ```
 
-`verify-backup` is read-only — it never touches the destination
+`backup verify` is read-only — it never touches the destination
 storage paths and never produces any output file. Use it whenever
 a backup has come in from outside; whenever you want to confirm
 versions line up before an upgrade-and-migrate; or as a daily smoke
@@ -753,19 +753,19 @@ test from cron against the latest backup.
 
 ### Restoring
 
-To restore, point `sui-id restore` at the tarball:
+To restore, point `sui-id backup restore` at the tarball:
 
 ```bash
 # plain backup
-sui-id restore --from /var/backups/sui-id-2026-04-25.tar \
-               --config /etc/sui-id/sui-id.toml
+sui-id backup restore --from /var/backups/sui-id-2026-04-25.tar \
+                       --config /etc/sui-id/sui-id.toml
 
 # encrypted backup
-sui-id restore --from /tmp/backup.tar.enc --decrypt \
-               --config /etc/sui-id/sui-id.toml
+sui-id backup restore --from /tmp/backup.tar.enc --decrypt \
+                       --config /etc/sui-id/sui-id.toml
 ```
 
-By default `restore` refuses to overwrite an existing database or
+By default `backup restore` refuses to overwrite an existing database or
 key file at the destination paths. Pass `--force` if you really mean
 it (typically only when recovering onto a fresh host).
 
@@ -778,15 +778,15 @@ backup with the new binary, which will write the manifest.
 
 The recommended migration sequence is:
 
-1. **On the old host**: `sui-id backup --to /tmp/migration.tar.enc --encrypt`
+1. **On the old host**: `sui-id backup create --to /tmp/migration.tar.enc --encrypt`
 2. **Transfer the file** to the new host through whatever channel is
    most convenient. Send the passphrase through a different channel.
 3. **On the new host**: install the same (or newer) sui-id version,
    prepare `/etc/sui-id/sui-id.toml`, then run
-   `sui-id verify-backup --from /tmp/migration.tar.enc --decrypt`
+   `sui-id backup verify --from /tmp/migration.tar.enc --decrypt`
    to confirm the file is intact and the schema version matches what
    the new binary expects.
-4. **Restore** with `sui-id restore --from /tmp/migration.tar.enc --decrypt`.
+4. **Restore** with `sui-id backup restore --from /tmp/migration.tar.enc --decrypt`.
 5. **Start the new sui-id**. Migrations run automatically on first
    boot if the new binary is a newer version than the old one.
 6. **Cut DNS / load balancer** to the new host. The old refresh
@@ -1326,7 +1326,7 @@ for backups (the config file and the master key):
 2. Run:
 
    ```sh
-   sui-id admin reset-mfa --username alice \
+   sui-id admin user reset-mfa --username alice \
        --reason "lost every factor; ticket OPS-42" \
        --config /etc/sui-id/sui-id.toml
    ```
@@ -1365,7 +1365,7 @@ administrator, and it works while the server is running.
 2. Run:
 
    ```sh
-   sui-id admin issue-recovery-link --username alice \
+   sui-id admin user recovery-link --username alice \
        --reason "caller verified by call-back to the number on record; ticket 4711" \
        --config /etc/sui-id/sui-id.toml
    ```
@@ -1383,7 +1383,7 @@ administrator, and it works while the server is running.
    paste the token text into the reset page.
 4. They open the link and **choose their own password**; you never see it. They
    still pass their second factor at the next sign-in. If they have lost that
-   too, follow with `sui-id admin reset-mfa` (above).
+   too, follow with `sui-id admin user reset-mfa` (above).
 
 The reason is required (at most 200 characters, no control characters) and is
 stored in the audit note. Only local accounts are eligible: an unknown, disabled,
@@ -1528,7 +1528,7 @@ they're back from vacation and don't remember the password — clear
 the lock from the host:
 
 ```bash
-sui-id admin unlock-user --username alice --config /etc/sui-id/sui-id.toml
+sui-id admin user unlock --username alice --config /etc/sui-id/sui-id.toml
 ```
 
 This resets the password-failure count and the second-factor failure count
@@ -1893,7 +1893,7 @@ metrics_listen_addr = "127.0.0.1:9091"   # Restrict to internal interface.
 Issue or rotate the bearer token:
 
 ```sh
-sui-id admin rotate-metrics-token --config sui-id.toml
+sui-id admin metrics-token rotate --config sui-id.toml
 ```
 
 The endpoint `GET /metrics` accepts either an admin session cookie or
@@ -1916,7 +1916,7 @@ Third-party applications can self-register via `POST /oauth2/register` using
 an initial-access token:
 
 ```sh
-sui-id admin issue-registration-token --config sui-id.toml \
+sui-id admin registration-token issue --config sui-id.toml \
   --max-uses 1 --note "Acme Corp onboarding"
 ```
 

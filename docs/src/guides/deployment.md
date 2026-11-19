@@ -116,7 +116,7 @@ bundle in §1, for outbound TLS).
 ## 4. Configuration
 
 ```bash
-sui-id --print-sample-config > /etc/sui-id/sui-id.toml
+sui-id init --production --output /etc/sui-id/sui-id.toml
 chown root:sui-id /etc/sui-id/sui-id.toml
 chmod 0640 /etc/sui-id/sui-id.toml
 ```
@@ -439,12 +439,12 @@ Before relying on a backup, verify it. A daily smoke test:
 
 ```
 47 3 * * * sui-id SUI_ID_BACKUP_PASSPHRASE="$(cat /etc/sui-id/backup.pass)" \
-    /usr/local/bin/sui-id verify-backup \
+    /usr/local/bin/sui-id backup verify \
     --from /var/backups/sui-id/sui-id-$(date +\%Y-\%m-\%d).tar.enc \
     --decrypt > /var/log/sui-id-backup-verify.log 2>&1
 ```
 
-`verify-backup` reads the file, runs a SQLite integrity check on
+`backup verify` reads the file, runs a SQLite integrity check on
 the inner snapshot, and prints the manifest. It writes nothing to
 the backup or to the configured storage paths; the only file it
 creates is a temporary copy of the snapshot, under the system
@@ -563,9 +563,10 @@ Do not edit or delete the database, and do not run migrations by hand.
 `journalctl … | grep -i migrat` above finds it. There is **no override flag**:
 some migrations drop or rebuild columns, so an older binary can fail at run
 time on operations the operator has not tried yet, which is worse than failing
-to start. The two routes forward are the ones the line names. `sui-id backup`,
-`verify-backup` and `restore` are unaffected, because none of them opens the
-database through the migration runner; take a backup first if you have not.
+to start. The two routes forward are the ones the line names. `sui-id backup
+create`, `backup verify` and `backup restore` are unaffected, because none of
+them opens the database through the migration runner; take a backup first if
+you have not.
 
 A schema version that is unreadable, or missing from a database that has tables
 (including a SQLite file that is not a sui-id database at all), is refused the

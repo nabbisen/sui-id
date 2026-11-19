@@ -19,7 +19,7 @@ use super::command_tree;
 /// added to the registry and forgotten here fails that test rather than
 /// silently missing from the overview.
 pub(super) const GROUPS: &[(&str, &[&str])] = &[
-    ("Getting started", &["setup", "serve"]),
+    ("Getting started", &["init", "setup", "serve"]),
     ("Running it", &["backup", "upgrade", "config"]),
     ("Administering", &["admin"]),
     ("Developing", &["dev"]),
@@ -32,6 +32,11 @@ pub(super) const GROUPS: &[(&str, &[&str])] = &[
 /// `every_leaf_has_notes` (`tests.rs`): a leaf added to the registry and
 /// forgotten here fails that test.
 pub(super) const COMMAND_NOTES: &[(&str, &[&str], &str)] = &[
+    (
+        "init",
+        &[],
+        "sui-id init --production --output /etc/sui-id/sui-id.toml",
+    ),
     (
         "setup",
         &["SUI_ID_ADMIN_PASSWORD"],
@@ -172,30 +177,56 @@ fn nearest(root: &Command, path: &[String]) -> Option<String> {
         .min_by_key(|name| strsim::levenshtein(name, first))
 }
 
+/// Every group's leaves, in display order, gathered once so the path
+/// column can be aligned across every group (RFC 148 O2b §4/C1) rather
+/// than restarting at each group's own widest path.
+fn grouped_leaves() -> Vec<(&'static str, Vec<Leaf>)> {
+    let root = command_tree();
+    GROUPS
+        .iter()
+        .map(|(title, names)| {
+            let mut leaves = Vec::new();
+            for name in *names {
+                // Proven unreachable by `help_groups_cover_every_top_level_command_exactly`
+                // (`tests.rs`), which fails first if `GROUPS` ever names
+                // something the registry does not.
+                #[allow(clippy::expect_used)]
+                let sub = root
+                    .get_subcommands()
+                    .find(|s| s.get_name() == *name)
+                    .expect("GROUPS names only real top-level commands");
+                collect_leaf_lines(sub, &[], &mut leaves);
+            }
+            (*title, leaves)
+        })
+        .collect()
+}
+
+/// RFC 148 O2b §4 (C1): one line per command -- its path, then a short
+/// purpose -- in one column aligned across every group, no usage detail
+/// (that belongs to `sui-id help COMMAND`), every line at most 80
+/// columns. `overview_lines_are_at_most_80_columns_and_the_purpose_column_aligns`
+/// (`tests.rs`) holds both properties as a test, not only as a
+/// convention in this function.
 fn render_overview() -> String {
     let root = command_tree();
     let about = root.get_about().map(|s| s.to_string()).unwrap_or_default();
     let mut out = format!("sui-id {} — {about}\n", env!("CARGO_PKG_VERSION"));
 
-    let mut lines: Vec<Leaf> = Vec::new();
-    for (title, names) in GROUPS {
+    let grouped = grouped_leaves();
+    let width = grouped
+        .iter()
+        .flat_map(|(_, leaves)| leaves.iter())
+        .map(|l| l.path.join(" ").len())
+        .max()
+        .unwrap_or(0);
+
+    for (title, leaves) in &grouped {
         let _ = writeln!(out);
         let _ = writeln!(out, "{title}");
-        for name in *names {
-            // Proven unreachable by `help_groups_cover_every_top_level_command_exactly`
-            // (`tests.rs`), which fails first if `GROUPS` ever names something
-            // the registry does not.
-            #[allow(clippy::expect_used)]
-            let sub = root
-                .get_subcommands()
-                .find(|s| s.get_name() == *name)
-                .expect("GROUPS names only real top-level commands");
-            lines.clear();
-            collect_leaf_lines(sub, &[], &mut lines);
-            let width = lines.iter().map(|l| l.usage.len()).max().unwrap_or(0);
-            for l in &lines {
-                let _ = writeln!(out, "  {:<width$}  {}", l.usage, l.about);
-            }
+        for l in leaves {
+            let path = l.path.join(" ");
+            let _ = writeln!(out, "  {path:<width$}  {}", l.about);
         }
     }
 
@@ -212,16 +243,19 @@ fn render_overview() -> String {
     let _ = writeln!(out);
     let _ = writeln!(
         out,
-        "Run `sui-id help COMMAND` for a command's full options, environment variables, \
-         and an example."
+        "Run `sui-id help COMMAND` for a command's full options, environment"
     );
+    let _ = writeln!(out, "variables, and an example.");
     out
 }
 
 /// One leaf command, gathered by [`collect_leaf_lines`]: its full word
 /// path, clap's own generated usage for it, and its one-line `about`.
+/// `usage` is read only by `reference.rs`'s test-only page renderer
+/// (§6/C3: nothing in the operator's binary reads it any more).
 pub(super) struct Leaf {
     pub(super) path: Vec<String>,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(super) usage: String,
     pub(super) about: String,
 }

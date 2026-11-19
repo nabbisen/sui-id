@@ -224,6 +224,21 @@ impl MaxLockoutDuration {
     }
 }
 
+/// The three-part guidance a missing configuration file prints (RFC 148
+/// §4/O2b §3): what is missing and where, how to create one (`sui-id
+/// init`, either profile), and where to read more. One function so
+/// `Config::load`'s own `NotFound` case and `cli::first_run`'s bare,
+/// no-`Error:`-prefix first-run print (RFC 148 §4: a service unit or
+/// script never prompts, and reads this unwrapped, not through
+/// `anyhow`'s own `{:?}`) can never say two different things.
+pub(crate) fn missing_config_guidance(path: &Path) -> String {
+    format!(
+        "no configuration found at {}.\n  Create one:  sui-id init                (a local trial)\n               sui-id init --production   (a production template)\n  Reference:   {}",
+        path.display(),
+        sui_id_web::github_doc_url!("docs/src/reference/configuration.md"),
+    )
+}
+
 impl Config {
     /// Read and parse a TOML configuration file.
     ///
@@ -238,14 +253,7 @@ impl Config {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let body = std::fs::read_to_string(path).map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                anyhow::anyhow!(
-                    "no configuration file at {}\n\n  Create one to start from:\n      \
-                     sui-id --print-sample-config > sui-id.toml      (a local trial)\n  The \
-                     production template is sui-id.example.toml, in a source checkout.\n  \
-                     Reference: {}",
-                    path.display(),
-                    sui_id_web::github_doc_url!("docs/src/reference/configuration.md"),
-                )
+                anyhow::anyhow!(missing_config_guidance(path))
             } else {
                 anyhow::anyhow!("failed to read config {}: {e}", path.display())
             }

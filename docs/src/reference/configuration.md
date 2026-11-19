@@ -6,7 +6,7 @@ convention `sui-id.toml` but configurable with `--config <path>`.
 Run the following to print a valid minimal configuration and exit:
 
 ```sh
-sui-id --print-sample-config
+sui-id config sample
 ```
 
 The output expresses every default so it can be edited in place.
@@ -18,7 +18,7 @@ The output expresses every default so it can be edited in place.
 > |---|---|
 > | `SUI_ID_MASTER_KEY` | Base64-encoded 32-byte master encryption key. Overrides `[storage].key_file`. On first start, if neither is present, a key is generated and written to `key_file`. |
 > | `SUI_ID_SETUP_TOKEN` | Override the one-time setup token printed to stderr on first start. Optional; useful for scripted provisioning. |
-> | `SUI_ID_BACKUP_PASSPHRASE` | Passphrase for `sui-id backup` and `sui-id restore`. When set, the CLI reads it instead of prompting interactively. |
+> | `SUI_ID_BACKUP_PASSPHRASE` | Passphrase for `sui-id backup create` and `sui-id backup restore`. When set, the CLI reads it instead of prompting interactively. |
 
 ---
 
@@ -51,8 +51,8 @@ File paths for the database and the master encryption key.
 | `key_file` | path | **yes** | — | Path to a file holding the base64-encoded 32-byte master key. On first start, if the file does not exist and `SUI_ID_MASTER_KEY` is unset, a key is generated and written here with permissions `0600`. Back this file up separately from the database — without it all encrypted columns are permanently unreadable. |
 
 > **Backup.** A complete backup is two files: `db_path` + `key_file`.
-> The built-in `sui-id backup` command creates an encrypted archive of both.
-> See the [operators reference](../guides/operators.md).
+> The built-in `sui-id backup create` command creates an encrypted archive of
+> both. See the [operators reference](../guides/operators.md).
 
 ---
 
@@ -80,7 +80,7 @@ Logging configuration via the [`tracing`](https://docs.rs/tracing) crate.
 |---|---|---|---|---|---|
 | `format` | string | no | `"fmt"` | `"fmt"`, `"json"` | `"fmt"` — human-readable lines. `"json"` — one JSON object per line, for ELK, Loki, Datadog, etc. |
 | `filter` | string | no | `"info,sui_id=info,sui_id_core=info,sui_id_store=info"` | [`tracing-subscriber` env-filter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) expression | Verbosity per module. For debug output: `"debug,h2=warn,hyper=warn,reqwest=warn"`. |
-| `access_log` | bool | no | `false` | — | When `true`, emit one `INFO` line per request: method, path, status, and request ID. Also enabled by `--dev`. |
+| `access_log` | bool | no | `false` | — | When `true`, emit one `INFO` line per request: method, path, status, and request ID. Also enabled by `sui-id dev`. |
 | `file` | path or absent | no | absent (stderr only) | — | When set, write logs to daily-rotated files in this directory **in addition to** stderr. Files are named `sui-id.YYYY-MM-DD.log`. The directory must exist and be writable. |
 
 ---
@@ -92,7 +92,7 @@ password-complexity parameters) will be added here.
 
 | Field | Type | Required | Default | Valid values | Description |
 |---|---|---|---|---|---|
-| `max_lockout` | string | no | `"24h"` | `"15min"`, `"1h"`, `"4h"`, `"12h"`, `"24h"`, `"48h"` | Cap on the automatic account-lockout duration after repeated failed sign-ins. Uses a progressive-backoff curve; `max_lockout` is the ceiling. Admins can unlock manually at any time with `sui-id admin unlock-user`. The restricted value set prevents locking real users out over weekends or holidays. The maximum is `"48h"`. |
+| `max_lockout` | string | no | `"24h"` | `"15min"`, `"1h"`, `"4h"`, `"12h"`, `"24h"`, `"48h"` | Cap on the automatic account-lockout duration after repeated failed sign-ins. Uses a progressive-backoff curve; `max_lockout` is the ceiling. Admins can unlock manually at any time with `sui-id admin user unlock`. The restricted value set prevents locking real users out over weekends or holidays. The maximum is `"48h"`. |
 
 > **Session policy** (idle timeout, concurrent session cap) is configured
 > in the admin UI under **Settings → Authentication**, not in this file.
@@ -106,51 +106,19 @@ password-complexity parameters) will be added here.
 |---|---|---|
 | `SUI_ID_MASTER_KEY` | No (but recommended for containers) | Base64-encoded 32-byte master key. Overrides `[storage].key_file` when set. Preferred for container deployments where secrets are injected via environment. |
 | `SUI_ID_SETUP_TOKEN` | No | Override the one-time setup token printed to stderr on first start. Set it before starting sui-id to use a known value in scripted provisioning. |
-| `SUI_ID_BACKUP_PASSPHRASE` | No | Passphrase for `sui-id backup` and `sui-id restore`. When set, skips the interactive passphrase prompt. |
+| `SUI_ID_BACKUP_PASSPHRASE` | No | Passphrase for `sui-id backup create` and `sui-id backup restore`. When set, skips the interactive passphrase prompt. |
 
 ---
 
-## Runtime flags
+## The command line
 
-CLI arguments — apply only to the current process invocation, not persisted.
-
-| Flag | Description |
-|---|---|
-| `--config <path>` | Path to the configuration file. Default: `./sui-id.toml`. |
-| `--dev` | Development mode. Seeds a test admin (`admin` / `changeme`) and an OIDC test client. Sets `cookie_secure = false`, disables HIBP, disables lockout, enables access logging. **Never use in production.** |
-| `--print-sample-config` | Print a minimal valid configuration to stdout and exit. Pipe to `> sui-id.toml` to bootstrap. |
-| `--help` | Print full usage and subcommand reference. |
-
----
-
-## Subcommands
-
-| Subcommand | Description |
-|---|---|
-| `sui-id setup --config <c> --admin-username <name>` | **Headless initialization (RFC 077).** Creates the first administrator and bootstraps a signing key without the GUI wizard. Accepts `--admin-email` and `--admin-display-name`. Password comes from `SUI_ID_ADMIN_PASSWORD` env var if set; otherwise a random 24-char password is generated and printed once to stdout with a change advisory. Fails if the instance is already initialized. |
-| `sui-id backup --config <c> --to <path> [--encrypt]` | Create an archive of the database and key file. Plain by default; with `--encrypt`, wrapped in a passphrase-derived envelope — use it for a backup that will leave the host. |
-| `sui-id restore --config <c> --from <path> [--force] [--decrypt]` | Restore from an archive. **Refuses** to overwrite an existing database or key file unless `--force` is given — it does not prompt. Use `--decrypt` for an archive made with `--encrypt`. |
-| `sui-id verify-backup --from <path> [--decrypt]` | Verify archive integrity and print a compatibility report without writing files. |
-| `sui-id admin unlock-user --config <c> --username <name>` | Clear an automatically-locked account immediately. |
-| `sui-id admin reset-mfa --config <c> --username <name> --reason <text>` | Remove every MFA factor (TOTP and passkeys) for the user, on the operator's authority. The recovery path for a sole administrator who lost every factor. The reason is recorded in the audit log. |
-| `sui-id admin issue-recovery-link --config <c> --username <name> --reason <text>` | Issue a single-use, 30-minute account-recovery link for a local user, on the operator's authority; works for any local account including the sole administrator. The link and token text are printed once to stdout. At most 5 an hour. See [Issuing a recovery link from the host](../guides/operators.md#issuing-a-recovery-link-from-the-host). |
-| `sui-id admin rotate-key [--generate-new-key \| --new-key <path>] [--yes] --config <c>` | **Re-seals every encrypted column under a new master key, offline.** Not a signing-key rotation. Stop the server first and take a fresh backup — it opens the database for writing. The previous key file is kept beside the new one as `<original>.bak.<timestamp>`. |
-| `sui-id admin rotate-metrics-token --config <c>` | Generate a new Prometheus metrics bearer token and print it once. |
-| `sui-id admin issue-registration-token --config <c> [--max-uses N] [--note TEXT]` | Generate an RFC 7591 initial-access token for dynamic client registration. Printed once — save it immediately. |
-| `sui-id admin revoke-registration-token --config <c> --id <id>` | Immediately revoke a client-registration token by id so it can no longer be redeemed. |
-| `sui-id admin list-registration-tokens --config <c>` | Read-only. Lists every registration token's id, creation time, use count/limit, expiry and revoked state. Never prints the token or its hash. |
-| `sui-id admin legacy-dynamic-candidates --config <c>` | Read-only (RFC 095). Lists `clients` rows a 2026-07-02–2026-10-02 bug may have left mislabelled `admin` when they were really self-registered. An empty result is not an all-clear — see [the upgrade guide](../guides/upgrade.md#v083x). |
-| `sui-id preview-upgrade [--config <c>]` | Read-only. Reports the stored schema version, the release that last migrated it, the migrations this sui-id would run, and the version it would end at — or the same refusal line startup would print. Writes nothing and needs no master key. |
-
-**`--no-backup`** (RFC 142 stage 5) is not per-subcommand: it applies to
-the server's own start and to any subcommand above that may migrate the
-database (everything except `backup`, `restore`, `verify-backup` and
-`preview-upgrade`, none of which open the database for a migration). It
-skips the automatic pre-migration snapshot, taken by default when a
-migration will actually run — see
-[the upgrade guide](../guides/upgrade.md#the-pre-migration-snapshot).
-
-Run `sui-id --help` for the full flag listings.
+`--config <path>` (default `./sui-id.toml`) and `--no-backup` (RFC 142 stage
+5: skip the automatic pre-migration snapshot) are global — valid before or
+after any command. Everything else — every command, its own options, the
+environment variables it reads, and a worked example — is the
+[CLI reference](cli.md), generated from the binary's own command registry so
+it cannot drift from what the binary actually accepts. Run `sui-id help` for
+the one-screen map, or `sui-id help COMMAND` for one command's full detail.
 
 ---
 
@@ -354,7 +322,7 @@ The endpoint is protected by a bearer token stored (hashed) in the database.
 Issue or rotate the token with:
 
 ```sh
-sui-id admin rotate-metrics-token --config sui-id.toml
+sui-id admin metrics-token rotate --config sui-id.toml
 ```
 
 Present the token as `Authorization: Bearer <token>` or as a session cookie

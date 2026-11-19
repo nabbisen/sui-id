@@ -55,6 +55,8 @@ mod n2c_account_chrome;
 mod n2e_choice_and_match;
 mod o1_startup_key_check;
 mod o2a_cli_registry;
+mod o2b_docs_use_new_forms;
+mod o2b_init_and_first_run;
 mod oidc_flow;
 mod password_change;
 mod r094_cycle_i_u20_revoke_idempotent;

@@ -75,6 +75,55 @@ fn overview_fits_one_screen_and_names_every_leaf() {
     }
 }
 
+/// RFC 148 O2b §4 (C1): no overview line wraps an 80-column terminal, and
+/// every command's purpose starts at the same column, in every group --
+/// not just within one, which is what O2a actually shipped (measured on
+/// `ff1a9f5`: aligned per group, not across them). **Mutation:** lengthen
+/// one `about` past the shared budget; confirmed red (a later line's
+/// purpose column moves, or the 80-column bound is crossed), then
+/// reverted.
+#[test]
+fn overview_lines_are_at_most_80_columns_and_the_purpose_column_aligns() {
+    let text = render_overview();
+    let mut purpose_columns: Vec<(usize, &str)> = Vec::new();
+    for line in text.lines() {
+        assert!(
+            line.chars().count() <= 80,
+            "overview line exceeds 80 columns ({} chars): {line:?}",
+            line.chars().count()
+        );
+        // A command line is "  <path>  <purpose>": two-space indent, then a
+        // path (never starting with '-', unlike the "Global options:"
+        // flag lines below it), then the gap before the purpose column.
+        let Some(rest) = line.strip_prefix("  ") else {
+            continue;
+        };
+        if rest.starts_with(' ') || rest.starts_with('-') || rest.is_empty() {
+            continue;
+        }
+        let Some(gap_start) = rest.find("  ") else {
+            continue;
+        };
+        let purpose = rest[gap_start..].trim_start_matches(' ');
+        let purpose_col = 2 + rest.len() - rest[gap_start..].trim_start_matches(' ').len();
+        let _ = purpose; // used only in the assertion message below
+        purpose_columns.push((purpose_col, line));
+    }
+    assert!(
+        purpose_columns.len() >= 15,
+        "expected at least fifteen command lines; found {}:\n{text}",
+        purpose_columns.len()
+    );
+    let first = purpose_columns[0].0;
+    for (col, line) in &purpose_columns {
+        assert_eq!(
+            *col, first,
+            "this command line's purpose starts at column {col}, not {first} \
+             like the others: {line:?}\n{text}"
+        );
+    }
+}
+
 #[test]
 fn help_for_a_known_leaf_resolves_and_names_its_own_options() {
     let root = command_tree();

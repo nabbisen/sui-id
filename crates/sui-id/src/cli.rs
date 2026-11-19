@@ -17,6 +17,7 @@ use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
 
+mod first_run;
 mod handlers;
 pub mod help;
 pub mod reference;
@@ -88,7 +89,19 @@ pub struct Cli {
 /// see `run`'s own comment at that match arm).
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Write a configuration to start from.
+    #[command(about = "Write a starter configuration")]
+    Init {
+        /// Write the production template instead of the local-trial
+        /// profile.
+        #[arg(long)]
+        production: bool,
+        /// Destination path. Refused if it already exists.
+        #[arg(long, value_name = "PATH")]
+        output: Option<PathBuf>,
+    },
     /// Create the first administrator (headless initialization).
+    #[command(about = "Create the first admin")]
     Setup {
         /// The new administrator's username.
         #[arg(long)]
@@ -101,6 +114,7 @@ enum Command {
         admin_display_name: Option<String>,
     },
     /// Run the HTTP server — the same as no command at all.
+    #[command(about = "Run the HTTP server")]
     Serve,
     /// Back up, restore, or verify the database.
     Backup(BackupArgs),
@@ -111,6 +125,7 @@ enum Command {
     /// Administer a running instance.
     Admin(AdminArgs),
     /// Run a local dev server for testing. MUST NOT be used in production.
+    #[command(about = "Run a local dev server")]
     Dev {
         /// Listen address (default: 127.0.0.1:8801). A non-loopback
         /// address requires explicit 'yes' confirmation on stdin.
@@ -133,8 +148,10 @@ enum Command {
         client_secret: Option<String>,
     },
     /// Show this help, or help for one command.
+    #[command(about = "Show help")]
     Help { command: Vec<String> },
     /// Print version information.
+    #[command(about = "Print version information")]
     Version,
 
     // ── Pre-148 aliases: distinct top-level words, no collision ────────
@@ -156,15 +173,6 @@ enum Command {
     },
     #[command(hide = true)]
     PreviewUpgrade,
-
-    /// Maintenance-only: regenerate `docs/src/reference/cli.md` from this
-    /// registry (§5). Not in RFC 148's own tree — see the review package's
-    /// note on this deviation from "an xtask subcommand, say".
-    #[command(hide = true)]
-    GenerateCliReference {
-        #[arg(long)]
-        check: bool,
-    },
 }
 
 #[derive(clap::Args, Debug)]
@@ -182,6 +190,7 @@ struct BackupArgs {
 #[derive(Subcommand, Debug)]
 enum BackupCommand {
     /// Write a tarball snapshot of the database, master key, and manifest.
+    #[command(about = "Back up the database")]
     Create {
         /// Output path for the backup tarball.
         #[arg(long)]
@@ -192,6 +201,7 @@ enum BackupCommand {
         encrypt: bool,
     },
     /// Restore a backup tarball into the configured storage paths.
+    #[command(about = "Restore from a backup")]
     Restore {
         /// Input path for the backup tarball.
         #[arg(long)]
@@ -204,6 +214,7 @@ enum BackupCommand {
         decrypt: bool,
     },
     /// Read a backup file and report what it contains. Writes nothing.
+    #[command(about = "Check a backup is valid")]
     Verify {
         /// Input path for the backup tarball.
         #[arg(long)]
@@ -224,6 +235,7 @@ struct UpgradeArgs {
 enum UpgradeCommand {
     /// Read-only. Report what this build would do to the configured
     /// database without opening it for writing.
+    #[command(about = "Preview a schema upgrade")]
     Preview,
 }
 
@@ -236,6 +248,7 @@ struct ConfigArgs {
 #[derive(Subcommand, Debug)]
 enum ConfigCommand {
     /// Print a configuration to start from.
+    #[command(about = "Print a starter configuration")]
     Sample {
         /// Print the production template (`sui-id.example.toml`) instead
         /// of the local-trial sample.
@@ -243,6 +256,7 @@ enum ConfigCommand {
         production: bool,
     },
     /// Validate a configuration and change nothing.
+    #[command(about = "Validate a configuration")]
     Check,
 }
 
@@ -321,12 +335,14 @@ struct AdminUserArgs {
 #[derive(Subcommand, Debug)]
 enum AdminUserCommand {
     /// Clear an account-lockout state for the given user.
+    #[command(about = "Clear an account lockout")]
     Unlock {
         /// The user's username.
         #[arg(long)]
         username: String,
     },
     /// Remove every MFA factor (TOTP and passkeys) for the given user.
+    #[command(about = "Remove a user's MFA factors")]
     ResetMfa {
         /// The user's username.
         #[arg(long)]
@@ -336,6 +352,7 @@ enum AdminUserCommand {
         reason: String,
     },
     /// Issue a single-use account-recovery link for a local user.
+    #[command(about = "Issue a recovery link")]
     RecoveryLink {
         /// The user's username.
         #[arg(long)]
@@ -356,6 +373,7 @@ struct AdminMasterKeyArgs {
 enum AdminMasterKeyCommand {
     /// Re-seal every encrypted column under a new master key. Runs
     /// OFFLINE: stop the server first and take a fresh backup.
+    #[command(about = "Rotate the master key")]
     Rotate {
         /// Mint a fresh key from the OS RNG (default if neither this nor
         /// --new-key is given).
@@ -381,6 +399,7 @@ struct AdminMetricsTokenArgs {
 enum AdminMetricsTokenCommand {
     /// Generate a fresh metrics bearer token; the previous one stops
     /// working immediately.
+    #[command(about = "Rotate the metrics token")]
     Rotate,
 }
 
@@ -394,6 +413,7 @@ struct AdminRegistrationTokenArgs {
 enum AdminRegistrationTokenCommand {
     /// Issue an RFC 7591 initial access token for dynamic client
     /// registration.
+    #[command(about = "Issue a registration token")]
     Issue {
         /// How many times the token may be redeemed (default: 1).
         #[arg(long, default_value_t = 1)]
@@ -403,6 +423,7 @@ enum AdminRegistrationTokenCommand {
         note: Option<String>,
     },
     /// Immediately revoke a client-registration token by id.
+    #[command(about = "Revoke a registration token")]
     Revoke {
         /// The registration token's id.
         #[arg(long)]
@@ -410,9 +431,11 @@ enum AdminRegistrationTokenCommand {
     },
     /// List every client-registration token. Never prints a token or its
     /// hash.
+    #[command(about = "List registration tokens")]
     List,
     /// Read-only (RFC 095). List `clients` rows a historical bug may have
     /// mislabelled.
+    #[command(about = "List mislabelled clients")]
     LegacyCandidates,
 }
 
@@ -495,6 +518,7 @@ pub async fn run(args: Vec<String>) -> Result<()> {
     // cannot be borrowed as a whole once any one of its fields has been
     // moved out of it, even to read an unrelated field.
     let cfg_path = config_path(&cli);
+    let explicit_config = cli.config.is_some();
     let policy = backup_policy(&cli);
     let command = cli.command.take();
 
@@ -527,10 +551,18 @@ pub async fn run(args: Vec<String>) -> Result<()> {
             }
             // Bare `sui-id [--config PATH]`: the documented service unit.
             // No notice (§3): the server should not gain a stderr line on
-            // every start.
-            handlers::serve(&cfg_path, policy).await
+            // every start. RFC 148 §4 (O2b): a missing configuration is
+            // a first-run conversation, not a bare refusal -- but only
+            // in a terminal.
+            first_run::serve_or_first_run(&cfg_path, explicit_config, policy).await
         }
-        Some(Command::Serve) => handlers::serve(&cfg_path, policy).await,
+        Some(Command::Serve) => {
+            first_run::serve_or_first_run(&cfg_path, explicit_config, policy).await
+        }
+        Some(Command::Init { production, output }) => {
+            let output = output.unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
+            handlers::run_init(&output, production)
+        }
         Some(Command::Setup {
             admin_username,
             admin_email,
@@ -626,7 +658,6 @@ pub async fn run(args: Vec<String>) -> Result<()> {
             alias_notice("preview-upgrade", "upgrade preview");
             handlers::run_preview_upgrade(&cfg_path)
         }
-        Some(Command::GenerateCliReference { check }) => reference::regenerate(check),
     }
 }
 

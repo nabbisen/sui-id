@@ -1,52 +1,33 @@
 //! RFC 148 §5: the CLI reference page, rendered from the same registry
 //! `cli.rs` declares (via [`super::help`]'s shared grouping/notes data and
-//! [`super::command_tree`]) — never a second hand-kept list. `tests.rs`
-//! fails if the committed page differs from a fresh render; regenerate it
-//! with `sui-id generate-cli-reference` (a hidden, maintenance-only
-//! command — see the review package's note on this deviation from the
-//! dispatch's own suggestion of an `xtask` subcommand: `xtask` depends on
-//! no workspace crate today, by design, and `Cli`'s registry lives in
-//! this crate's own lib target, so generating from it here avoids making
-//! `xtask` depend on the entire server for one doc page).
+//! [`super::command_tree`]) — never a second hand-kept list. `tests.rs`'s
+//! drift test fails if the committed page differs from a fresh render;
+//! running it with `SUI_ID_REGENERATE_CLI_REFERENCE=1` set writes the
+//! fresh render instead of comparing. **No command in the operator's
+//! binary does this** (cycle O2a shipped a hidden `generate-cli-reference`
+//! command; O2b's review found that maintainer tooling in the production
+//! binary is something an operator could stumble on, and moved
+//! regeneration into the test itself).
 
-use anyhow::{Context, Result, bail};
+#[cfg(test)]
+use anyhow::Context;
+#[cfg(test)]
 use std::fmt::Write as _;
 
+#[cfg(test)]
 use super::command_tree;
+#[cfg(test)]
 use super::help::{COMMAND_NOTES, GROUPS, Leaf, collect_leaf_lines};
 
 /// The page's path relative to the repository root, named in every
-/// failure message that points at it.
+/// failure message that points at it. `#[cfg(test)]` below: nothing in
+/// the operator's binary reads or writes this page any more (§6/C3) --
+/// only the drift test does, so this whole module is test-only now.
+#[cfg(test)]
 pub(crate) const PAGE_PATH: &str = "docs/src/reference/cli.md";
 
-/// `sui-id generate-cli-reference [--check]`. `--check` compares the
-/// committed page with a fresh render and exits non-zero if they differ,
-/// naming this command in the error — the same shape `tests.rs`'s own
-/// drift test uses, so a maintainer sees the identical message either
-/// way.
-pub(crate) fn regenerate(check: bool) -> Result<()> {
-    let root = repo_root()?;
-    let path = root.join(PAGE_PATH);
-    let fresh = render();
-    if check {
-        let committed = std::fs::read_to_string(&path)
-            .with_context(|| format!("reading {}", path.display()))?;
-        if committed != fresh {
-            bail!(
-                "{} is stale. Regenerate it with `sui-id generate-cli-reference` \
-                 and commit the result.",
-                PAGE_PATH
-            );
-        }
-        println!("{PAGE_PATH} is current.");
-    } else {
-        std::fs::write(&path, &fresh).with_context(|| format!("writing {}", path.display()))?;
-        println!("wrote {PAGE_PATH}.");
-    }
-    Ok(())
-}
-
-fn repo_root() -> Result<std::path::PathBuf> {
+#[cfg(test)]
+pub(crate) fn repo_root() -> anyhow::Result<std::path::PathBuf> {
     // `CARGO_MANIFEST_DIR` is `<repo>/crates/sui-id` at build time.
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     manifest_dir
@@ -56,9 +37,10 @@ fn repo_root() -> Result<std::path::PathBuf> {
         .context("CARGO_MANIFEST_DIR has fewer than two ancestors")
 }
 
-/// The page's full content, built fresh from the registry every call —
-/// this is the one render both `regenerate` and `tests.rs`'s drift check
-/// use, so there is exactly one way this page's text is produced.
+/// The page's full content, built fresh from the registry every call --
+/// the one render `tests.rs`'s drift check (and its own regeneration
+/// mode) uses, so there is exactly one way this page's text is produced.
+#[cfg(test)]
 pub(crate) fn render() -> String {
     let root = command_tree();
     let mut out = String::new();
@@ -67,10 +49,10 @@ pub(crate) fn render() -> String {
     let _ = writeln!(out);
     let _ = writeln!(
         out,
-        "Generated from `sui-id`'s own command registry (RFC 148 §5) by \
-         `sui-id generate-cli-reference`. Do not edit by hand — a test fails \
-         if this page differs from a fresh render, and the regeneration \
-         command is named in that test's own failure message."
+        "Generated from `sui-id`'s own command registry (RFC 148 §5). Do not \
+         edit by hand — a test fails if this page differs from a fresh \
+         render; run it with `SUI_ID_REGENERATE_CLI_REFERENCE=1` set to \
+         write the fresh render instead of comparing."
     );
     let _ = writeln!(out);
     let _ = writeln!(
@@ -102,6 +84,7 @@ pub(crate) fn render() -> String {
     out
 }
 
+#[cfg(test)]
 fn render_leaf_section(out: &mut String, leaf: &Leaf) {
     let joined = leaf.path.join(" ");
     let anchor = joined.replace(' ', "-");

@@ -59,7 +59,7 @@ an initial-access token issued by an administrator.
 An administrator runs:
 
 ```sh
-sui-id admin issue-registration-token --config sui-id.toml \
+sui-id admin registration-token issue --config sui-id.toml \
   --max-uses 1 --note "MyApp onboarding"
 ```
 

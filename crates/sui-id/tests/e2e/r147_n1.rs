@@ -24,16 +24,16 @@ fn assert_names_the_three_parts(out: &Output, expected_path: &str) {
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains(&format!("no configuration file at {expected_path}")),
+        stderr.contains(&format!("no configuration found at {expected_path}")),
         "part 1 (what, and its path): {stderr}"
     );
     assert!(
-        stderr.contains("sui-id --print-sample-config > sui-id.toml"),
+        stderr.contains("sui-id init") && stderr.contains("a local trial"),
         "part 2 (how to make a local trial): {stderr}"
     );
     assert!(
-        stderr.contains("sui-id.example.toml"),
-        "part 3 (the production template): {stderr}"
+        stderr.contains("sui-id init --production") && stderr.contains("a production template"),
+        "part 2 (how to make a production template): {stderr}"
     );
     assert!(
         stderr.contains(&format!(

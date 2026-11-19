@@ -91,8 +91,8 @@ needed at runtime). See the
 # Install the binary from crates.io
 cargo install sui-id
 
-# Generate a starter config
-sui-id --print-sample-config > sui-id.toml
+# Write a starter config
+sui-id init
 
 # Edit issuer / paths if needed, then start
 sui-id --config sui-id.toml
@@ -103,7 +103,7 @@ Or build from source:
 ```bash
 git clone https://github.com/nabbisen/sui-id && cd sui-id
 cargo build --release
-./target/release/sui-id --print-sample-config > sui-id.toml
+./target/release/sui-id init
 ./target/release/sui-id --config sui-id.toml
 ```
 

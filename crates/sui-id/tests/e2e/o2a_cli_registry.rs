@@ -304,7 +304,7 @@ fn a_flags_value_is_never_taken_for_a_command() {
         .expect("run");
     assert!(!out.status.success());
     assert!(
-        stderr(&out).contains("backup") && stderr(&out).contains("no configuration file"),
+        stderr(&out).contains("backup") && stderr(&out).contains("no configuration found"),
         "{}",
         stderr(&out)
     );

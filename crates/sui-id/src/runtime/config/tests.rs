@@ -365,16 +365,16 @@ fn a_missing_config_file_names_how_to_create_one() {
     let err = Config::load(&path).expect_err("no such file");
     let msg = format!("{err:#}");
     assert!(
-        msg.contains(&format!("no configuration file at {}", path.display())),
+        msg.contains(&format!("no configuration found at {}", path.display())),
         "part 1 (what, and its path): {msg}"
     );
     assert!(
-        msg.contains("sui-id --print-sample-config > sui-id.toml"),
+        msg.contains("sui-id init") && msg.contains("a local trial"),
         "part 2 (how to make a local trial): {msg}"
     );
     assert!(
-        msg.contains("sui-id.example.toml"),
-        "part 3 (the production template): {msg}"
+        msg.contains("sui-id init --production") && msg.contains("a production template"),
+        "part 2 (how to make a production template): {msg}"
     );
     assert!(
         msg.contains("docs/src/reference/configuration.md"),

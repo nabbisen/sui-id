@@ -12,25 +12,62 @@ use std::path::{Path, PathBuf};
 use crate::database::PreMigrationBackup;
 use crate::{backup, config::Config};
 
+mod templates;
+
 /// `sui-id config sample [--production]` / the pre-148 `--print-sample-config`.
 /// Both call this, so their stdout is byte-identical by construction.
 pub(crate) fn config_sample(production: bool) -> Result<()> {
     if production {
-        // RFC 147 §4's own test keeps this file's keys in step with
-        // `Config::sample()`; embedded so an installed binary (no source
-        // checkout) can still print it.
-        print!(
-            "{}",
-            include_str!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../../sui-id.example.toml"
-            ))
-        );
+        print!("{}", templates::production_toml());
     } else {
-        let cfg = Config::sample();
-        let s = toml::to_string_pretty(&cfg).context("serializing sample config")?;
-        println!("{s}");
+        print!("{}", templates::local_trial_toml());
     }
+    Ok(())
+}
+
+/// `sui-id init [--production] [--output PATH]` (RFC 148 §4). Writes
+/// exactly what `sui-id config sample [--production]` prints (the same
+/// two functions), and **never overwrites**: `create_new` is the only way
+/// the destination is opened, so an existing file is refused, not
+/// replaced, before anything is written.
+pub(crate) fn run_init(output: &Path, production: bool) -> Result<()> {
+    use std::io::Write as _;
+
+    let text = if production {
+        templates::production_toml().to_string()
+    } else {
+        templates::local_trial_toml()
+    };
+
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                anyhow::anyhow!(
+                    "refusing to overwrite the existing configuration at {}",
+                    output.display()
+                )
+            } else {
+                anyhow::Error::new(e).context(format!("creating {}", output.display()))
+            }
+        })?;
+    file.write_all(text.as_bytes())
+        .with_context(|| format!("writing {}", output.display()))?;
+
+    let profile = if production {
+        "production template"
+    } else {
+        "local trial"
+    };
+    eprintln!("wrote {} ({profile}).", output.display());
+    eprintln!();
+    eprintln!("Next:  sui-id serve      then open the setup link it prints.");
+    eprintln!(
+        "Help:  sui-id help       Reference: {}",
+        sui_id_web::github_doc_url!("docs/src/reference/configuration.md")
+    );
     Ok(())
 }
 

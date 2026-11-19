@@ -1068,7 +1068,10 @@ async fn r103_s4_cli_sixth_issuance_in_an_hour_is_refused() {
 /// help`, generated from the command registry) and replaced the
 /// hand-written unknown-subaction message with clap's own unrecognized-
 /// subcommand error. This test's own intent survives unchanged: both
-/// still name the real command, under their new wording.
+/// still name the real command, under their new wording. Cycle O2b's own
+/// review (C1) then dropped usage detail from the overview entirely (one
+/// path, one short purpose, 80 columns) -- `sui-id help admin user
+/// recovery-link` is where the full usage line now lives.
 #[test]
 fn r103_s4_cli_help_and_the_unknown_subaction_message_name_the_command() {
     let help = Command::new(env!("CARGO_BIN_EXE_sui-id"))
@@ -1082,12 +1085,21 @@ fn r103_s4_cli_help_and_the_unknown_subaction_message_name_the_command() {
     );
     let text = out(&help);
     assert!(
-        text.contains("admin user recovery-link --username <USERNAME> --reason <REASON>"),
-        "usage line:\n{text}"
+        text.contains("admin user recovery-link"),
+        "overview line:\n{text}"
     );
     assert!(
-        text.contains("Issue a single-use account-recovery link"),
-        "description:\n{text}"
+        text.contains("Issue a recovery link"),
+        "short purpose:\n{text}"
+    );
+    let detail = Command::new(env!("CARGO_BIN_EXE_sui-id"))
+        .args(["help", "admin", "user", "recovery-link"])
+        .output()
+        .expect("help admin user recovery-link");
+    assert!(
+        out(&detail).contains("--username <USERNAME> --reason <REASON>"),
+        "full usage:\n{}",
+        out(&detail)
     );
     let unknown = Command::new(env!("CARGO_BIN_EXE_sui-id"))
         .args(["admin", "no-such-subaction"])

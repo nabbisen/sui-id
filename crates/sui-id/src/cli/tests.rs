@@ -156,16 +156,19 @@ fn a_value_that_spells_a_command_name_is_never_mistaken_for_one() {
     }
 }
 
-#[test]
-fn generate_cli_reference_is_hidden_but_parses() {
-    let cli = parse(&["generate-cli-reference", "--check"]);
-    assert!(matches!(
-        cli.command,
-        Some(Command::GenerateCliReference { check: true })
-    ));
-}
-
 // ── Mutual exclusion the dispatch used to hand-check is now clap's job ──
+
+/// RFC 148 O2b §6 (C3): `generate-cli-reference` shipped in 0.93.0 O2a as
+/// maintainer tooling hidden in the operator's binary; O2b's review found
+/// that wrong and deleted it (regeneration now lives in the drift test
+/// itself, gated by an environment variable). This is the negative of
+/// O2a's own `generate_cli_reference_is_hidden_but_parses` -- the command
+/// must not merely be hidden, it must not exist.
+#[test]
+fn generate_cli_reference_no_longer_exists() {
+    Cli::try_parse_from(argv(&["generate-cli-reference", "--check"]))
+        .expect_err("generate-cli-reference must not parse as any command");
+}
 
 #[test]
 fn rotate_key_rejects_both_new_key_sources_at_once() {

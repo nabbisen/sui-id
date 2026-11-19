@@ -248,7 +248,9 @@ async fn r103_cli_reset_mfa_refusals_write_nothing() {
 /// RFC 148 cycle O2a renamed this command's leaf from `admin reset-mfa`
 /// to `admin user reset-mfa` and reorganized `--help` into an alias for
 /// `sui-id help`; this test's own intent (the command is discoverable in
-/// help) survives under the new wording.
+/// help) survives under the new wording. Cycle O2b's own review (C1)
+/// then dropped usage detail from the overview entirely -- the full
+/// usage line now lives at `sui-id help admin user reset-mfa`.
 #[test]
 fn r103_cli_help_names_reset_mfa() {
     let out = Command::new(env!("CARGO_BIN_EXE_sui-id"))
@@ -256,11 +258,18 @@ fn r103_cli_help_names_reset_mfa() {
         .output()
         .expect("run sui-id --help");
     let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("admin user reset-mfa"), "{stdout}");
+    assert!(stdout.contains("Remove a user's MFA factors"), "{stdout}");
+
+    let detail = Command::new(env!("CARGO_BIN_EXE_sui-id"))
+        .args(["help", "admin", "user", "reset-mfa"])
+        .output()
+        .expect("run sui-id help admin user reset-mfa");
+    let detail_stdout = String::from_utf8_lossy(&detail.stdout);
     assert!(
-        stdout.contains("admin user reset-mfa --username <USERNAME> --reason <REASON>"),
-        "{stdout}"
+        detail_stdout.contains("--username <USERNAME> --reason <REASON>"),
+        "{detail_stdout}"
     );
-    assert!(stdout.contains("Remove every MFA factor"), "{stdout}");
 }
 
 // ── The web path is unchanged ────────────────────────────────────────

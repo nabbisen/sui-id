@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`sui-id init` writes a commented configuration to start from**
+  (`--production` for the production template), and never overwrites a
+  file; `sui-id` run in a terminal with no configuration offers to create
+  one.
+
 ### Changed
 
 - **The command line is grouped by task** (`sui-id help` lists it on one
@@ -14,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its new form, and keeps working until 1.0. **A usage error** (an unknown
   option, or a missing required value) **now exits with status 2**, the
   common convention, instead of 1; a script that tests for exactly 1 after a
-  usage error should test for non-zero.
+  usage error should test for non-zero. The help overview now fits an
+  80-column terminal, one line per command.
 
 ### Security
 

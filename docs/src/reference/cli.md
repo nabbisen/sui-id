@@ -1,14 +1,28 @@
 # CLI reference
 
-Generated from `sui-id`'s own command registry (RFC 148 §5) by `sui-id generate-cli-reference`. Do not edit by hand — a test fails if this page differs from a fresh render, and the regeneration command is named in that test's own failure message.
+Generated from `sui-id`'s own command registry (RFC 148 §5). Do not edit by hand — a test fails if this page differs from a fresh render; run it with `SUI_ID_REGENERATE_CLI_REFERENCE=1` set to write the fresh render instead of comparing.
 
 `--config PATH` and `--no-backup` are global: valid before or after any command below.
 
 ## Getting started
 
+### `sui-id init` {#init}
+
+Write a starter configuration
+
+```text
+sui-id init [OPTIONS]
+```
+
+Example:
+
+```sh
+sui-id init --production --output /etc/sui-id/sui-id.toml
+```
+
 ### `sui-id setup` {#setup}
 
-Create the first administrator (headless initialization)
+Create the first admin
 
 ```text
 sui-id setup [OPTIONS] --admin-username <ADMIN_USERNAME>
@@ -25,7 +39,7 @@ sui-id setup --admin-username admin
 
 ### `sui-id serve` {#serve}
 
-Run the HTTP server — the same as no command at all
+Run the HTTP server
 
 ```text
 sui-id serve
@@ -44,7 +58,7 @@ sui-id --config sui-id.toml
 
 ### `sui-id backup create` {#backup-create}
 
-Write a tarball snapshot of the database, master key, and manifest
+Back up the database
 
 ```text
 sui-id backup create [OPTIONS] --to <TO>
@@ -62,7 +76,7 @@ sui-id backup create --to ./sui-id.tar --encrypt
 
 ### `sui-id backup restore` {#backup-restore}
 
-Restore a backup tarball into the configured storage paths
+Restore from a backup
 
 ```text
 sui-id backup restore [OPTIONS] --from <FROM>
@@ -80,7 +94,7 @@ sui-id backup restore --from ./sui-id.tar
 
 ### `sui-id backup verify` {#backup-verify}
 
-Read a backup file and report what it contains. Writes nothing
+Check a backup is valid
 
 ```text
 sui-id backup verify [OPTIONS] --from <FROM>
@@ -97,7 +111,7 @@ sui-id backup verify --from ./sui-id.tar
 
 ### `sui-id upgrade preview` {#upgrade-preview}
 
-Read-only. Report what this build would do to the configured database without opening it for writing
+Preview a schema upgrade
 
 ```text
 sui-id upgrade preview
@@ -111,7 +125,7 @@ sui-id upgrade preview
 
 ### `sui-id config sample` {#config-sample}
 
-Print a configuration to start from
+Print a starter configuration
 
 ```text
 sui-id config sample [OPTIONS]
@@ -125,7 +139,7 @@ sui-id config sample > sui-id.toml
 
 ### `sui-id config check` {#config-check}
 
-Validate a configuration and change nothing
+Validate a configuration
 
 ```text
 sui-id config check
@@ -141,7 +155,7 @@ sui-id config check --config sui-id.toml
 
 ### `sui-id admin user unlock` {#admin-user-unlock}
 
-Clear an account-lockout state for the given user
+Clear an account lockout
 
 ```text
 sui-id admin user unlock --username <USERNAME>
@@ -158,7 +172,7 @@ sui-id admin user unlock --username alice
 
 ### `sui-id admin user reset-mfa` {#admin-user-reset-mfa}
 
-Remove every MFA factor (TOTP and passkeys) for the given user
+Remove a user's MFA factors
 
 ```text
 sui-id admin user reset-mfa --username <USERNAME> --reason <REASON>
@@ -175,7 +189,7 @@ sui-id admin user reset-mfa --username alice --reason "lost device"
 
 ### `sui-id admin user recovery-link` {#admin-user-recovery-link}
 
-Issue a single-use account-recovery link for a local user
+Issue a recovery link
 
 ```text
 sui-id admin user recovery-link --username <USERNAME> --reason <REASON>
@@ -192,7 +206,7 @@ sui-id admin user recovery-link --username alice --reason "sole admin, lost MFA"
 
 ### `sui-id admin master-key rotate` {#admin-master-key-rotate}
 
-Re-seal every encrypted column under a new master key. Runs OFFLINE: stop the server first and take a fresh backup
+Rotate the master key
 
 ```text
 sui-id admin master-key rotate [OPTIONS]
@@ -209,7 +223,7 @@ sui-id admin master-key rotate --generate-new-key --yes
 
 ### `sui-id admin metrics-token rotate` {#admin-metrics-token-rotate}
 
-Generate a fresh metrics bearer token; the previous one stops working immediately
+Rotate the metrics token
 
 ```text
 sui-id admin metrics-token rotate
@@ -226,7 +240,7 @@ sui-id admin metrics-token rotate
 
 ### `sui-id admin registration-token issue` {#admin-registration-token-issue}
 
-Issue an RFC 7591 initial access token for dynamic client registration
+Issue a registration token
 
 ```text
 sui-id admin registration-token issue [OPTIONS]
@@ -243,7 +257,7 @@ sui-id admin registration-token issue --max-uses 1
 
 ### `sui-id admin registration-token revoke` {#admin-registration-token-revoke}
 
-Immediately revoke a client-registration token by id
+Revoke a registration token
 
 ```text
 sui-id admin registration-token revoke --id <ID>
@@ -260,7 +274,7 @@ sui-id admin registration-token revoke --id 01jc6z9f0000000000000000r0
 
 ### `sui-id admin registration-token list` {#admin-registration-token-list}
 
-List every client-registration token. Never prints a token or its hash
+List registration tokens
 
 ```text
 sui-id admin registration-token list
@@ -277,7 +291,7 @@ sui-id admin registration-token list
 
 ### `sui-id admin registration-token legacy-candidates` {#admin-registration-token-legacy-candidates}
 
-Read-only (RFC 095). List `clients` rows a historical bug may have mislabelled
+List mislabelled clients
 
 ```text
 sui-id admin registration-token legacy-candidates
@@ -296,7 +310,7 @@ sui-id admin registration-token legacy-candidates
 
 ### `sui-id dev` {#dev}
 
-Run a local dev server for testing. MUST NOT be used in production
+Run a local dev server
 
 ```text
 sui-id dev [OPTIONS]
@@ -312,7 +326,7 @@ sui-id dev --bind 127.0.0.1:8801
 
 ### `sui-id help` {#help}
 
-Show this help, or help for one command
+Show help
 
 ```text
 sui-id help [COMMAND]...

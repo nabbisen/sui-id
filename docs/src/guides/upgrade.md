@@ -4,7 +4,7 @@
 
 1. **Back up** before upgrading:
    ```bash
-   sui-id backup --config sui-id.toml --to sui-id-pre-upgrade.tar
+   sui-id backup create --config sui-id.toml --to sui-id-pre-upgrade.tar
    ```
    Do not use `cp`: the database runs in WAL mode, so a copy of the
    `.sqlite` file can miss committed data.
@@ -16,7 +16,7 @@
 
 4. **Preview**, with the new binary, before starting it:
    ```bash
-   sui-id preview-upgrade --config sui-id.toml
+   sui-id upgrade preview --config sui-id.toml
    ```
    Read which migrations it lists, and confirm it reports `Nothing was
    changed.` It opens nothing for writing, needs no master key, and prints
@@ -119,7 +119,7 @@ reference](../reference/configuration.md#federation_providers-rfc-004)
 and the [operator guide's "Configure a
 provider"](operators.md#federated-sign-in-upstream-oidc). A
 block that fails one of them stops sui-id from starting; the refusal
-names the provider and the field. **Run the new binary's `sui-id preview-upgrade --config sui-id.toml`
+names the provider and the field. **Run the new binary's `sui-id upgrade preview --config sui-id.toml`
 first** (General procedure, step 4): it loads the configuration with these
 rules without starting the server or writing to the database, so a block
 that would refuse to start is reported now, by provider and field.
@@ -174,7 +174,7 @@ the database, the start now **refuses with exit code `1`, with nothing
 changed**. Free some space and start again; start with `--no-backup` only
 if you have taken a backup yourself (General procedure, step 1).
 
-**Run `sui-id preview-upgrade` first** (General procedure, step 4) — it
+**Run `sui-id upgrade preview` first** (General procedure, step 4) — it
 now also predicts whether this snapshot will be taken and whether there
 is room for it, before you start the new binary.
 
@@ -185,8 +185,8 @@ starting version.
 
 ### v0.83.x
 
-**New admin subaction: `sui-id admin legacy-dynamic-candidates [--config PATH]`
-(RFC 095).** Read-only — it writes nothing. If any client ever self-registered
+**New admin subaction** (now `sui-id admin registration-token
+legacy-candidates [--config PATH]`; RFC 095). Read-only — it writes nothing. If any client ever self-registered
 through RFC 7591 dynamic registration while your instance was running a
 build between commits `48946f6` (2026-07-02) and `930513b` (2026-10-02),
 run this command once after upgrading. A bug in that window discarded the
@@ -270,7 +270,7 @@ add them continue to work without change:
 
 ## The pre-migration snapshot
 
-Starting a binary that will actually run a migration (`preview-upgrade`
+Starting a binary that will actually run a migration (`upgrade preview`
 reports `Pending`, not already at head, and not a fresh database) first
 takes an automatic, plain `VACUUM INTO` snapshot beside the database,
 named from the database's own file name and the versions it spans, for
@@ -297,7 +297,7 @@ Roll back as soon as you know you need to.
 
 1. Stop the new binary.
 2. Restore the pre-upgrade state, either:
-   - the step-1 backup: `sui-id restore --config sui-id.toml --from
+   - the step-1 backup: `sui-id backup restore --config sui-id.toml --from
      sui-id-pre-upgrade.tar --force`; or
    - the automatic snapshot: replace the database file with it (and
      remove any `-wal`/`-shm` file beside the live database first — the
@@ -319,7 +319,7 @@ refusing to run: the database at … is at schema version 44, but this sui-id
 database recorded it, the release that migrated it, and exit code **65**.
 The release is recorded since sui-id 0.79.0 (RFC 112); a database no build
 from before that has migrated since shows no release name, both here and in
-`preview-upgrade`'s own output.
+`upgrade preview`'s own output.
 Nothing is written to the database. There is no override flag. A schema version
 that cannot be read, or that is missing from a database that has tables, is
 refused the same way. The full text, the exit codes and the systemd setting
