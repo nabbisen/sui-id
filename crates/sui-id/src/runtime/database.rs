@@ -75,19 +75,6 @@ pub enum PreMigrationBackup {
     Declined,
 }
 
-/// `--no-backup` is a boolean flag like any other (it is never in
-/// `VALUE_TAKING_FLAGS`): its presence anywhere in `args` declines the
-/// automatic pre-migration snapshot for this invocation. The one place
-/// that reads the flag, so every caller — the server's own start and
-/// every subcommand that reaches [`open`] — asks it the same way.
-pub fn backup_policy_from_args(args: &[String]) -> PreMigrationBackup {
-    if args.iter().any(|a| a == "--no-backup") {
-        PreMigrationBackup::Declined
-    } else {
-        PreMigrationBackup::Take
-    }
-}
-
 /// A refusal that is not about the database's schema (RFC 142 stage 5 §5) —
 /// not enough free space for the pre-migration snapshot, or the snapshot
 /// itself failed to write. Carried through `anyhow` the same way

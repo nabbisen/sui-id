@@ -51,6 +51,9 @@ sui-id-store                = { workspace = true }
 sui-id-core                 = { workspace = true }
 sui-id-web                  = { workspace = true }
 
+clap                        = { workspace = true }
+strsim                      = { workspace = true }
+
 # RFC 134 D2: `features = ["net"]` declared explicitly because this crate
 # now calls `tokio::net::lookup_host` directly -- `net` was already
 # reachable through workspace feature unification (sui-id-core and

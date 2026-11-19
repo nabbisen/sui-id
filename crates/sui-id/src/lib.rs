@@ -12,6 +12,7 @@ pub mod assets;
 pub mod backup;
 #[path = "http/cache_freshness.rs"]
 pub mod cache_freshness;
+pub mod cli;
 #[path = "runtime/config.rs"]
 pub mod config;
 #[path = "http/consent_state.rs"]

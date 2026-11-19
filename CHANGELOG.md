@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The command line is grouped by task** (`sui-id help` lists it on one
+  screen); every earlier form still works, prints a one-line notice naming
+  its new form, and keeps working until 1.0. **A usage error** (an unknown
+  option, or a missing required value) **now exits with status 2**, the
+  common convention, instead of 1; a script that tests for exactly 1 after a
+  usage error should test for non-zero.
+
 ### Security
 
 - **sui-id now checks the master key at every start, and refuses a key

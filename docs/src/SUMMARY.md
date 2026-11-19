@@ -23,6 +23,7 @@
 
 # Reference
 
+- [CLI reference](./reference/cli.md)
 - [Configuration](./reference/configuration.md)
 - [OIDC API for integrators](./reference/oidc-api.md)
 - [Audit event reference](./reference/audit-events.md)

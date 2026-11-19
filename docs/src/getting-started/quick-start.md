@@ -105,7 +105,7 @@ cargo build --release
 Generate a starter config:
 
 ```bash
-sui-id --print-sample-config > sui-id.toml
+sui-id config sample > sui-id.toml
 ```
 
 Edit at minimum:
@@ -167,7 +167,7 @@ For rapid local testing, dev mode starts without a setup wizard and seeds
 demo data:
 
 ```bash
-sui-id --dev
+sui-id dev
 ```
 
 Dev mode:

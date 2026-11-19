@@ -998,15 +998,13 @@ async fn r103_s4_cli_refusals_exit_non_zero_with_a_message_and_write_nothing() {
             "control characters",
         ),
         (
+            // RFC 148 cycle O2a: a missing required flag is now clap's
+            // own parse error, not a hand-written message.
             "no --reason",
             vec!["--username", "bob"],
-            "requires --reason",
+            "--reason",
         ),
-        (
-            "no --username",
-            vec!["--reason", REASON],
-            "requires --username",
-        ),
+        ("no --username", vec!["--reason", REASON], "--username"),
     ];
     for (label, args, message) in &cases {
         let o = cli(&cfg, args);
@@ -1066,26 +1064,35 @@ async fn r103_s4_cli_sixth_issuance_in_an_hour_is_refused() {
     );
 }
 
+/// RFC 148 cycle O2a reorganized `--help` (now an alias for `sui-id
+/// help`, generated from the command registry) and replaced the
+/// hand-written unknown-subaction message with clap's own unrecognized-
+/// subcommand error. This test's own intent survives unchanged: both
+/// still name the real command, under their new wording.
 #[test]
 fn r103_s4_cli_help_and_the_unknown_subaction_message_name_the_command() {
     let help = Command::new(env!("CARGO_BIN_EXE_sui-id"))
         .arg("--help")
         .output()
         .expect("--help");
+    assert!(
+        err(&help).contains("note:"),
+        "the --help alias must print its notice to stderr: {}",
+        err(&help)
+    );
     let text = out(&help);
     assert!(
-        text.contains("sui-id admin issue-recovery-link --username NAME --reason TEXT"),
-        "usage line"
+        text.contains("admin user recovery-link --username <USERNAME> --reason <REASON>"),
+        "usage line:\n{text}"
     );
-    assert!(text.contains("admin issue-recovery-link"), "description");
+    assert!(
+        text.contains("Issue a single-use account-recovery link"),
+        "description:\n{text}"
+    );
     let unknown = Command::new(env!("CARGO_BIN_EXE_sui-id"))
         .args(["admin", "no-such-subaction"])
         .output()
         .expect("unknown subaction");
     assert!(!unknown.status.success());
-    assert!(
-        err(&unknown).contains("issue-recovery-link"),
-        "{}",
-        err(&unknown)
-    );
+    assert!(err(&unknown).contains("sui-id admin"), "{}", err(&unknown));
 }

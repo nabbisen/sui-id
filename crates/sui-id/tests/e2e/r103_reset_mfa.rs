@@ -214,15 +214,13 @@ async fn r103_cli_reset_mfa_refusals_write_nothing() {
             "non-empty --reason",
         ),
         (
+            // RFC 148 cycle O2a: a missing required flag is now clap's
+            // own parse error, not a hand-written message.
             "missing reason",
             vec!["--username", "root"],
-            "requires --reason",
+            "--reason",
         ),
-        (
-            "missing username",
-            vec!["--reason", REASON],
-            "requires --username",
-        ),
+        ("missing username", vec!["--reason", REASON], "--username"),
     ];
     for (label, args, message) in cases {
         let out = reset_mfa(&cfg, &args);
@@ -247,6 +245,10 @@ async fn r103_cli_reset_mfa_refusals_write_nothing() {
     assert_eq!(audit_rows(t.path()).await, 0, "deleted user: no event");
 }
 
+/// RFC 148 cycle O2a renamed this command's leaf from `admin reset-mfa`
+/// to `admin user reset-mfa` and reorganized `--help` into an alias for
+/// `sui-id help`; this test's own intent (the command is discoverable in
+/// help) survives under the new wording.
 #[test]
 fn r103_cli_help_names_reset_mfa() {
     let out = Command::new(env!("CARGO_BIN_EXE_sui-id"))
@@ -255,10 +257,10 @@ fn r103_cli_help_names_reset_mfa() {
         .expect("run sui-id --help");
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("sui-id admin reset-mfa --username NAME --reason TEXT"),
+        stdout.contains("admin user reset-mfa --username <USERNAME> --reason <REASON>"),
         "{stdout}"
     );
-    assert!(stdout.contains("admin reset-mfa "), "{stdout}");
+    assert!(stdout.contains("Remove every MFA factor"), "{stdout}");
 }
 
 // ── The web path is unchanged ────────────────────────────────────────

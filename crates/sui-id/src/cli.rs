@@ -1,1678 +1,751 @@
-//! CLI subcommand implementations (RFC 075, v0.62.0).
+//! RFC 148: the one command registry. This `clap` derive tree *is* the
+//! list — the dispatch below is an exhaustive `match` on [`Command`], so a
+//! command without a dispatch arm does not compile, and [`help`] /
+//! [`reference`] render from the same tree via [`clap::CommandFactory`]
+//! rather than a hand-kept second list (RFC 107's own defect).
 //!
-//! Entry-point routing and startup paths (`serve`, `serve_dev`) live in
-//! `main.rs`; this module contains only the handler functions for each
-//! subcommand so that `main.rs` stays below the 500-line threshold.
+//! Every pre-148 form is kept, hidden from help, as either a separate
+//! top-level [`Command`] variant (`restore`, `verify-backup`,
+//! `preview-upgrade` — distinct words from the new tree, no collision) or
+//! a sibling variant inside the group its new form nests under (`backup`'s
+//! old flat `--to PATH` form on [`BackupArgs`] itself; the nine old
+//! `admin <subaction>` names inside [`AdminCommand`]). Every such path
+//! prints one notice to stderr (never stdout) before doing the old form's
+//! job through the same handler the new form calls — see [`run`].
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
+use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
-use sui_id::{backup, config::Config};
 
-/// RFC 107: the one list of top-level subcommand names. `main.rs`'s own
-/// `match` (which needs literal patterns, not a slice) is not generated
-/// from this, but `cli_bindings_cover_help_and_dispatch` asserts every
-/// name here appears in `print_help`'s text, so the two cannot drift
-/// silently apart. Consumed only by that test -- there is no non-test
-/// use site, since the dispatch's own §1 is explicit that the top-level
-/// unknown-subcommand message must not grow a list it does not have today.
-#[allow(dead_code)]
-pub(crate) const TOP_LEVEL_SUBCOMMANDS: &[&str] = &[
-    "backup",
-    "restore",
-    "verify-backup",
-    "preview-upgrade",
-    "admin",
-    "setup",
-];
-
-/// RFC 107: the one list of `admin` subaction names — previously
-/// hand-kept separately in `run_admin_subcommand`'s `match`, its own
-/// unknown-subaction message, and `print_help`'s text, which had already
-/// drifted (two entries missing from help). The unknown-subaction message
-/// is now built from this list directly; `cli_bindings_cover_help_and_dispatch`
-/// covers the help text, and `every_admin_subaction_dispatches` covers the
-/// `match`.
-pub(crate) const ADMIN_SUBACTIONS: &[&str] = &[
-    "unlock-user",
-    "reset-mfa",
-    "issue-recovery-link",
-    "rotate-key",
-    "rotate-metrics-token",
-    "issue-registration-token",
-    "revoke-registration-token",
-    "list-registration-tokens",
-    "legacy-dynamic-candidates",
-];
-
-/// RFC 107: the one list of flags that take a value, replacing the
-/// previous `FLAGS_WITH_VALUE` (`--config`, `--to`, `--from` only).
-/// `find_subcommand` (`main.rs`) uses this to skip a flag's value when
-/// walking argv for the subcommand; a flag missing here makes it
-/// misread that value as the subcommand (RFC 107's own `--dev-*` defect).
-/// Derived from each flag's own parsing, not from the help text, which is
-/// the artefact this RFC exists because it cannot be trusted; cross-checked
-/// against the architect's own independently measured list of sixteen.
-pub(crate) const VALUE_TAKING_FLAGS: &[&str] = &[
-    "--config",
-    "--to",
-    "--from",
-    "--username",
-    "--reason",
-    "--new-key",
-    "--max-uses",
-    "--note",
-    "--id",
-    "--admin-username",
-    "--admin-email",
-    "--admin-display-name",
-    "--dev-bind",
-    "--dev-db",
-    "--dev-seed",
-    "--dev-admin-password",
-    "--dev-client-secret",
-];
-
-pub(crate) fn run_backup_subcommand(args: &[String]) -> Result<()> {
-    let dest = parse_named_path(args, "--to").context("backup requires --to PATH")?;
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let opts = if args.iter().any(|a| a == "--encrypt") {
-        let pass = read_passphrase("Encryption passphrase", true)?;
-        backup::BackupOptions {
-            passphrase: Some(pass),
-        }
-    } else {
-        backup::BackupOptions::default()
-    };
-    backup::run_backup(&cfg, &dest, &opts)?;
-    if opts.passphrase.is_some() {
-        eprintln!(
-            "encrypted backup written to {} (mode 0600). Store the passphrase \
-             separately from the file — losing it makes the backup unrecoverable.",
-            dest.display()
-        );
-    } else {
-        eprintln!(
-            "backup written to {} (mode 0600). The archive contains the master key; \
-             treat it as a secret. For transport over an untrusted channel, use --encrypt.",
-            dest.display()
-        );
-    }
-    Ok(())
-}
-
-pub(crate) fn run_restore_subcommand(args: &[String]) -> Result<()> {
-    let src = parse_named_path(args, "--from").context("restore requires --from PATH")?;
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let force = args.iter().any(|a| a == "--force");
-    let passphrase = if args.iter().any(|a| a == "--decrypt") {
-        Some(read_passphrase("Decryption passphrase", false)?)
-    } else {
-        None
-    };
-    backup::run_restore(&cfg, &src, &backup::RestoreOptions { force, passphrase })?;
-    eprintln!(
-        "restored from {} into {} and {}",
-        src.display(),
-        cfg.storage.db_path.display(),
-        cfg.storage.key_file.display()
-    );
-    Ok(())
-}
-
-pub(crate) fn run_verify_backup_subcommand(args: &[String]) -> Result<()> {
-    let src = parse_named_path(args, "--from").context("verify-backup requires --from PATH")?;
-    let passphrase = if args.iter().any(|a| a == "--decrypt") {
-        Some(read_passphrase("Decryption passphrase", false)?)
-    } else {
-        None
-    };
-    let report = backup::run_verify(&src, passphrase.as_deref())?;
-    println!("Format version: {}", report.manifest.format_version);
-    println!("sui-id version: {}", report.manifest.sui_id_version);
-    println!("Schema version: {}", report.manifest.schema_version);
-    println!("Created at:     {}", report.manifest.created_at);
-    println!("Hostname:       {}", report.manifest.hostname);
-    println!("Issuer:         {}", report.manifest.issuer);
-    println!("Encrypted:      {}", report.encrypted);
-    println!("Tar size:       {} bytes", report.tar_bytes);
-    println!("Database size:  {} bytes", report.db_bytes);
-    println!(
-        "Master key:     {}",
-        if report.key_present {
-            "present"
-        } else {
-            "MISSING"
-        }
-    );
-    println!();
-    println!("✓ SQLite integrity check passed");
-    if report.encrypted {
-        println!("✓ Decrypted with provided passphrase");
-    }
-    Ok(())
-}
-
-/// `sui-id preview-upgrade [--config PATH]` (RFC 142 stage 4): what this
-/// build would do to the configured database, without opening it for
-/// writing and without resolving a master key — loading `Config` reads
-/// `storage.db_path` only; nothing here ever reaches `storage.key_file`.
-/// A refused database (`sui_id::database::preview`'s `Err`) is exactly the
-/// same [`sui_id::database::DatabaseRefused`] every other refused-database
-/// path produces, so `main` prints the one line and exits 65 without any
-/// special case here.
-pub(crate) fn run_preview_upgrade_subcommand(args: &[String]) -> Result<()> {
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let path = &cfg.storage.db_path;
-
-    let outcome = sui_id::database::preview(path)?;
-    // RFC 142 stage 5 §6: the same free-space function `database::open`
-    // itself will use, so the preview's prediction and the start's actual
-    // decision can never disagree about the numbers. Only meaningful (and
-    // only computed) when a migration would actually run.
-    let free_space = matches!(outcome, sui_id_store::migrations::Preview::Pending { .. })
-        .then(|| sui_id_store::backup::check_free_space(path));
-    print!(
-        "{}",
-        render_preview_upgrade(
-            env!("CARGO_PKG_VERSION"),
-            path,
-            &outcome,
-            free_space.as_ref()
-        )
-    );
-    Ok(())
-}
-
-/// The exact text of `preview-upgrade`'s report (RFC 142 stage 4 §2, RFC
-/// 142 stage 5 §6). A pure function of its inputs so the forms can be
-/// asserted against synthetic `Preview`/`FreeSpaceCheck` values, not only
-/// through a real database file. `free_space` is read only for `Pending`.
-fn render_preview_upgrade(
-    version: &str,
-    path: &std::path::Path,
-    outcome: &sui_id_store::migrations::Preview,
-    free_space: Option<&sui_id_store::backup::FreeSpaceCheck>,
-) -> String {
-    use std::fmt::Write as _;
-    use sui_id_store::migrations::{MAX_SCHEMA_VERSION, Preview};
-
-    let mut out = format!("sui-id {version}: upgrade preview for {}\n", path.display());
-    match outcome {
-        Preview::NoFile => {
-            let _ = writeln!(out, "  No database exists at {} yet.", path.display());
-            let _ = writeln!(
-                out,
-                "  Starting this sui-id creates its schema and runs all {MAX_SCHEMA_VERSION} \
-                 migrations. Nothing was changed."
-            );
-        }
-        Preview::Fresh => {
-            let _ = writeln!(out, "  The database at {} is empty.", path.display());
-            let _ = writeln!(
-                out,
-                "  Starting this sui-id creates its schema and runs all {MAX_SCHEMA_VERSION} \
-                 migrations. Nothing was changed."
-            );
-        }
-        Preview::AtHead => {
-            let _ = writeln!(
-                out,
-                "  The database is already at schema version {MAX_SCHEMA_VERSION}. Starting \
-                 this sui-id runs no migrations. Nothing was changed."
-            );
-        }
-        Preview::Pending {
-            current,
-            last_migrated_by,
-            migrations,
-        } => {
-            let stamp = match last_migrated_by {
-                Some(v) => format!("last migrated by sui-id {v}"),
-                None => "the release that last migrated it is not recorded".to_string(),
-            };
-            let _ = writeln!(out, "  Schema version now:      {current} ({stamp})");
-            let _ = writeln!(out, "  This sui-id migrates to: {MAX_SCHEMA_VERSION}");
-            let _ = writeln!(
-                out,
-                "  {} migrations would run when this sui-id starts:",
-                migrations.len()
-            );
-            for m in migrations {
-                let _ = writeln!(out, "    {}", m.name);
-            }
-            if let Some(check) = free_space {
-                let _ = writeln!(out, "  {}", sui_id::database::backup_prediction_line(check));
-            }
-            let _ = writeln!(
-                out,
-                "  Nothing was changed. Back up before starting this sui-id: \
-                 docs/src/guides/upgrade.md"
-            );
-        }
-    }
-    out
-}
-
-/// Dispatcher for `sui-id admin <subaction> ...`. Six subactions exist
-/// today (`ADMIN_SUBACTIONS`); the surface is shaped to keep growing.
-/// NOTE: async because `main` is `#[tokio::main]` — constructing a second
-/// runtime here (`Runtime::new().block_on`) panics with "Cannot start a
-/// runtime from within a runtime". Surfaced during RFC 077 smoke testing;
-/// the same fix is applied to all async subcommands.
-pub(crate) async fn run_admin_subcommand(args: &[String]) -> Result<()> {
-    let action = args.get(2).map(String::as_str);
-    match action {
-        Some("unlock-user") => run_admin_unlock_user(args).await,
-        Some("reset-mfa") => run_admin_reset_mfa(args).await,
-        Some("issue-recovery-link") => run_admin_issue_recovery_link(args).await,
-        Some("rotate-key") => run_admin_rotate_key(args).await,
-        Some("rotate-metrics-token") => run_admin_rotate_metrics_token(args).await,
-        Some("issue-registration-token") => run_admin_issue_registration_token(args).await,
-        Some("revoke-registration-token") => run_admin_revoke_registration_token(args).await,
-        Some("list-registration-tokens") => run_admin_list_registration_tokens(args).await,
-        Some("legacy-dynamic-candidates") => run_admin_legacy_dynamic_candidates(args).await,
-        Some(known) if ADMIN_SUBACTIONS.contains(&known) => unreachable!(
-            "{known} is listed in ADMIN_SUBACTIONS but has no dispatch arm above -- add one"
-        ),
-        Some(other) => bail!(
-            "unknown admin subaction `{other}`. Known subactions: {}",
-            ADMIN_SUBACTIONS.join(", ")
-        ),
-        None => bail!("admin requires a subaction. Try: sui-id admin unlock-user --username NAME"),
-    }
-}
-
-/// `sui-id admin unlock-user --username NAME [--config PATH]`
-///
-/// Clears `failed_login_count` and `locked_until` on a user without
-/// requiring a password verification — the operator's own
-/// authority, witnessed by their access to the host's master key
-/// material, is what authorises this. Used to recover a real user
-/// who's been locked out by a typo storm or by a brute-force
-/// attempt that exceeded the auto-unlock window.
-pub(crate) async fn run_admin_unlock_user(args: &[String]) -> Result<()> {
-    let username = args
-        .iter()
-        .position(|a| a == "--username")
-        .and_then(|i| args.get(i + 1))
-        .context("admin unlock-user requires --username NAME")?;
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-
-    // Open the database using the same key-resolution logic the
-    // server uses (env var > file). No need to spin up the HTTP
-    // layer or the clock; we read one row, write one row, exit.
-    let (db, _key_origin) = sui_id::database::open_checked(
-        &cfg.storage.db_path,
-        &cfg.storage.key_file,
-        sui_id::database::backup_policy_from_args(args),
-    )
-    .await
-    .context("loading master key and opening database")?;
-
-    let user = sui_id_store::repos::users::find_by_username(&db, username)
-        .await
-        .with_context(|| format!("looking up user {username:?}"))?;
-    // RFC 094 U08: the counter/lock reset and the admin.user.unlock audit
-    // append now commit in one Class-A transaction, replacing the
-    // previous unguarded `admin_unlock` followed by a fire-and-forget raw
-    // `audit::append` call that bypassed the registry entirely.
-    sui_id_store::commands::admin_unlock_user(&db, user.id)
-        .await
-        .context("clearing lockout")?;
-    eprintln!("unlocked {username} (id={})", user.id);
-    Ok(())
-}
-
-/// `sui-id admin reset-mfa --username NAME --reason TEXT [--config PATH]`
-///
-/// Removes every MFA factor (TOTP and passkeys) for one user, on the
-/// operator's authority (RFC 103 D12): the recovery for a sole
-/// administrator who lost every factor. The removal and its
-/// `mfa.admin_reset` event (no actor, `via = cli`) commit together.
-/// Sessions are left alone, as on the web path.
-pub(crate) async fn run_admin_reset_mfa(args: &[String]) -> Result<()> {
-    let flag = |name: &str| {
-        args.iter()
-            .position(|a| a == name)
-            .and_then(|i| args.get(i + 1))
-    };
-    let username = flag("--username").context("admin reset-mfa requires --username NAME")?;
-    let reason = flag("--reason").context("admin reset-mfa requires --reason TEXT")?;
-    if reason.trim().is_empty() {
-        bail!("admin reset-mfa requires a non-empty --reason TEXT");
-    }
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) = sui_id::database::open_checked(
-        &cfg.storage.db_path,
-        &cfg.storage.key_file,
-        sui_id::database::backup_policy_from_args(args),
-    )
-    .await
-    .context("loading master key and opening database")?;
-
-    match sui_id_core::admin::operator_reset_mfa(&db, username, reason).await {
-        Ok((user_id, report)) => {
-            eprintln!(
-                "reset MFA for {username} (id={user_id}): totp {}, {} passkey(s) removed",
-                if report.totp_removed {
-                    "removed"
-                } else {
-                    "absent"
-                },
-                report.passkeys_removed
-            );
-            Ok(())
-        }
-        Err(sui_id_core::errors::CoreError::NotFound) => {
-            bail!("no active user named {username:?} (unknown or deleted); nothing was changed")
-        }
-        Err(e) => Err(anyhow::anyhow!(e)).context("resetting MFA; nothing was changed"),
-    }
-}
-
-/// `sui-id admin issue-recovery-link --username NAME --reason TEXT [--config PATH]`
-///
-/// Issues a single-use, 30-minute account-recovery link for one local user, on
-/// the operator's authority (RFC 103 D2, D12): the last resort, which works
-/// for any local account including the sole administrator. It is a link, never
-/// a password: the user opens it and chooses their own. The issuance and its
-/// `user.recovery_link.issued` event (no actor, `via = cli`) commit together,
-/// and it invalidates the user's earlier links.
-///
-/// **Output.** The link and the token text are printed to **stdout** and
-/// nowhere else, once, and never through a logger. Everything else this
-/// command says (what it did, why it refused) goes to stderr and carries no
-/// token. It works while the server is running: it opens the database itself,
-/// as every other `admin` subcommand does.
-pub(crate) async fn run_admin_issue_recovery_link(args: &[String]) -> Result<()> {
-    let flag = |name: &str| {
-        args.iter()
-            .position(|a| a == name)
-            .and_then(|i| args.get(i + 1))
-    };
-    let username =
-        flag("--username").context("admin issue-recovery-link requires --username NAME")?;
-    let reason = flag("--reason").context("admin issue-recovery-link requires --reason TEXT")?;
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) = sui_id::database::open_checked(
-        &cfg.storage.db_path,
-        &cfg.storage.key_file,
-        sui_id::database::backup_policy_from_args(args),
-    )
-    .await
-    .context("loading master key and opening database")?;
-    let clock: sui_id_core::time::SharedClock = std::sync::Arc::new(sui_id_core::time::SystemClock);
-
-    match sui_id_core::recovery_link::issue_as_operator(&db, &clock, username, reason).await {
-        Ok((user_id, link)) => {
-            let url = sui_id_core::recovery_link::completion_url(&cfg.server.issuer, &link.token);
-            eprintln!(
-                "issued a recovery link for {username} (id={user_id}); it expires at {} and \
-                 invalidated {} earlier link(s)",
-                link.expires_at
-                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                link.invalidated
-            );
-            eprintln!(
-                "deliver it through a channel that authenticates the person, and immediately: \
-                 it is shown only once"
-            );
-            println!("Recovery link:");
-            println!("{url}");
-            println!("Token, if the link's fragment is dropped in transit:");
-            println!("{}", link.token.expose());
-            Ok(())
-        }
-        Err(sui_id_core::errors::CoreError::Store(sui_id_store::StoreError::RecoveryRefused(
-            why,
-        ))) => bail!("no recovery link was issued: {why}"),
-        Err(e) => Err(anyhow::anyhow!(e)).context("issuing the recovery link; nothing was changed"),
-    }
-}
-
-/// `sui-id admin rotate-key [--new-key PATH | --generate-new-key] [--yes]
-///                          [--config PATH]`
-///
-/// Re-seal every encrypted column in the database under a new
-/// 32-byte XChaCha20-Poly1305 master key. Runs offline: the
-/// caller is expected to have stopped the server first, taken
-/// a backup of both the DB and the current key file, and only
-/// then to invoke this. After completion the operator restarts
-/// the server, which picks up the new key from the configured
-/// path.
-///
-/// New key sources:
-///   - `--generate-new-key` (default if neither flag is given):
-///     CLI generates a fresh 32-byte key from the OS RNG and
-///     writes it as base64 to the configured key file path.
-///   - `--new-key PATH`: the operator has already prepared a
-///     new key file (e.g. via an HSM-backed workflow) and
-///     points us at it. The contents are validated as base64-
-///     encoded 32 bytes and replace the configured key file.
-///
-/// In both cases the *previous* file at the configured path is
-/// renamed to `<original>.bak.<RFC3339-Z timestamp>` and kept
-/// in the same directory. Old files are not auto-deleted; the
-/// operator decides when (or whether) to remove them.
-///
-/// Default flow — urgent fix (2026-11-03): the new key is made durable
-/// *before* the re-seal commits, not after. Every release since v0.26.0
-/// (2026-05-04) wrote the only copy of a generated key after the
-/// transaction committed; a disk error there was permanent, total loss
-/// of every sealed column. See
-/// `rfcs/handoffs/094-transactional-audit/urgent-master-key-ordering-2026-11-03.md`.
-/// **`0.91.0` stage 1, part A (2026-11-14): "durable" now means synced,
-/// not merely written.** Before, nothing called `sync_all` on the
-/// staged key file or its directory, nor on either rename below — a
-/// power loss could still lose a "durable" key that had only reached
-/// the page cache. `write_key_file` now syncs the file and its
-/// directory before it returns, and each rename below is followed by
-/// its own directory sync.
-///   1. Print a summary of what will happen and prompt
-///      "type yes to continue:". Skip with `--yes` for non-
-///      interactive use.
-///   2. If `<key_file>.new` already exists, refuse before opening the
-///      database — a previous rotation may not have completed, and
-///      that file may be the only copy of the key the database is
-///      already using.
-///   3. Open DB under the OLD key. Refuses first if that key came from
-///      `SUI_ID_MASTER_KEY` (`0.91.0` stage 1, part B) — rotation writes
-///      the key *file*, which a start with that variable still set
-///      would ignore, leaving the server unable to open a database
-///      this command had already re-sealed.
-///   4. Obtain the new key (generate, or read `--new-key`) and stage
-///      it at `<key_file>.new`, created atomically with owner-only
-///      permissions (`create_new` + mode `0600`, never a `chmod`
-///      after the fact), then synced to disk along with its directory.
-///      This is the only durable copy of a generated key until step 7.
-///   5. Re-seal every encrypted column under the new key, and record
-///      `admin.master_key.resealed` (K07), in one transaction
-///      (RFC 094 cycle J stage 4). Failure: rollback, no audit row;
-///      the staged key and the old key file are both untouched, and a
-///      re-run is a clean retry.
-///   6. Rename old key file to `.bak.<timestamp>`, then sync that
-///      directory.
-///   7. Rename `<key_file>.new` to the configured path, then sync that
-///      directory again. Steps 6 and 7 are renames within one
-///      directory, which allocate nothing and are far less likely to
-///      fail than a write — and if either the rename or its directory
-///      sync does, the new key is still recoverable from
-///      `<key_file>.new` or `.bak.<timestamp>`.
-///   8. Print a report of how many rows were re-sealed in each
-///      table.
-pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-    // RFC 112 D5: this command prints a summary and asks for confirmation before
-    // it opens the database, so the refusal is checked first; it must be the
-    // first thing the operator reads, not the last after a "type yes".
-    sui_id::database::check(&cfg.storage.db_path)?;
-
-    // Source-of-new-key flag handling. Mutually exclusive: at
-    // most one of `--new-key` / `--generate-new-key`. Default is
-    // generate.
-    let generate_flag = args.iter().any(|a| a == "--generate-new-key");
-    let new_key_arg = args
-        .iter()
-        .position(|a| a == "--new-key")
-        .and_then(|i| args.get(i + 1));
-    if generate_flag && new_key_arg.is_some() {
-        bail!("pass at most one of --generate-new-key, --new-key PATH");
-    }
-    let provided_new_key_path: Option<PathBuf> = new_key_arg.map(PathBuf::from);
-
-    let yes = args.iter().any(|a| a == "--yes" || a == "-y");
-
-    // Warn the operator and request confirmation unless --yes
-    // was passed. Even on --yes we print the summary so it's in
-    // the operator's terminal scrollback if anything goes wrong.
-    eprintln!(
-        "About to rotate the master key for the database at {}.",
-        cfg.storage.db_path.display()
-    );
-    eprintln!("Old key file: {}", cfg.storage.key_file.display());
-    if let Some(p) = &provided_new_key_path {
-        eprintln!("New key:      {} (provided)", p.display());
-    } else {
-        eprintln!("New key:      generated by this command");
-    }
-    eprintln!(
-        "After completion the old key file will be renamed to \
-        \"<path>.bak.<timestamp>\" and kept in place."
-    );
-    eprintln!(
-        "Make sure the server is stopped and that you have a fresh \
-        backup of both the DB and the old key file before continuing."
-    );
-
-    if !yes {
-        // Confirm via TTY.
-        use std::io::{BufRead, Write};
-        let mut stderr = std::io::stderr();
-        write!(stderr, "Type 'yes' to continue: ").ok();
-        stderr.flush().ok();
-        let mut line = String::new();
-        std::io::stdin()
-            .lock()
-            .read_line(&mut line)
-            .context("reading confirmation from stdin")?;
-        if line.trim() != "yes" {
-            bail!("aborted (no 'yes' confirmation)");
-        }
-    }
-
-    let old_path = cfg.storage.key_file.clone();
-    let staged_path = {
-        let mut p = old_path.clone();
-        let mut new_name = p
-            .file_name()
-            .map(|s| s.to_owned())
-            .unwrap_or_else(|| std::ffi::OsString::from("master.key"));
-        new_name.push(".new");
-        p.set_file_name(new_name);
-        p
-    };
-
-    // Refuse before touching the database. If this file exists, a
-    // previous rotation may not have completed: it may be the only
-    // copy of the key the database is already using, and overwriting
-    // it with a freshly generated key would destroy that key and look
-    // like an ordinary retry.
-    if staged_path.exists() {
-        bail!(
-            "refusing to rotate: {} already exists. A previous rotation \
-            may not have completed -- that file may be the only copy of \
-            the master key the database is already sealed under. Check \
-            it against the database (does it open with it as the \
-            key_file?) before removing it and retrying.",
-            staged_path.display()
-        );
-    }
-
-    // Resolve OLD key from the configured path (or env, same as the
-    // server's startup logic) — RFC 100 stage 1: checked against the
-    // database read-only first, the one way in every caller but this
-    // one uses through `database::open_checked`. Rotation calls it
-    // directly, not that wrapper, because the Env-origin refusal below
-    // must run *before* the database is opened, and `open_checked`'s
-    // fixed order opens it immediately after resolving.
-    let resolved_old =
-        sui_id::keyring::resolve_checked(&cfg.storage.key_file, &cfg.storage.db_path)
-            .context("loading old master key")?;
-
-    // `0.91.0` stage 1, part B: refuse before the database is even
-    // opened if the old key came from the environment. Only `resolve`
-    // knows the origin, so this check can only run after it -- and it
-    // must run before `database::open`, so a refusal touches nothing.
-    if resolved_old.origin == sui_id::keyring::KeyOrigin::Env {
-        bail!(
-            "refusing to rotate: the current master key came from the \
-            SUI_ID_MASTER_KEY environment variable, not the key file at \
-            {}. Rotation only writes the key *file* -- with the \
-            variable still set, the server would ignore that file on \
-            its next start and keep using the old key, which would no \
-            longer open a database this command had already re-sealed. \
-            Unset SUI_ID_MASTER_KEY and point key_file at a file \
-            holding the current key before rotating here, or rotate \
-            the key in whatever deployment system sets the variable.",
-            cfg.storage.key_file.display()
-        );
-    }
-
-    let db = sui_id::database::open(
-        &cfg.storage.db_path,
-        resolved_old.key,
-        sui_id::database::backup_policy_from_args(args),
-    )?;
-    // RFC 100 stage 1: idempotent — a database rotation already visits
-    // necessarily already has a sentinel (it has sealed rows, so
-    // `resolve_checked` just verified the old key against one of them
-    // or against the sentinel itself); this is a no-op in that case,
-    // and only matters for an operator who rotates immediately after
-    // an upgrade that had not yet seen any other request write one.
-    sui_id_store::master_key_check::ensure_sentinel_written(&db, db.key())
-        .await
-        .context("writing the master key sentinel")?;
-
-    // Construct the NEW key. Either generate one or read it
-    // from the operator-provided file.
-    let (new_key, new_key_b64) = if let Some(path) = &provided_new_key_path {
-        let raw = std::fs::read_to_string(path)
-            .with_context(|| format!("reading --new-key file at {}", path.display()))?;
-        let key = sui_id_store::crypto::MasterKey::from_base64(&raw)
-            .context("--new-key file must contain a base64-encoded 32-byte key")?;
-        let b64 = raw.trim().to_owned();
-        (key, b64)
-    } else {
-        let key = sui_id_store::crypto::MasterKey::generate();
-        let b64 = key.to_base64();
-        (key, b64)
-    };
-
-    // Rename the old key file AFTER the transaction commits so a
-    // failure in re-sealing does not leave the operator with a renamed
-    // file and an un-rotated DB. The timestamp is computed here because
-    // the success report below prints it; `bak_path` is otherwise just
-    // a path `rotate_key_files` renames into.
-    let now = chrono::Utc::now();
-    // Filename-safe RFC3339 (replace ':' which is illegal on
-    // Windows and irritating on macOS).
-    let stamp = now.format("%Y-%m-%dT%H-%M-%SZ").to_string();
-    let bak_path = {
-        let mut p = old_path.clone();
-        let mut new_name = p
-            .file_name()
-            .map(|s| s.to_owned())
-            .unwrap_or_else(|| std::ffi::OsString::from("master.key"));
-        new_name.push(format!(".bak.{stamp}"));
-        p.set_file_name(new_name);
-        p
-    };
-
-    // RFC 100 stage 0: staging the new key, re-sealing, and both
-    // renames all go through the key-file adapter now — [`Real`] in
-    // production, exactly the same operations this function ran
-    // inline before this stage.
-    //
-    // [`Real`]: sui_id::key_adapter::Real
-    let adapter = sui_id::key_adapter::default_adapter();
-    let report = match sui_id::rotate::rotate_key_files(
-        adapter.as_ref(),
-        &db,
-        &new_key,
-        &old_path,
-        &staged_path,
-        &bak_path,
-        &new_key_b64,
-    )
-    .await
-    {
-        // The re-seal committed, but another connection kept it from being
-        // made durable. This is not retryable (a second rotation would start
-        // from the old key, which no longer opens the database), so say
-        // exactly where each key is and what to do.
-        Err(sui_id::rotate::RotateKeyFilesError::NotDurable(e)) => {
-            return Err(anyhow::Error::new(e).context(format!(
-                "the database is now sealed under the NEW key, which is at {staged}; {active} \
-                 still holds the old key. Something else has the database open: stop sui-id \
-                 (rotation runs offline), then move {staged} to {active} by hand before \
-                 starting anything. Do not delete {staged}, and do not run the rotation again",
-                staged = staged_path.display(),
-                active = old_path.display(),
-            )));
-        }
-        Err(sui_id::rotate::RotateKeyFilesError::Other(e)) => return Err(e),
-        Ok(report) => report,
-    };
-
-    // RFC 094 cycle J stage 5: this record's own subject is the key
-    // files -- the row count moved to `admin.master_key.resealed` (K07),
-    // which carries it per table. Report what only this event knows.
-    let rotated_append = sui_id_store::repos::audit::append(
-        &db,
-        &sui_id_store::models::AuditLogRow {
-            at: now,
-            actor: None,
-            action: "admin.master_key.rotated".into(),
-            target: None,
-            result: "ok".into(),
-            note: Some(format!(
-                "new key in place at {}; old key archived at {}",
-                old_path.display(),
-                bak_path.display()
-            )),
-        },
-    )
-    .await;
-    // The rotation itself is done and committed by this point; its
-    // completion does not depend on this best-effort record (a
-    // filesystem rename cannot join the transaction K07 already
-    // committed). Report a failed append rather than discard it -- an
-    // operator who loses this row is told nothing, and a later reader
-    // seeing `resealed` with no `rotated` would otherwise conclude the
-    // opposite of the truth. Do not fail the command: the work is done,
-    // and a non-zero exit would invite a re-run that the staged-file
-    // refusal would then block.
-
-    eprintln!();
-    eprintln!("Rotation complete.");
-    eprintln!("  signing_keys:               {}", report.signing_keys);
-    eprintln!("  refresh_tokens:             {}", report.refresh_tokens);
-    eprintln!("  user_totp (secrets):        {}", report.user_totp_secrets);
-    eprintln!(
-        "  user_totp (recovery codes): {}",
-        report.user_totp_recovery_codes
-    );
-    eprintln!(
-        "  user_webauthn_credentials:  {}",
-        report.user_webauthn_credentials
-    );
-    eprintln!("  smtp_config:                {}", report.smtp_config);
-    eprintln!("  total:                      {}", report.total());
-    eprintln!();
-    eprintln!("Old key file archived at {}", bak_path.display());
-    eprintln!("New key file written to  {}", old_path.display());
-    eprintln!();
-    eprintln!("Restart the server. The new key is in place.");
-    // Last, deliberately. Sixteen lines of success report follow the
-    // append above, ending in the restart instruction; a warning printed
-    // before them is a warning the operator scrolls past. This stage
-    // exists so a half-finished rotation is legible -- the one runtime
-    // signal that something is incomplete belongs where the eye lands.
-    if let Err(err) = rotated_append {
-        eprintln!();
-        eprintln!("Warning: the rotation completed, but the admin.master_key.rotated");
-        eprintln!("audit record could not be written: {err}");
-        eprintln!("The key is rotated and in place regardless -- note this by hand if");
-        eprintln!("your audit trail needs to be complete.");
-    }
-    Ok(())
-}
-
-/// `sui-id setup --admin-username NAME [--admin-email EMAIL]
-///               [--admin-display-name NAME] [--config PATH]`
-///
-/// RFC 077: headless initialization. Creates the first administrator
-/// and bootstraps a signing key without the GUI wizard, enabling
-/// provisioning via Ansible, cloud-init, Docker entrypoints, etc.
-///
-/// Password resolution (deliberately no `--admin-password` flag —
-/// command-line arguments leak into shell history and `ps` output):
-///
-///   1. `SUI_ID_ADMIN_PASSWORD` env var, if set — validated at
-///      Standard level (12+ chars).
-///   2. Otherwise a random 24-char password is generated and printed ONCE to
-///      stdout. **Nothing forces its rotation**: there is no such flag (RFC 115
-///      D12 removed the one that pretended to). Change it after first sign-in;
-///      note that stdout is often captured into Ansible, cloud-init and Docker
-///      logs, where this line remains a working credential until you do.
-///
-/// stdout carries only the credential block (machine-capturable);
-/// diagnostics go to stderr.
-///
-/// No setup token: this path requires filesystem access to the
-/// database and master key, which already implies control of the
-/// instance (same trust model as `admin unlock-user`). The web
-/// wizard keeps its boot-time token because it is network-reachable.
-pub(crate) async fn run_setup_subcommand(args: &[String]) -> Result<()> {
-    run_setup(args).await
-}
-
-async fn run_setup(args: &[String]) -> Result<()> {
-    fn flag_value<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
-        args.iter()
-            .position(|a| a == name)
-            .and_then(|i| args.get(i + 1))
-            .map(String::as_str)
-    }
-
-    let username = flag_value(args, "--admin-username")
-        .filter(|s| !s.trim().is_empty())
-        .context("setup requires --admin-username NAME")?;
-    let email = flag_value(args, "--admin-email");
-    let display_name = flag_value(args, "--admin-display-name");
-
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-
-    let (db, _key_origin) = sui_id::database::open_checked(
-        &cfg.storage.db_path,
-        &cfg.storage.key_file,
-        sui_id::database::backup_policy_from_args(args),
-    )
-    .await
-    .context("loading master key and opening database")?;
-
-    let clock = sui_id_core::time::system_clock();
-
-    // Password: env var wins; otherwise generate and flag for rotation.
-    let env_password = std::env::var("SUI_ID_ADMIN_PASSWORD")
-        .ok()
-        .filter(|s| !s.is_empty());
-    let (password, generated): (zeroize::Zeroizing<String>, bool) = match env_password {
-        Some(p) => (zeroize::Zeroizing::new(p), false),
-        None => (sui_id_core::setup::generate_admin_password(), true),
-    };
-
-    let created = sui_id_core::setup::create_initial_admin_headless(
-        &db,
-        &clock,
-        username,
-        &password,
-        display_name,
-        email,
-    )
-    .await
-    .map_err(|e| match e {
-        sui_id_core::errors::CoreError::AlreadyInitialized => {
-            anyhow::anyhow!("this instance is already initialized; setup can only run once")
-        }
-        other => anyhow::anyhow!("{other}"),
-    })?;
-
-    let login_url = format!("{}/admin/login", cfg.server.issuer.trim_end_matches('/'));
-
-    eprintln!("sui-id initialized (admin id={}).", created.user_id);
-    println!();
-    println!("============ INITIAL ADMIN CREDENTIALS ============");
-    println!("  username: {}", created.username);
-    if generated {
-        println!("  password: {}", password.as_str());
-    }
-    println!("  login:    {}", login_url);
-    println!("===================================================");
-    println!();
-    if generated {
-        println!("This password is shown only once. Change it after first");
-        println!("login at /me/security/password.");
-    } else {
-        println!("Password taken from SUI_ID_ADMIN_PASSWORD.");
-    }
-    Ok(())
-}
-
-/// Read a passphrase from stdin (interactive TTY) or from the
-/// `SUI_ID_BACKUP_PASSPHRASE` environment variable (for cron and
-/// scripted use). When `confirm` is true and we're on a TTY, the
-/// passphrase is asked twice and rejected on mismatch.
-pub(crate) fn read_passphrase(prompt: &str, confirm: bool) -> Result<String> {
-    if let Ok(env) = std::env::var("SUI_ID_BACKUP_PASSPHRASE")
-        && !env.is_empty()
-    {
-        return Ok(env);
-    }
-    use std::io::{BufRead, Write};
-    let stdin = std::io::stdin();
-    let mut stderr = std::io::stderr();
-    write!(stderr, "{prompt}: ").ok();
-    stderr.flush().ok();
-    let mut first = String::new();
-    stdin
-        .lock()
-        .read_line(&mut first)
-        .context("reading passphrase")?;
-    let first = first.trim_end_matches(['\r', '\n']).to_string();
-    if first.is_empty() {
-        bail!("passphrase must not be empty");
-    }
-    if confirm {
-        write!(stderr, "{prompt} (again): ").ok();
-        stderr.flush().ok();
-        let mut second = String::new();
-        stdin
-            .lock()
-            .read_line(&mut second)
-            .context("reading passphrase confirmation")?;
-        let second = second.trim_end_matches(['\r', '\n']).to_string();
-        if first != second {
-            bail!("passphrases did not match");
-        }
-    }
-    Ok(first)
-}
-
-pub(crate) fn parse_config_path(args: &[String]) -> Option<PathBuf> {
-    parse_named_path(args, "--config")
-}
-
-pub(crate) fn parse_named_path(args: &[String], flag: &str) -> Option<PathBuf> {
-    let mut iter = args.iter();
-    while let Some(a) = iter.next() {
-        if a == flag {
-            return iter.next().map(PathBuf::from);
-        }
-        let prefix = format!("{flag}=");
-        if let Some(rest) = a.strip_prefix(&prefix) {
-            return Some(PathBuf::from(rest));
-        }
-    }
-    None
-}
-
-pub(crate) fn print_help() {
-    println!("{}", help_text());
-}
-
-/// Separated from [`print_help`] so a test can assert `TOP_LEVEL_SUBCOMMANDS`
-/// and `ADMIN_SUBACTIONS` each appear in this text, rather than only in
-/// `print_help`'s own `println!` call site.
-fn help_text() -> String {
-    format!(
-        "sui-id {ver}
-
-Self-hosted OpenID Connect provider.
-
-USAGE:
-    sui-id [--config PATH]
-    sui-id backup --to PATH [--config PATH] [--encrypt]
-    sui-id restore --from PATH [--config PATH] [--force] [--decrypt]
-    sui-id verify-backup --from PATH [--decrypt]
-    sui-id preview-upgrade [--config PATH]
-    sui-id admin unlock-user --username NAME [--config PATH]
-    sui-id admin reset-mfa --username NAME --reason TEXT [--config PATH]
-    sui-id admin issue-recovery-link --username NAME --reason TEXT [--config PATH]
-    sui-id admin rotate-key [--generate-new-key | --new-key PATH] [--yes] [--config PATH]
-    sui-id admin rotate-metrics-token [--config PATH]
-    sui-id admin issue-registration-token [--max-uses N] [--note TEXT] [--config PATH]
-    sui-id admin revoke-registration-token --id ID [--config PATH]
-    sui-id admin list-registration-tokens [--config PATH]
-    sui-id admin legacy-dynamic-candidates [--config PATH]
-    sui-id --dev [--dev-bind ADDR] [--dev-db PATH] [--dev-seed PATH]
-                 [--dev-admin-password STR] [--dev-client-secret STR]
-    sui-id --print-sample-config
-    sui-id --version
-    sui-id --help
-
-SUBCOMMANDS:
-    (none)                   Run the HTTP server.
-    backup                   Write a tarball containing a SQLite-consistent
-                             snapshot of the database, a copy of the master
-                             key file, and a manifest describing the
-                             provenance. The output file is mode 0600.
-                             With --encrypt, the tarball is wrapped in an
-                             XChaCha20-Poly1305 envelope keyed by an
-                             Argon2id derivation of a passphrase you supply.
-                             Use --encrypt for backups that will leave the
-                             trust boundary of the host.
-    restore                  Restore a backup tarball into the configured
-                             storage paths. Refuses to overwrite existing
-                             files unless --force is supplied. Use --decrypt
-                             when restoring an encrypted backup.
-    verify-backup            Read a backup file and report what it
-                             contains. Writes nothing to the backup or to
-                             the configured storage paths; stages a
-                             temporary copy of the snapshot under the
-                             system temp directory to run a SQLite
-                             integrity check, then removes it. Use before
-                             a real restore to catch a corrupted or
-                             mismatched backup.
-    preview-upgrade          Read-only. Reports the configured database's
-                             stored schema version, the release that last
-                             migrated it, the migrations this sui-id would
-                             run, and the version it would end at — or the
-                             same refusal line startup would print. Writes
-                             nothing: not the version, not sui_meta, not a
-                             WAL frame it did not need. Needs no master
-                             key. Run it with the new binary before
-                             replacing the old one; see
-                             docs/src/guides/upgrade.md.
-    admin unlock-user        Clear an account-lockout state for the given
-                             user. Resets the failed-login counter and
-                             removes any active lock. Use to recover a real
-                             user who's been locked out by a typo storm or
-                             whose lockout window hasn't expired yet.
-    admin reset-mfa          Remove every MFA factor (TOTP and passkeys)
-                             for the given user, on the operator's
-                             authority. The recovery for a sole
-                             administrator who lost every factor. The
-                             reason is recorded in the audit log.
-    admin issue-recovery-link
-                             Issue a single-use account-recovery link (valid
-                             30 minutes) for a local user, on the operator's
-                             authority: the last resort, and the way back for
-                             a sole administrator. The user opens it and
-                             chooses their own password; nobody else learns
-                             it. The link and its token text are printed to
-                             stdout once. The reason (at most 200 characters)
-                             is recorded in the audit log. At most 5 per hour.
-    admin rotate-key         Re-seal every encrypted column under a new
-                             32-byte master key. Runs OFFLINE: stop the
-                             server first, take a fresh backup, then run
-                             this. The previous key file is renamed to
-                             '<original>.bak.<timestamp>' beside it; the
-                             new key is written to the configured path.
-                             Use --generate-new-key (default) for the
-                             CLI to mint a fresh key, or --new-key PATH
-                             to provide one you prepared yourself. Use
-                             --yes to skip the interactive confirmation
-                             prompt for non-interactive use.
-    admin rotate-metrics-token
-                             Generate a fresh metrics bearer token and
-                             store its hash, invalidating the previous
-                             one immediately (no grace-period overlap).
-                             The raw token is printed to stdout ONCE;
-                             update your Prometheus scrape config with it
-                             before the next scrape interval.
-    admin issue-registration-token
-                             Issue an RFC 7591 initial access token for
-                             dynamic client registration. The raw token
-                             is printed to stdout ONCE. Accepts
-                             --max-uses N (default 1) and --note TEXT.
-    admin revoke-registration-token
-                             Immediately revoke a client-registration
-                             token by id, so it can no longer be
-                             redeemed. Requires --id ID.
-    admin list-registration-tokens
-                             List every client-registration token: id,
-                             created_at, max_uses/used_count,
-                             expires_at and revoked state. Never prints
-                             the token or its hash.
-    admin legacy-dynamic-candidates
-                             Read-only (RFC 095). Lists `clients` rows a
-                             pre-RFC-094 bug (2026-07-02 to 2026-10-02)
-                             may have left mislabelled `admin` when they
-                             were really self-registered. Writes nothing;
-                             an empty result does not mean none exist —
-                             see docs/src/guides/upgrade.md.
-    setup                    Headless initialization (RFC 077). Creates the
-                             first administrator and bootstraps a signing
-                             key without the GUI wizard. Requires
-                             --admin-username; accepts --admin-email and
-                             --admin-display-name. The password comes from
-                             SUI_ID_ADMIN_PASSWORD if set; otherwise a
-                             random one is generated and printed ONCE to
-                             stdout (change it after first login). Fails
-                             if the instance is already initialized.
-    --dev                    Start sui-id in dev mode for local testing.
-                             Skips the setup wizard, opens an in-memory
-                             SQLite database under a freshly generated
-                             master key, and seeds an admin, two test
-                             users, and one OIDC test client. Plaintext
-                             credentials are printed to stderr at
-                             startup. MUST NOT be used in production.
-                             Bind defaults to 127.0.0.1; --dev-bind to
-                             a non-loopback address requires explicit
-                             'yes' confirmation on stdin.
-
-OPTIONS:
-    --config PATH            Path to the TOML configuration file
-                             (default: ./sui-id.toml)
-    --to PATH                Output path for `backup`.
-    --from PATH              Input path for `restore` / `verify-backup`.
-    --username NAME          Target username for `admin unlock-user`,
-                             `admin reset-mfa` and `admin issue-recovery-link`.
-    --reason TEXT            Why, recorded in the audit log, for `admin
-                             reset-mfa` and `admin issue-recovery-link`.
-    --new-key PATH           Pre-prepared new key file for `admin rotate-key`.
-    --generate-new-key       Have `admin rotate-key` mint a fresh key.
-    --max-uses N             Use count for `admin issue-registration-token`
-                             (default: 1).
-    --note TEXT              Operator note for `admin
-                             issue-registration-token`.
-    --id ID                  Registration-token id for `admin
-                             revoke-registration-token`.
-    --yes, -y                Skip the confirmation prompt.
-    --force                  Allow `restore` to overwrite existing files.
-    --encrypt                Encrypt the backup with a passphrase.
-    --decrypt                Treat the input as an encrypted backup.
-    --no-backup              Skip the automatic pre-migration database
-                             snapshot (RFC 142 stage 5). Applies to the
-                             server's own start and to any subcommand
-                             that may migrate the database — not a
-                             per-subcommand flag. Use `preview-upgrade`
-                             first to see whether it would apply.
-    --dev-bind ADDR          Listen address for `--dev`
-                             (default: 127.0.0.1:8801).
-    --dev-db PATH            Pin the dev-mode database to a file path
-                             (default: in-memory). The file is
-                             truncated each restart.
-    --dev-seed PATH          TOML file describing dev-mode admin /
-                             users / OIDC clients to seed. See
-                             samples/dev-seed.toml.
-    --dev-admin-password STR Override the dev-mode admin password
-                             (default: 'admin').
-    --dev-client-secret STR  Override the first dev-mode client's
-                             secret (default: 'test-secret').
-    --print-sample-config    Print a sample configuration and exit.
-    --version, -V            Print version information and exit.
-    --help, -h               Print this help and exit.
-
-ENVIRONMENT:
-    SUI_ID_MASTER_KEY        Base64-encoded 32-byte master key.
-                             Overrides the key file if set.
-    SUI_ID_BACKUP_PASSPHRASE Passphrase for `--encrypt` / `--decrypt`,
-                             when running non-interactively (cron, scripts).
-    SUI_ID_ADMIN_PASSWORD    Initial admin password for `setup`. If unset,
-                             a random password is generated and printed.
-
-DOCUMENTATION:
-    See README.md and docs/src/guides/operators.md for the operator's guide.
-",
-        ver = env!("CARGO_PKG_VERSION")
-    )
-}
-
-/// `sui-id admin rotate-metrics-token [--config PATH]`
-///
-/// Generates a fresh 32-byte random metrics bearer token, stores its
-/// SHA-256 hex hash in `server_settings.metrics_token_hash`, and
-/// prints the raw token once to stdout.
-///
-/// **The token is shown only once — save it immediately.**  Prometheus
-/// scrape configs must be updated to use the new token; there is no
-/// grace-period window (two valid tokens at once) — P6.
-///
-/// If `metrics_enabled = false` in the config, the command still stores
-/// the hash so the operator can pre-rotate before enabling metrics.
-pub(crate) async fn run_admin_rotate_metrics_token(args: &[String]) -> Result<()> {
-    use getrandom::fill as rand_fill;
-    use sha2::{Digest, Sha256};
-
-    let config_path =
-        parse_config_path(args).unwrap_or_else(|| std::path::PathBuf::from("./sui-id.toml"));
-    let cfg = crate::Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-
-    let (db, _key_origin) = sui_id::database::open_checked(
-        &cfg.storage.db_path,
-        &cfg.storage.key_file,
-        sui_id::database::backup_policy_from_args(args),
-    )
-    .await
-    .context("loading master key and opening database")?;
-
-    // Generate a fresh 32-byte random token and encode it as URL-safe base64.
-    let mut raw = [0u8; 32];
-    rand_fill(&mut raw).context("generating random bytes")?;
-    let token: String = raw.iter().map(|b| format!("{b:02x}")).collect::<String>();
-
-    // Hash with SHA-256 for storage (constant-time comparison at verify time).
-    let hash = Sha256::digest(token.as_bytes())
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<String>();
-
-    let now = sui_id_core::time::system_clock().now();
-    sui_id_store::commands::rotate_metrics_token(&db, Some(hash.clone()), now)
-        .await
-        .context("updating metrics_token_hash")?;
-
-    println!("New metrics bearer token (shown ONCE — save it now):");
-    println!();
-    println!("  {token}");
-    println!();
-    println!("Update your Prometheus scrape config:");
-    println!("  authorization:");
-    println!("    type: Bearer");
-    println!("    credentials: {token}");
-    println!();
-    println!(
-        "Old token (if any) is now invalid. Update scrape configs before the          next scrape interval."
-    );
-
-    Ok(())
-}
-
-/// `sui-id admin issue-registration-token [--max-uses N] [--note TEXT] [--config PATH]`
-///
-/// Generates a fresh RFC 7591 initial access token, stores its SHA-256 hash
-/// in `client_registration_token`, and prints the raw token once to stdout.
-/// Developers present this token as `Authorization: Bearer <token>` to
-/// `POST /oauth2/register`.
-///
-/// **The token is shown only once — save it immediately.**
-pub(crate) async fn run_admin_issue_registration_token(args: &[String]) -> Result<()> {
-    use sha2::{Digest, Sha256};
-    use sui_id_shared::ids::RegistrationTokenId;
-
-    let config_path =
-        parse_config_path(args).unwrap_or_else(|| std::path::PathBuf::from("./sui-id.toml"));
-    let cfg = crate::Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-
-    let (db, _key_origin) = sui_id::database::open_checked(
-        &cfg.storage.db_path,
-        &cfg.storage.key_file,
-        sui_id::database::backup_policy_from_args(args),
-    )
-    .await
-    .context("loading master key and opening database")?;
-
-    // Parse --max-uses N (default 1)
-    let max_uses: i64 = {
-        let mut v = 1i64;
-        let mut i = 1;
-        while i < args.len() {
-            if args[i] == "--max-uses" {
-                if let Some(n) = args.get(i + 1).and_then(|s| s.parse().ok()) {
-                    v = n;
-                }
-                i += 2;
-            } else {
-                i += 1;
-            }
-        }
-        v
-    };
-
-    // Parse --note TEXT
-    let note: Option<String> = {
-        let mut v = None;
-        let mut i = 1;
-        while i < args.len() {
-            if args[i] == "--note" {
-                v = args.get(i + 1).cloned();
-                i += 2;
-            } else {
-                i += 1;
-            }
-        }
-        v
-    };
-
-    // Generate a 32-byte random token.
-    let mut raw = [0u8; 32];
-    getrandom::fill(&mut raw).context("generating random bytes")?;
-    let token: String = raw.iter().map(|b| format!("{b:02x}")).collect();
-
-    let hash: String = Sha256::digest(token.as_bytes())
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect();
-
-    let now = sui_id_core::time::system_clock().now();
-    let row = sui_id_store::repos::client_registration_token::RegistrationTokenRow {
-        id: RegistrationTokenId::new(),
-        token_hash: hash,
-        max_uses,
-        used_count: 0,
-        expires_at: None,
-        revoked_at: None,
-        note,
-        created_at: now,
-        updated_at: now,
-    };
-
-    sui_id_store::commands::issue_registration_token(&db, row.clone())
-        .await
-        .context("storing registration token")?;
-
-    print!(
-        "{}",
-        render_issued_registration_token(&token, row.id, max_uses)
-    );
-    Ok(())
-}
-
-/// Separated from [`run_admin_issue_registration_token`] for direct
-/// testing, same pattern as [`render_legacy_dynamic_candidate_report`]
-/// and [`render_registration_token_list`]. Prints the id alongside the
-/// token (this round's fix: the id is not a secret, unlike the token,
-/// and an operator who records this output can revoke later without
-/// `admin list-registration-tokens` or the database) while keeping the
-/// existing "shown ONCE" warning on the token itself unchanged.
-fn render_issued_registration_token(
-    token: &str,
-    id: sui_id_shared::ids::RegistrationTokenId,
-    max_uses: i64,
-) -> String {
-    use std::fmt::Write;
-    let mut out = String::new();
-    let w = &mut out;
-    let _ = writeln!(
-        w,
-        "RFC 7591 initial access token (shown ONCE — save it now):"
-    );
-    let _ = writeln!(w);
-    let _ = writeln!(w, "  {token}");
-    let _ = writeln!(w);
-    let _ = writeln!(
-        w,
-        "Id (not secret — record it to revoke this token later with"
-    );
-    let _ = writeln!(w, "`admin revoke-registration-token --id ID`):");
-    let _ = writeln!(w);
-    let _ = writeln!(w, "  {id}");
-    let _ = writeln!(w);
-    let _ = writeln!(w, "Usage (max_uses = {max_uses}):");
-    let _ = writeln!(w, "  curl -X POST https://your-sui-id/oauth2/register \\");
-    let _ = writeln!(w, "    -H 'Authorization: Bearer {token}' \\");
-    let _ = writeln!(w, "    -H 'Content-Type: application/json' \\");
-    let _ = writeln!(
-        w,
-        "    -d '{{\"client_name\":\"My App\",\"redirect_uris\":[\"https://app.example/cb\"]}}'"
-    );
-    out
-}
-
-/// `sui-id admin revoke-registration-token --id ID [--config PATH]`
-///
-/// Immediately revokes an RFC 7591 initial access token so it can no
-/// longer be redeemed — `consume` already refuses a revoked row
-/// (checked, not assumed: `repos::client_registration_token::
-/// consume_within_tx` returns `Ok(false)` for `row.revoked_at.is_some()`).
-/// RFC 094 M2b wave 4 stage 4, C22: the write and its
-/// `client.registration_token.revoked` audit append now commit in one
-/// transaction, replacing a bare `revoke` that had no caller and no
-/// event at all.
-pub(crate) async fn run_admin_revoke_registration_token(args: &[String]) -> Result<()> {
-    use sui_id_shared::ids::RegistrationTokenId;
-
-    let id_str = args
-        .iter()
-        .position(|a| a == "--id")
-        .and_then(|i| args.get(i + 1))
-        .context("admin revoke-registration-token requires --id ID")?;
-    let id: RegistrationTokenId = id_str
-        .parse()
-        .with_context(|| format!("{id_str:?} is not a valid registration-token id"))?;
-
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) = sui_id::database::open_checked(
-        &cfg.storage.db_path,
-        &cfg.storage.key_file,
-        sui_id::database::backup_policy_from_args(args),
-    )
-    .await
-    .context("loading master key and opening database")?;
-
-    let now = sui_id_core::time::system_clock().now();
-    sui_id_store::commands::revoke_registration_token(&db, id, now)
-        .await
-        .with_context(|| format!("revoking registration token {id}"))?;
-
-    println!("Registration token {id} revoked.");
-    Ok(())
-}
-
-/// `sui-id admin list-registration-tokens [--config PATH]`
-///
-/// Read-only. Lists every row in `client_registration_token` so an
-/// operator has a way to learn a token's id without opening the
-/// database — the gap this round exists to close (RFC 094 M2b wave 4
-/// stage 4 shipped `--id`-based revocation with no way to obtain one).
-/// Wraps `repos::client_registration_token::list`, which existed with
-/// no caller until this command. **Never prints the token or its
-/// hash** — the row's `token_hash` column is excluded from the render
-/// entirely, not merely unprinted by omission at one call site.
-pub(crate) async fn run_admin_list_registration_tokens(args: &[String]) -> Result<()> {
-    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
-    let cfg = Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) = sui_id::database::open_checked(
-        &cfg.storage.db_path,
-        &cfg.storage.key_file,
-        sui_id::database::backup_policy_from_args(args),
-    )
-    .await
-    .context("loading master key and opening database")?;
-
-    let rows = sui_id_store::repos::client_registration_token::list(&db)
-        .await
-        .context("listing registration tokens")?;
-    print!("{}", render_registration_token_list(&rows));
-    Ok(())
-}
-
-/// Separated from [`run_admin_list_registration_tokens`] for direct
-/// testing, same pattern as [`render_legacy_dynamic_candidate_report`].
-/// Renders `max_uses = 0` as `unlimited` (`:22`'s own comment on the
-/// column), and `expires_at = None` as `never` (what the issue command
-/// always writes today) — both per the dispatch's explicit requirement
-/// that the raw sentinel values not be shown as themselves. Does not
-/// take or touch `token_hash`: the type this function reads from would
-/// have to change for it to leak the hash by accident.
-fn render_registration_token_list(
-    rows: &[sui_id_store::repos::client_registration_token::RegistrationTokenRow],
-) -> String {
-    use std::fmt::Write;
-    let mut out = String::new();
-    let w = &mut out;
-
-    if rows.is_empty() {
-        let _ = writeln!(w, "No registration tokens.");
-        return out;
-    }
-
-    for row in rows {
-        let max_uses = if row.max_uses == 0 {
-            "unlimited".to_string()
-        } else {
-            row.max_uses.to_string()
-        };
-        let expires_at = row
-            .expires_at
-            .map(|t| t.to_rfc3339())
-            .unwrap_or_else(|| "never".to_string());
-        let revoked = match row.revoked_at {
-            Some(at) => format!("revoked {}", at.to_rfc3339()),
-            None => "active".to_string(),
-        };
-        let _ = writeln!(
-            w,
-            "id={} created_at={} max_uses={} used_count={} expires_at={} {}",
-            row.id,
-            row.created_at.to_rfc3339(),
-            max_uses,
-            row.used_count,
-            expires_at,
-            revoked,
-        );
-    }
-    out
-}
-
-/// RFC 008's handler bug: `clients::create` discarded `registered_via`
-/// between these two commits (inclusive start, exclusive end), so a
-/// dynamically registered client's row landed on the column's own
-/// `DEFAULT 'admin'`.
-const LEGACY_WINDOW_START_COMMIT: &str = "48946f6";
-const LEGACY_WINDOW_START_DATE: &str = "2026-07-02";
-const LEGACY_WINDOW_END_COMMIT: &str = "930513b";
-const LEGACY_WINDOW_END_DATE: &str = "2026-10-02";
-
-/// The oldest `audit_seq` across both evidence categories, if any — what
-/// a chain-verification range must reach back to in order to cover every
-/// row this report's output names. `None` means neither category has a
-/// row to anchor a range to.
-fn oldest_evidence_seq(
-    report: &sui_id_store::repos::audit::LegacyDynamicCandidateReport,
-) -> Option<i64> {
-    report
-        .candidates
-        .iter()
-        .map(|c| c.audit_seq)
-        .chain(report.unresolved.iter().map(|u| u.audit_seq))
-        .min()
-}
-
-/// Renders the full report as text. **Pure and synchronous** — no I/O, no
-/// database access — so §7's empty-case requirement ("the rendered output
-/// for zero candidates contains the incompleteness statement and does not
-/// contain a bare zero-count claim") is assertable directly against this
-/// function's return value, not against captured stdout.
-///
-/// `chain`, when `Some`, is `(oldest_seq, newest_seq, report)` from a
-/// [`sui_id_store::repos::audit::verify_chain_tail`] call the caller
-/// already ran over `[oldest_seq, newest_seq]` — this function only
-/// formats that result, it does not decide the range or run the check.
-fn render_legacy_dynamic_candidate_report(
-    report: &sui_id_store::repos::audit::LegacyDynamicCandidateReport,
-    chain: Option<(i64, i64, &sui_id_store::repos::audit::ChainVerifyReport)>,
-) -> String {
-    use std::fmt::Write;
-    let mut out = String::new();
-    let w = &mut out;
-
-    let _ = writeln!(
-        w,
-        "RFC 095 legacy dynamic-registration candidate report (read-only; nothing here writes to the database)."
-    );
-    let _ = writeln!(w);
-    let _ = writeln!(
-        w,
-        "Historical ambiguity window: {LEGACY_WINDOW_START_COMMIT} ({LEGACY_WINDOW_START_DATE}) \
-         through {LEGACY_WINDOW_END_COMMIT} ({LEGACY_WINDOW_END_DATE})."
-    );
-    let _ = writeln!(
-        w,
-        "Within that window, `clients::create` discarded `registered_via`, and the audit \
-         row that would identify a dynamic registration was written best-effort: if that \
-         write failed, the registration still succeeded and left no trace at all. A client \
-         with no `client.dynamic_register` audit row is therefore not evidence of anything \
-         — it is a gap this report cannot see, not evidence that nothing happened."
-    );
-    let _ = writeln!(w);
-
-    if report.candidates.is_empty() {
-        let _ = writeln!(
-            w,
-            "No legacy_unstamped_dynamic_candidate is visible in the evidence this report is \
-             permitted to use. This does NOT mean no such client exists — the historical \
-             best-effort audit cannot prove completeness, so no \"zero candidates\" claim is \
-             being made. See the incompleteness note above."
-        );
-    } else {
-        let n = report.candidates.len();
-        let _ = writeln!(
-            w,
-            "{n} legacy_unstamped_dynamic_candidate(s) FOUND in the evidence available — not \
-             necessarily {n} that exist. The same incompleteness applies here: a dynamically \
-             registered client with no surviving audit row would not appear in this list \
-             either."
-        );
-        let _ = writeln!(w);
-        for c in &report.candidates {
-            let _ = writeln!(
-                w,
-                "  legacy_unstamped_dynamic_candidate: client_id={} name={:?} \
-                 created_at={} is_disabled={} is_deleted={} audit_seq={} audit_at={}",
-                c.client_id,
-                c.client_name,
-                c.created_at.to_rfc3339(),
-                c.is_disabled,
-                c.is_deleted,
-                c.audit_seq,
-                c.audit_at.to_rfc3339(),
-            );
-        }
-    }
-
-    let _ = writeln!(w);
-    let _ = writeln!(
-        w,
-        "Audit-chain verification for the evidence above (informational, read-only):"
-    );
-    match chain {
-        Some((oldest, newest, chain)) => {
-            let limit = newest - oldest + 1;
-            let _ = writeln!(
-                w,
-                "  verified seq range [{oldest}, {newest}] or older ({limit} rows read back \
-                 from the tail, which reaches at least this far -- further if `seq` has any \
-                 gaps): checked={}, broken_at_seq={:?}, legacy_unhashed={}.",
-                chain.checked, chain.broken_at_seq, chain.legacy_unhashed
-            );
-            if chain.legacy_unhashed != 0 {
-                let _ = writeln!(
-                    w,
-                    "  legacy_unhashed is nonzero, which should not happen for this window \
-                     (the hash chain predates `registered_via`) — this is a finding, not a \
-                     formality."
-                );
-            }
-            if chain.broken_at_seq.is_some() {
-                let _ = writeln!(
-                    w,
-                    "  broken_at_seq is set — the chain itself may be compromised in or \
-                     before this range. Treat every row in it, candidate or not, as unverified."
-                );
-            }
-        }
-        None => {
-            let _ = writeln!(
-                w,
-                "  no client.dynamic_register evidence row exists to anchor a verification \
-                 range to, so none was run for this report. This says nothing about the rest \
-                 of the audit log."
-            );
-        }
-    }
-
-    if !report.unresolved.is_empty() {
-        let _ = writeln!(w);
-        let _ = writeln!(
-            w,
-            "client.dynamic_register audit rows that do not resolve to any client row ({}) — \
-             more alarming than a candidate, not a candidate themselves:",
-            report.unresolved.len()
-        );
-        for u in &report.unresolved {
-            let _ = writeln!(
-                w,
-                "  unresolved: audit_seq={} audit_at={} target={:?}",
-                u.audit_seq,
-                u.audit_at.to_rfc3339(),
-                u.target,
-            );
-        }
-    }
-
-    let _ = writeln!(w);
-    let _ = writeln!(
-        w,
-        "This report lists; it disposes nothing. Before RFC 095 M3 closes, the owner must \
-         durably record, for every candidate above, disablement, explicit legacy acceptance, \
-         or a separately audited metadata correction."
-    );
-
-    out
-}
-
-/// `sui-id admin legacy-dynamic-candidates [--config PATH]`
-///
-/// RFC 095 `:350-360`. Read-only throughout: no `set_registered_via`, no
-/// `set_disabled`, no writes of any kind, and no audit event for having
-/// run this report. See
-/// [`sui_id_store::repos::audit::legacy_dynamic_candidates`] for the
-/// query and the no-provenance-inference rule it implements, and
-/// [`render_legacy_dynamic_candidate_report`] for the output text, which
-/// is tested directly rather than through captured stdout.
-pub(crate) async fn run_admin_legacy_dynamic_candidates(args: &[String]) -> Result<()> {
-    let config_path =
-        parse_config_path(args).unwrap_or_else(|| std::path::PathBuf::from("./sui-id.toml"));
-    let cfg = crate::Config::load(&config_path)
-        .with_context(|| format!("loading config from {}", config_path.display()))?;
-
-    let (db, _key_origin) = sui_id::database::open_checked(
-        &cfg.storage.db_path,
-        &cfg.storage.key_file,
-        sui_id::database::backup_policy_from_args(args),
-    )
-    .await
-    .context("loading master key and opening database")?;
-
-    let report = sui_id_store::repos::audit::legacy_dynamic_candidates(&db)
-        .await
-        .context("querying legacy dynamic-registration candidates")?;
-
-    let oldest = oldest_evidence_seq(&report);
-    let chain_result = match (oldest, report.max_seq) {
-        (Some(oldest), Some(newest)) => {
-            let limit = newest - oldest + 1;
-            let r = sui_id_store::repos::audit::verify_chain_tail(&db, limit)
-                .await
-                .context("verifying audit chain over the candidate range")?;
-            Some((oldest, newest, r))
-        }
-        _ => None,
-    };
-    let chain_ref = chain_result.as_ref().map(|(o, n, r)| (*o, *n, r));
-
-    print!(
-        "{}",
-        render_legacy_dynamic_candidate_report(&report, chain_ref)
-    );
-
-    Ok(())
-}
+mod handlers;
+pub mod help;
+pub mod reference;
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::unwrap_used)]
+#[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 mod tests;
+
+/// `--config PATH` and `--no-backup` are global (RFC 148 §1: `--config`
+/// "stays one global option, valid on every command that reads the
+/// configuration"); every other flag belongs to the leaf that reads it.
+/// `disable_help_flag`/`disable_version_flag`: RFC 148 §2 lists
+/// `--version`/`-V`/`--help`/`-h` as *aliases* that now print a notice,
+/// which clap's own auto-generated flags cannot do — so they are plain
+/// hidden fields below instead, and this struct's own `--help`/`--version`
+/// are never reached. Per-subcommand `--help` (e.g. `sui-id backup
+/// --help`) is untouched: this setting is not inherited by children.
+#[derive(Parser, Debug)]
+#[command(
+    name = "sui-id",
+    about = "Self-hosted OpenID Connect provider.",
+    disable_help_flag = true,
+    disable_help_subcommand = true,
+    disable_version_flag = true
+)]
+pub struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    /// Path to the TOML configuration file.
+    #[arg(long, global = true, value_name = "PATH")]
+    config: Option<PathBuf>,
+
+    /// Skip the automatic pre-migration database snapshot (RFC 142 stage
+    /// 5). Applies to the server's own start and to any command that may
+    /// migrate the database.
+    #[arg(long, global = true)]
+    no_backup: bool,
+
+    // ── Pre-148 top-level mode flags, hidden, kept as aliases (§2) ──────
+    #[arg(long = "print-sample-config", hide = true)]
+    print_sample_config: bool,
+    #[arg(long = "dev", hide = true)]
+    dev_flag: bool,
+    #[arg(long = "dev-bind", hide = true)]
+    dev_bind: Option<String>,
+    #[arg(long = "dev-db", hide = true)]
+    dev_db: Option<PathBuf>,
+    #[arg(long = "dev-seed", hide = true)]
+    dev_seed: Option<PathBuf>,
+    #[arg(long = "dev-admin-password", hide = true)]
+    dev_admin_password: Option<String>,
+    #[arg(long = "dev-client-secret", hide = true)]
+    dev_client_secret: Option<String>,
+    #[arg(long = "version", short = 'V', hide = true)]
+    version_flag: bool,
+    /// `global`: `disable_help_flag` above is inherited by every
+    /// subcommand, so without this no command would accept `--help`.
+    /// The root's is the pre-148 form; a subcommand's prints its own help.
+    #[arg(long = "help", short = 'h', hide = true, global = true)]
+    help_flag: bool,
+}
+
+/// RFC 148 §1's tree, one variant per leaf, plus the hidden pre-148
+/// aliases named in this module's own doc comment. `Serve` is the explicit
+/// spelling of what bare `sui-id` already does (`main.rs` handles "no
+/// command" before this match is reached, so `Serve` itself has no arm
+/// here — seeing it is a programmer error, not a user-reachable state;
+/// see `run`'s own comment at that match arm).
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Create the first administrator (headless initialization).
+    Setup {
+        /// The new administrator's username.
+        #[arg(long)]
+        admin_username: String,
+        /// The new administrator's email address.
+        #[arg(long)]
+        admin_email: Option<String>,
+        /// The new administrator's display name.
+        #[arg(long)]
+        admin_display_name: Option<String>,
+    },
+    /// Run the HTTP server — the same as no command at all.
+    Serve,
+    /// Back up, restore, or verify the database.
+    Backup(BackupArgs),
+    /// Preview a schema upgrade.
+    Upgrade(UpgradeArgs),
+    /// Print or validate a configuration.
+    Config(ConfigArgs),
+    /// Administer a running instance.
+    Admin(AdminArgs),
+    /// Run a local dev server for testing. MUST NOT be used in production.
+    Dev {
+        /// Listen address (default: 127.0.0.1:8801). A non-loopback
+        /// address requires explicit 'yes' confirmation on stdin.
+        #[arg(long)]
+        bind: Option<String>,
+        /// Pin the dev-mode database to a file path (default:
+        /// in-memory). The file is truncated each restart.
+        #[arg(long)]
+        db: Option<PathBuf>,
+        /// TOML file describing dev-mode admin / users / OIDC clients to
+        /// seed. See samples/dev-seed.toml.
+        #[arg(long)]
+        seed: Option<PathBuf>,
+        /// Override the dev-mode admin password (default: 'admin').
+        #[arg(long)]
+        admin_password: Option<String>,
+        /// Override the first dev-mode client's secret (default:
+        /// 'test-secret').
+        #[arg(long)]
+        client_secret: Option<String>,
+    },
+    /// Show this help, or help for one command.
+    Help { command: Vec<String> },
+    /// Print version information.
+    Version,
+
+    // ── Pre-148 aliases: distinct top-level words, no collision ────────
+    #[command(hide = true)]
+    Restore {
+        #[arg(long)]
+        from: PathBuf,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        decrypt: bool,
+    },
+    #[command(hide = true)]
+    VerifyBackup {
+        #[arg(long)]
+        from: PathBuf,
+        #[arg(long)]
+        decrypt: bool,
+    },
+    #[command(hide = true)]
+    PreviewUpgrade,
+
+    /// Maintenance-only: regenerate `docs/src/reference/cli.md` from this
+    /// registry (§5). Not in RFC 148's own tree — see the review package's
+    /// note on this deviation from "an xtask subcommand, say".
+    #[command(hide = true)]
+    GenerateCliReference {
+        #[arg(long)]
+        check: bool,
+    },
+}
+
+#[derive(clap::Args, Debug)]
+struct BackupArgs {
+    #[command(subcommand)]
+    command: Option<BackupCommand>,
+    /// Pre-148 flat form (`sui-id backup --to PATH [--encrypt]`), valid
+    /// only when no subcommand is given.
+    #[arg(long, hide = true)]
+    to: Option<PathBuf>,
+    #[arg(long, hide = true)]
+    encrypt: bool,
+}
+
+#[derive(Subcommand, Debug)]
+enum BackupCommand {
+    /// Write a tarball snapshot of the database, master key, and manifest.
+    Create {
+        /// Output path for the backup tarball.
+        #[arg(long)]
+        to: PathBuf,
+        /// Encrypt the backup with a passphrase (read from
+        /// SUI_ID_BACKUP_PASSPHRASE, or prompted).
+        #[arg(long)]
+        encrypt: bool,
+    },
+    /// Restore a backup tarball into the configured storage paths.
+    Restore {
+        /// Input path for the backup tarball.
+        #[arg(long)]
+        from: PathBuf,
+        /// Overwrite existing files at the configured storage paths.
+        #[arg(long)]
+        force: bool,
+        /// Treat the input as an encrypted backup.
+        #[arg(long)]
+        decrypt: bool,
+    },
+    /// Read a backup file and report what it contains. Writes nothing.
+    Verify {
+        /// Input path for the backup tarball.
+        #[arg(long)]
+        from: PathBuf,
+        /// Treat the input as an encrypted backup.
+        #[arg(long)]
+        decrypt: bool,
+    },
+}
+
+#[derive(clap::Args, Debug)]
+struct UpgradeArgs {
+    #[command(subcommand)]
+    command: UpgradeCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum UpgradeCommand {
+    /// Read-only. Report what this build would do to the configured
+    /// database without opening it for writing.
+    Preview,
+}
+
+#[derive(clap::Args, Debug)]
+struct ConfigArgs {
+    #[command(subcommand)]
+    command: ConfigCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum ConfigCommand {
+    /// Print a configuration to start from.
+    Sample {
+        /// Print the production template (`sui-id.example.toml`) instead
+        /// of the local-trial sample.
+        #[arg(long)]
+        production: bool,
+    },
+    /// Validate a configuration and change nothing.
+    Check,
+}
+
+#[derive(clap::Args, Debug)]
+struct AdminArgs {
+    #[command(subcommand)]
+    command: AdminCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum AdminCommand {
+    /// Manage an individual user's lockout, MFA, or recovery.
+    User(AdminUserArgs),
+    /// Rotate the master key.
+    MasterKey(AdminMasterKeyArgs),
+    /// Rotate the metrics bearer token.
+    MetricsToken(AdminMetricsTokenArgs),
+    /// Manage dynamic-client-registration tokens.
+    RegistrationToken(AdminRegistrationTokenArgs),
+
+    // ── Pre-148 aliases: same depth as the new nouns above ──────────────
+    #[command(hide = true)]
+    UnlockUser {
+        #[arg(long)]
+        username: String,
+    },
+    #[command(hide = true)]
+    ResetMfa {
+        #[arg(long)]
+        username: String,
+        #[arg(long)]
+        reason: String,
+    },
+    #[command(hide = true)]
+    IssueRecoveryLink {
+        #[arg(long)]
+        username: String,
+        #[arg(long)]
+        reason: String,
+    },
+    #[command(hide = true)]
+    RotateKey {
+        #[arg(long, conflicts_with = "new_key")]
+        generate_new_key: bool,
+        #[arg(long)]
+        new_key: Option<PathBuf>,
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+    #[command(hide = true)]
+    RotateMetricsToken,
+    #[command(hide = true)]
+    IssueRegistrationToken {
+        #[arg(long, default_value_t = 1)]
+        max_uses: i64,
+        #[arg(long)]
+        note: Option<String>,
+    },
+    #[command(hide = true)]
+    RevokeRegistrationToken {
+        #[arg(long)]
+        id: String,
+    },
+    #[command(hide = true)]
+    ListRegistrationTokens,
+    #[command(hide = true)]
+    LegacyDynamicCandidates,
+}
+
+#[derive(clap::Args, Debug)]
+struct AdminUserArgs {
+    #[command(subcommand)]
+    command: AdminUserCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum AdminUserCommand {
+    /// Clear an account-lockout state for the given user.
+    Unlock {
+        /// The user's username.
+        #[arg(long)]
+        username: String,
+    },
+    /// Remove every MFA factor (TOTP and passkeys) for the given user.
+    ResetMfa {
+        /// The user's username.
+        #[arg(long)]
+        username: String,
+        /// Why, recorded in the audit log.
+        #[arg(long)]
+        reason: String,
+    },
+    /// Issue a single-use account-recovery link for a local user.
+    RecoveryLink {
+        /// The user's username.
+        #[arg(long)]
+        username: String,
+        /// Why, recorded in the audit log.
+        #[arg(long)]
+        reason: String,
+    },
+}
+
+#[derive(clap::Args, Debug)]
+struct AdminMasterKeyArgs {
+    #[command(subcommand)]
+    command: AdminMasterKeyCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum AdminMasterKeyCommand {
+    /// Re-seal every encrypted column under a new master key. Runs
+    /// OFFLINE: stop the server first and take a fresh backup.
+    Rotate {
+        /// Mint a fresh key from the OS RNG (default if neither this nor
+        /// --new-key is given).
+        #[arg(long, conflicts_with = "new_key")]
+        generate_new_key: bool,
+        /// Use an already-prepared new key file (e.g. from an
+        /// HSM-backed workflow) instead of generating one.
+        #[arg(long)]
+        new_key: Option<PathBuf>,
+        /// Skip the interactive confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+}
+
+#[derive(clap::Args, Debug)]
+struct AdminMetricsTokenArgs {
+    #[command(subcommand)]
+    command: AdminMetricsTokenCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum AdminMetricsTokenCommand {
+    /// Generate a fresh metrics bearer token; the previous one stops
+    /// working immediately.
+    Rotate,
+}
+
+#[derive(clap::Args, Debug)]
+struct AdminRegistrationTokenArgs {
+    #[command(subcommand)]
+    command: AdminRegistrationTokenCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum AdminRegistrationTokenCommand {
+    /// Issue an RFC 7591 initial access token for dynamic client
+    /// registration.
+    Issue {
+        /// How many times the token may be redeemed (default: 1).
+        #[arg(long, default_value_t = 1)]
+        max_uses: i64,
+        /// An operator note stored alongside the token.
+        #[arg(long)]
+        note: Option<String>,
+    },
+    /// Immediately revoke a client-registration token by id.
+    Revoke {
+        /// The registration token's id.
+        #[arg(long)]
+        id: String,
+    },
+    /// List every client-registration token. Never prints a token or its
+    /// hash.
+    List,
+    /// Read-only (RFC 095). List `clients` rows a historical bug may have
+    /// mislabelled.
+    LegacyCandidates,
+}
+
+/// One notice line (RFC 148 §2), stderr only, never stdout — so a piped
+/// alias such as `sui-id --print-sample-config > sui-id.toml` writes
+/// exactly what it writes today.
+fn alias_notice(old: &str, new: &str) {
+    eprintln!("note: `sui-id {old}` is now `sui-id {new}`; the old form still works.");
+}
+
+fn config_path(cli: &Cli) -> PathBuf {
+    cli.config
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("./sui-id.toml"))
+}
+
+/// `--no-backup` is global (declared once on [`Cli`]); every caller that
+/// reaches [`crate::database::open`] asks it the same way.
+fn backup_policy(cli: &Cli) -> crate::database::PreMigrationBackup {
+    if cli.no_backup {
+        crate::database::PreMigrationBackup::Declined
+    } else {
+        crate::database::PreMigrationBackup::Take
+    }
+}
+
+/// Parsed from `std::env::args()` by the caller (`main.rs`), so a test can
+/// pass a synthetic argv instead. `--version`/`--help` win over a parse
+/// error from the rest of the line, same as today (`main.rs` used to check
+/// them before ever walking argv for a subcommand) — checked here before
+/// `Cli::try_parse_from` can reject an otherwise-incomplete line.
+/// `Some(path)` when `--help` (or `-h`) was given *on a subcommand*, with
+/// that subcommand's path; `None` otherwise, including the root's own
+/// `--help`, which is the pre-148 form `run` handles with its notice.
+fn help_requested_on_a_command(args: &[String]) -> Option<Vec<String>> {
+    fn relax(cmd: clap::Command) -> clap::Command {
+        cmd.subcommand_required(false)
+            .arg_required_else_help(false)
+            .mut_args(|a| a.required(false))
+            .mut_subcommands(relax)
+    }
+    let relaxed = relax(<Cli as clap::CommandFactory>::command());
+    let matches = relaxed.try_get_matches_from(args).ok()?;
+    let mut path = Vec::new();
+    let mut level = &matches;
+    while let Some((name, sub)) = level.subcommand() {
+        path.push(name.to_string());
+        level = sub;
+    }
+    (!path.is_empty() && level.get_flag("help_flag")).then_some(path)
+}
+
+pub async fn run(args: Vec<String>) -> Result<()> {
+    // No scan of the raw arguments (review fold-in, 0.93.0 O2a): `clap`
+    // parses `--help` and `--version` like any other flag. A scan ahead of
+    // it took `sui-id backup create --help` for the top-level form, and a
+    // flag's *value* spelled `-h` for the help flag, which is RFC 107's bug
+    // class. The root's own `--help`/`--version` are the pre-148 forms,
+    // handled in the `None` arm below; a subcommand's `--help` is `clap`'s.
+    // A subcommand's `--help` prints that command's own detail, with no
+    // notice: it is not a pre-148 form. clap checks required arguments
+    // before acting on an ordinary flag, so `sui-id backup create --help`
+    // would fail on its missing `--to`. So a relaxed copy of the registry,
+    // with nothing required, answers one question first: was help asked
+    // for, and on which command? The path comes from clap's own matches,
+    // so a flag's value is never taken for part of it.
+    if let Some(path) = help_requested_on_a_command(&args) {
+        if !help::print_help(&path) {
+            std::process::exit(2);
+        }
+        return Ok(());
+    }
+
+    let mut cli = match Cli::try_parse_from(&args) {
+        Ok(cli) => cli,
+        Err(e) => e.exit(),
+    };
+
+    // Read before `cli.command` is matched by value below -- a struct
+    // cannot be borrowed as a whole once any one of its fields has been
+    // moved out of it, even to read an unrelated field.
+    let cfg_path = config_path(&cli);
+    let policy = backup_policy(&cli);
+    let command = cli.command.take();
+
+    match command {
+        None => {
+            if cli.version_flag {
+                alias_notice("--version", "version");
+                help::print_version();
+                return Ok(());
+            }
+            if cli.help_flag {
+                alias_notice("--help", "help");
+                help::print_overview();
+                return Ok(());
+            }
+            if cli.print_sample_config {
+                alias_notice("--print-sample-config", "config sample");
+                return handlers::config_sample(false);
+            }
+            if cli.dev_flag {
+                alias_notice("--dev", "dev");
+                return handlers::serve_dev(handlers::DevArgs {
+                    bind: cli.dev_bind,
+                    db: cli.dev_db,
+                    seed: cli.dev_seed,
+                    admin_password: cli.dev_admin_password,
+                    client_secret: cli.dev_client_secret,
+                })
+                .await;
+            }
+            // Bare `sui-id [--config PATH]`: the documented service unit.
+            // No notice (§3): the server should not gain a stderr line on
+            // every start.
+            handlers::serve(&cfg_path, policy).await
+        }
+        Some(Command::Serve) => handlers::serve(&cfg_path, policy).await,
+        Some(Command::Setup {
+            admin_username,
+            admin_email,
+            admin_display_name,
+        }) => {
+            handlers::run_setup(
+                &cfg_path,
+                policy,
+                &admin_username,
+                admin_email.as_deref(),
+                admin_display_name.as_deref(),
+            )
+            .await
+        }
+        Some(Command::Backup(BackupArgs {
+            command: Some(BackupCommand::Create { to, encrypt }),
+            ..
+        })) => handlers::run_backup(&cfg_path, &to, encrypt),
+        Some(Command::Backup(BackupArgs {
+            command:
+                Some(BackupCommand::Restore {
+                    from,
+                    force,
+                    decrypt,
+                }),
+            ..
+        })) => handlers::run_restore(&cfg_path, &from, force, decrypt),
+        Some(Command::Backup(BackupArgs {
+            command: Some(BackupCommand::Verify { from, decrypt }),
+            ..
+        })) => handlers::run_verify_backup(&from, decrypt),
+        Some(Command::Backup(BackupArgs {
+            command: None,
+            to,
+            encrypt,
+        })) => {
+            let to = to.context("backup requires --to PATH")?;
+            alias_notice("backup --to PATH", "backup create --to PATH");
+            handlers::run_backup(&cfg_path, &to, encrypt)
+        }
+        Some(Command::Upgrade(UpgradeArgs {
+            command: UpgradeCommand::Preview,
+        })) => handlers::run_preview_upgrade(&cfg_path),
+        Some(Command::Config(ConfigArgs {
+            command: ConfigCommand::Sample { production },
+        })) => handlers::config_sample(production),
+        Some(Command::Config(ConfigArgs {
+            command: ConfigCommand::Check,
+        })) => handlers::config_check(&cfg_path),
+        Some(Command::Admin(AdminArgs { command })) => {
+            dispatch_admin(&cfg_path, policy, command).await
+        }
+        Some(Command::Dev {
+            bind,
+            db,
+            seed,
+            admin_password,
+            client_secret,
+        }) => {
+            handlers::serve_dev(handlers::DevArgs {
+                bind,
+                db,
+                seed,
+                admin_password,
+                client_secret,
+            })
+            .await
+        }
+        Some(Command::Help { command }) => {
+            if help::print_help(&command) {
+                Ok(())
+            } else {
+                std::process::exit(2);
+            }
+        }
+        Some(Command::Version) => {
+            help::print_version();
+            Ok(())
+        }
+        Some(Command::Restore {
+            from,
+            force,
+            decrypt,
+        }) => {
+            alias_notice("restore", "backup restore");
+            handlers::run_restore(&cfg_path, &from, force, decrypt)
+        }
+        Some(Command::VerifyBackup { from, decrypt }) => {
+            alias_notice("verify-backup", "backup verify");
+            handlers::run_verify_backup(&from, decrypt)
+        }
+        Some(Command::PreviewUpgrade) => {
+            alias_notice("preview-upgrade", "upgrade preview");
+            handlers::run_preview_upgrade(&cfg_path)
+        }
+        Some(Command::GenerateCliReference { check }) => reference::regenerate(check),
+    }
+}
+
+async fn dispatch_admin(
+    cfg_path: &std::path::Path,
+    policy: crate::database::PreMigrationBackup,
+    command: AdminCommand,
+) -> Result<()> {
+    match command {
+        AdminCommand::User(AdminUserArgs { command }) => match command {
+            AdminUserCommand::Unlock { username } => {
+                handlers::run_admin_unlock_user(cfg_path, policy, &username).await
+            }
+            AdminUserCommand::ResetMfa { username, reason } => {
+                handlers::run_admin_reset_mfa(cfg_path, policy, &username, &reason).await
+            }
+            AdminUserCommand::RecoveryLink { username, reason } => {
+                handlers::run_admin_issue_recovery_link(cfg_path, policy, &username, &reason).await
+            }
+        },
+        AdminCommand::MasterKey(AdminMasterKeyArgs {
+            command:
+                AdminMasterKeyCommand::Rotate {
+                    generate_new_key,
+                    new_key,
+                    yes,
+                },
+        }) => {
+            handlers::run_admin_rotate_key(cfg_path, policy, generate_new_key, new_key, yes).await
+        }
+        AdminCommand::MetricsToken(AdminMetricsTokenArgs {
+            command: AdminMetricsTokenCommand::Rotate,
+        }) => handlers::run_admin_rotate_metrics_token(cfg_path, policy).await,
+        AdminCommand::RegistrationToken(AdminRegistrationTokenArgs { command }) => match command {
+            AdminRegistrationTokenCommand::Issue { max_uses, note } => {
+                handlers::run_admin_issue_registration_token(
+                    cfg_path,
+                    policy,
+                    max_uses,
+                    note.as_deref(),
+                )
+                .await
+            }
+            AdminRegistrationTokenCommand::Revoke { id } => {
+                handlers::run_admin_revoke_registration_token(cfg_path, policy, &id).await
+            }
+            AdminRegistrationTokenCommand::List => {
+                handlers::run_admin_list_registration_tokens(cfg_path, policy).await
+            }
+            AdminRegistrationTokenCommand::LegacyCandidates => {
+                handlers::run_admin_legacy_dynamic_candidates(cfg_path, policy).await
+            }
+        },
+        AdminCommand::UnlockUser { username } => {
+            alias_notice("admin unlock-user", "admin user unlock");
+            handlers::run_admin_unlock_user(cfg_path, policy, &username).await
+        }
+        AdminCommand::ResetMfa { username, reason } => {
+            alias_notice("admin reset-mfa", "admin user reset-mfa");
+            handlers::run_admin_reset_mfa(cfg_path, policy, &username, &reason).await
+        }
+        AdminCommand::IssueRecoveryLink { username, reason } => {
+            alias_notice("admin issue-recovery-link", "admin user recovery-link");
+            handlers::run_admin_issue_recovery_link(cfg_path, policy, &username, &reason).await
+        }
+        AdminCommand::RotateKey {
+            generate_new_key,
+            new_key,
+            yes,
+        } => {
+            alias_notice("admin rotate-key", "admin master-key rotate");
+            handlers::run_admin_rotate_key(cfg_path, policy, generate_new_key, new_key, yes).await
+        }
+        AdminCommand::RotateMetricsToken => {
+            alias_notice("admin rotate-metrics-token", "admin metrics-token rotate");
+            handlers::run_admin_rotate_metrics_token(cfg_path, policy).await
+        }
+        AdminCommand::IssueRegistrationToken { max_uses, note } => {
+            alias_notice(
+                "admin issue-registration-token",
+                "admin registration-token issue",
+            );
+            handlers::run_admin_issue_registration_token(
+                cfg_path,
+                policy,
+                max_uses,
+                note.as_deref(),
+            )
+            .await
+        }
+        AdminCommand::RevokeRegistrationToken { id } => {
+            alias_notice(
+                "admin revoke-registration-token",
+                "admin registration-token revoke",
+            );
+            handlers::run_admin_revoke_registration_token(cfg_path, policy, &id).await
+        }
+        AdminCommand::ListRegistrationTokens => {
+            alias_notice(
+                "admin list-registration-tokens",
+                "admin registration-token list",
+            );
+            handlers::run_admin_list_registration_tokens(cfg_path, policy).await
+        }
+        AdminCommand::LegacyDynamicCandidates => {
+            alias_notice(
+                "admin legacy-dynamic-candidates",
+                "admin registration-token legacy-candidates",
+            );
+            handlers::run_admin_legacy_dynamic_candidates(cfg_path, policy).await
+        }
+    }
+}
+
+/// The `clap::Command` tree this binary's registry builds — the single
+/// source [`help`] and [`reference`] both walk. Never used for parsing
+/// itself (`Cli::try_parse_from` does that); only for introspection, so
+/// help and the reference page cannot name a command the parser does not
+/// also accept, or vice versa.
+pub(crate) fn command_tree() -> clap::Command {
+    Cli::command()
+}

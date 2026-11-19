@@ -89,10 +89,10 @@ fn run(args: &[&str], config: &std::path::Path) -> Output {
 
 fn preview(config: &std::path::Path) -> Output {
     Command::new(BIN)
-        .args(["preview-upgrade", "--config"])
+        .args(["upgrade", "preview", "--config"])
         .arg(config)
         .output()
-        .expect("run preview-upgrade")
+        .expect("run upgrade preview")
 }
 
 fn stdout(o: &Output) -> String {

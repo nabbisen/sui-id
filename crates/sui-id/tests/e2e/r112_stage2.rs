@@ -59,7 +59,14 @@ impl Home {
     /// "user not found", which is the point: the open succeeded).
     fn create(&self) {
         let out = run(
-            &["admin", "unlock-user", "--username", "nobody", "--config"],
+            &[
+                "admin",
+                "user",
+                "unlock",
+                "--username",
+                "nobody",
+                "--config",
+            ],
             &self.config(false),
         );
         assert_eq!(
@@ -157,7 +164,14 @@ fn a_cli_subcommand_against_a_too_new_database_prints_one_line_and_exits_65() {
     ));
     let cfg = h.config(false);
     let out = run(
-        &["admin", "unlock-user", "--username", "nobody", "--config"],
+        &[
+            "admin",
+            "user",
+            "unlock",
+            "--username",
+            "nobody",
+            "--config",
+        ],
         &cfg,
     );
     assert_eq!(out.status.code(), Some(i32::from(EXIT_DATABASE_REFUSED)));
@@ -183,7 +197,14 @@ fn a_cli_subcommand_against_a_garbled_stamp_prints_one_line_and_exits_65() {
     h.stamp("UPDATE sui_meta SET value='garbage' WHERE key='schema_version'");
     let tables = h.tables();
     let out = run(
-        &["admin", "unlock-user", "--username", "nobody", "--config"],
+        &[
+            "admin",
+            "user",
+            "unlock",
+            "--username",
+            "nobody",
+            "--config",
+        ],
         &h.config(false),
     );
     assert_eq!(out.status.code(), Some(i32::from(EXIT_DATABASE_REFUSED)));
@@ -221,9 +242,10 @@ fn both_refusal_variants_and_every_opener_share_exit_code_65() {
     ] {
         h.stamp(sql);
         for args in [
-            &["admin", "unlock-user", "--username", "x", "--config"][..],
+            &["admin", "user", "unlock", "--username", "x", "--config"][..],
             &[
                 "admin",
+                "user",
                 "reset-mfa",
                 "--username",
                 "x",
@@ -231,18 +253,19 @@ fn both_refusal_variants_and_every_opener_share_exit_code_65() {
                 "r",
                 "--config",
             ][..],
-            &["admin", "rotate-metrics-token", "--config"][..],
+            &["admin", "metrics-token", "rotate", "--config"][..],
             &[
                 "admin",
-                "issue-recovery-link",
+                "user",
+                "recovery-link",
                 "--username",
                 "x",
                 "--reason",
                 "r",
                 "--config",
             ][..],
-            &["admin", "rotate-key", "--config"][..],
-            &["admin", "issue-registration-token", "--config"][..],
+            &["admin", "master-key", "rotate", "--config"][..],
+            &["admin", "registration-token", "issue", "--config"][..],
             &["setup", "--admin-username", "root", "--config"][..],
         ] {
             let out = run(args, &cfg);
@@ -355,7 +378,14 @@ fn a_failure_that_is_not_a_refusal_keeps_exit_1_and_its_shape() {
     let h = Home::new();
     h.create();
     let out = run(
-        &["admin", "unlock-user", "--username", "nobody", "--config"],
+        &[
+            "admin",
+            "user",
+            "unlock",
+            "--username",
+            "nobody",
+            "--config",
+        ],
         &h.config(false),
     );
     assert_eq!(out.status.code(), Some(1));

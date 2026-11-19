@@ -37,6 +37,25 @@ sui-id-shared               = { version = "0.92.0", path = "crates/sui-id-shared
 sui-id-store                = { version = "0.92.0", path = "crates/sui-id-store" }
 sui-id-web                  = { version = "0.92.0", path = "crates/sui-id-web" }
 
+# CLI (RFC 148 §1: the command registry is one `clap` derive tree).
+# `default-features = false`: no `color` (the output is plain text) and
+# none of `cargo`/`env`/`unicode`/`wrap_help`, which this binary does not
+# use. `suggestions` is RFC 148 §5's "did you mean" for an unknown command.
+clap                        = { version = "4", default-features = false, features = [
+    "std",
+    "derive",
+    "help",
+    "usage",
+    "error-context",
+    "suggestions",
+] }
+# Already resolved transitively by clap's own "suggestions" feature; a
+# direct dependency so `sui-id help <unknown>` (free-text args to the
+# `help` command, which clap never validates as subcommand names) can use
+# the same "did you mean" distance clap uses for its own unknown-command
+# error, instead of a second algorithm.
+strsim                      = "0.11"
+
 # Async runtime / web
 tokio                       = { version = "1.40", features = ["macros", "rt-multi-thread", "signal", "fs", "sync", "time"] }
 axum                        = { version = "0.8", features = ["macros"] }
