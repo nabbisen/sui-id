@@ -165,3 +165,132 @@ fn fingerprint_is_sixteen_lowercase_hex_characters() {
             .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
     );
 }
+
+// ---------- RFC 100 stage 3: the rotation journal's tags ----------
+
+/// Vectors computed independently (Python's `hmac`/`hashlib`, not this
+/// crate), against the key bytes `0..=31`, this module's own domains, a
+/// `0x00` separator, and the body `b'{"x":1}'`:
+/// `hmac.new(bytes(range(32)), domain + b"\x00" + body, hashlib.sha256).hexdigest()`.
+#[test]
+fn known_vectors_for_both_journal_tags() {
+    let mut bytes = [0u8; 32];
+    for (i, b) in bytes.iter_mut().enumerate() {
+        *b = i as u8;
+    }
+    let key = MasterKey::from_bytes(bytes);
+    let body = br#"{"x":1}"#;
+    assert_eq!(
+        journal_tag_old(&key, body),
+        "386b8d9759c62b568bc19d27f3fbae03279c5dc18dfc7d659096dd7c9f469572"
+    );
+    assert_eq!(
+        journal_tag_new(&key, body),
+        "c3f35c11df295706d530804510afcda1cb7101078f6fb7b791e39d80f8e55d86"
+    );
+}
+
+#[test]
+fn verify_reports_old_or_new_depending_on_the_candidate_key() {
+    let old_key = MasterKey::generate();
+    let new_key = MasterKey::generate();
+    let body = b"the published body bytes";
+    let tag_old = journal_tag_old(&old_key, body);
+    let tag_new = journal_tag_new(&new_key, body);
+
+    assert_eq!(
+        verify_journal_tags(&old_key, body, &tag_old, &tag_new),
+        Some(KeyRole::Old)
+    );
+    assert_eq!(
+        verify_journal_tags(&new_key, body, &tag_old, &tag_new),
+        Some(KeyRole::New)
+    );
+}
+
+#[test]
+fn verify_reports_neither_for_an_unrelated_key() {
+    let old_key = MasterKey::generate();
+    let new_key = MasterKey::generate();
+    let other_key = MasterKey::generate();
+    let body = b"the published body bytes";
+    let tag_old = journal_tag_old(&old_key, body);
+    let tag_new = journal_tag_new(&new_key, body);
+
+    assert_eq!(
+        verify_journal_tags(&other_key, body, &tag_old, &tag_new),
+        None
+    );
+}
+
+#[test]
+fn verify_reports_neither_when_the_body_changed_by_one_byte() {
+    let old_key = MasterKey::generate();
+    let new_key = MasterKey::generate();
+    let body = b"the published body bytes".to_vec();
+    let tag_old = journal_tag_old(&old_key, &body);
+    let tag_new = journal_tag_new(&new_key, &body);
+
+    let mut tampered = body.clone();
+    tampered[0] ^= 1;
+    assert_eq!(
+        verify_journal_tags(&old_key, &tampered, &tag_old, &tag_new),
+        None
+    );
+    assert_eq!(
+        verify_journal_tags(&new_key, &tampered, &tag_old, &tag_new),
+        None
+    );
+}
+
+#[test]
+fn old_and_new_tags_differ_even_for_the_same_key_and_body() {
+    // Domain separation: if the old and new keys happened to be equal
+    // (never true in a real rotation, but nothing here assumes otherwise),
+    // the two tags still would not collide.
+    let key = MasterKey::generate();
+    let body = b"body";
+    assert_ne!(journal_tag_old(&key, body), journal_tag_new(&key, body));
+}
+
+/// One tag, one spelling: the stored tag is exactly what `hex_encode`
+/// wrote. A `+`-prefixed pair (which `u8::from_str_radix` would accept)
+/// or an uppercase spelling of the *same* bytes does not verify.
+#[test]
+fn verify_accepts_only_the_lowercase_spelling_of_a_tag() {
+    let mut bytes = [0u8; 32];
+    for (i, b) in bytes.iter_mut().enumerate() {
+        *b = i as u8;
+    }
+    let key = MasterKey::from_bytes(bytes);
+    let body = br#"{"x":1}"#;
+    let tag_old = journal_tag_old(&key, body);
+    let tag_new = journal_tag_new(&key, body);
+    assert_eq!(
+        verify_journal_tags(&key, body, &tag_old, &tag_new),
+        Some(KeyRole::Old)
+    );
+    // Rewrite one pair below 0x10 (`0N`) as `+N`: the same byte to
+    // `u8::from_str_radix`, a different spelling on disk.
+    let pos = (0..tag_old.len())
+        .step_by(2)
+        .find(|&i| tag_old.as_bytes()[i] == b'0')
+        .expect("the known vector has a pair below 0x10");
+    let mut plus = tag_old.clone().into_bytes();
+    plus[pos] = b'+';
+    let plus = String::from_utf8(plus).expect("ascii");
+    assert_eq!(verify_journal_tags(&key, body, &plus, &tag_new), None);
+    assert_eq!(
+        verify_journal_tags(&key, body, &tag_old.to_uppercase(), &tag_new),
+        None
+    );
+}
+
+#[test]
+fn verify_rejects_a_malformed_stored_tag_without_erroring() {
+    let key = MasterKey::generate();
+    assert_eq!(
+        verify_journal_tags(&key, b"body", "not-hex", "also-not-hex"),
+        None
+    );
+}

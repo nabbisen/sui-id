@@ -18,7 +18,7 @@
 
 use super::{KeyFileMetadata, KeyFileOps};
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -26,19 +26,51 @@ type Ino = usize;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Op {
-    Link { name: PathBuf, ino: Ino },
-    Rename { from: PathBuf, to: PathBuf },
-    Write { ino: Ino, data: Vec<u8> },
+    Link {
+        name: PathBuf,
+        ino: Ino,
+    },
+    Rename {
+        from: PathBuf,
+        to: PathBuf,
+    },
+    Write {
+        ino: Ino,
+        data: Vec<u8>,
+    },
     Marker(String),
+    /// RFC 100 stage 3: the rotation workspace's own creation -- a
+    /// directory entry like `Link`, but with no inode/data of its own.
+    MkDir(PathBuf),
+    /// The workspace's removal. Modeled as unconditional (the real
+    /// adapter's `remove_dir` already refuses a non-empty directory
+    /// before this would ever be recorded).
+    RmDir(PathBuf),
+}
+
+/// The directory an op's durability is tied to: which `sync_dir(dir)`
+/// call moves it from pending to durable. `Write` and `Marker` have none
+/// here -- a write's content durability goes through `sync_file`, not a
+/// directory sync, and a marker through `db_durable`.
+fn owning_dir(op: &Op) -> Option<PathBuf> {
+    match op {
+        Op::Link { name, .. } => name.parent().map(Path::to_path_buf),
+        Op::Rename { to, .. } => to.parent().map(Path::to_path_buf),
+        Op::MkDir(path) | Op::RmDir(path) => path.parent().map(Path::to_path_buf),
+        Op::Write { .. } | Op::Marker(_) => None,
+    }
 }
 
 /// One directory's worth of durable state: entries (including hard
-/// links — two names can share an `Ino`), their data, and the markers
-/// that have become durable (a checkpointed database commit).
+/// links — two names can share an `Ino`), their data, the
+/// **sub-directories** that currently exist (RFC 100 stage 3: the
+/// rotation workspace, the one case this models), and the markers that
+/// have become durable (a checkpointed database commit).
 #[derive(Clone, Default, Debug)]
 pub struct Disk {
     entries: BTreeMap<PathBuf, Ino>,
     data: BTreeMap<Ino, Vec<u8>>,
+    dirs: BTreeSet<PathBuf>,
     markers: Vec<String>,
 }
 
@@ -58,7 +90,30 @@ impl Disk {
                 self.data.insert(*ino, data.clone());
             }
             Op::Marker(m) => self.markers.push(m.clone()),
+            Op::MkDir(path) => {
+                self.dirs.insert(path.clone());
+            }
+            Op::RmDir(path) => {
+                self.dirs.remove(path);
+            }
         }
+    }
+
+    /// RFC 100 stage 3, §1's second durability rule: a power loss after
+    /// a workspace directory's own creation, but before its parent is
+    /// synced, loses the directory *and everything recorded inside it*
+    /// -- an entry orphaned this way is dropped here, regardless of
+    /// whether its own write or rename was independently selected by a
+    /// power-loss subset. `managed_dirs` is every directory path ever
+    /// created during the run (not just this snapshot's own `dirs`): an
+    /// ordinary top-level path (the key file's own directory) is never
+    /// in it, so this is a no-op for every pre-stage-3 test.
+    fn prune_orphans(&mut self, managed_dirs: &BTreeSet<PathBuf>) {
+        let live_dirs = self.dirs.clone();
+        self.entries.retain(|path, _| match path.parent() {
+            Some(parent) if managed_dirs.contains(parent) => live_dirs.contains(parent),
+            _ => true,
+        });
     }
 
     pub fn read(&self, name: &Path) -> Option<&[u8]> {
@@ -74,6 +129,11 @@ impl Disk {
     pub fn has_marker(&self, m: &str) -> bool {
         self.markers.iter().any(|x| x == m)
     }
+
+    /// Does the workspace directory at `path` exist in this snapshot?
+    pub fn has_dir(&self, path: &Path) -> bool {
+        self.dirs.contains(path)
+    }
 }
 
 /// One crash point: the (durable, pending) snapshot taken just before an
@@ -83,6 +143,7 @@ struct CrashPoint {
     durable: Disk,
     pending_entries: Vec<Op>,
     pending_data: BTreeMap<Ino, Vec<u8>>,
+    managed_dirs: BTreeSet<PathBuf>,
 }
 
 struct Inner {
@@ -92,6 +153,12 @@ struct Inner {
     pending_data: BTreeMap<Ino, Vec<u8>>,
     next_ino: Ino,
     points: Vec<CrashPoint>,
+    /// Every path ever given to [`KeyFileOps::create_dir`] during this
+    /// run -- grows only, never shrinks, even past a later `remove_dir`.
+    /// [`Disk::prune_orphans`] uses it to tell "a workspace directory
+    /// that is not currently live" from "an ordinary top-level path,"
+    /// which is never in this set.
+    managed_dirs: BTreeSet<PathBuf>,
 }
 
 /// Records every key-file operation issued through it during one real
@@ -129,6 +196,7 @@ impl Simulated {
                 pending_data: BTreeMap::new(),
                 next_ino: next,
                 points: vec![],
+                managed_dirs: BTreeSet::new(),
             }),
         }
     }
@@ -138,11 +206,13 @@ impl Simulated {
         let durable = inner.durable.clone();
         let pending_entries = inner.pending_entries.clone();
         let pending_data = inner.pending_data.clone();
+        let managed_dirs = inner.managed_dirs.clone();
         inner.points.push(CrashPoint {
             label: label.to_owned(),
             durable,
             pending_entries,
             pending_data,
+            managed_dirs,
         });
     }
 
@@ -162,6 +232,7 @@ impl Simulated {
                 durable: p.durable.clone(),
                 pending_entries: p.pending_entries.clone(),
                 pending_data: p.pending_data.clone(),
+                managed_dirs: p.managed_dirs.clone(),
             })
             .collect()
     }
@@ -180,6 +251,7 @@ pub struct RecordedPoint {
     durable: Disk,
     pending_entries: Vec<Op>,
     pending_data: BTreeMap<Ino, Vec<u8>>,
+    managed_dirs: BTreeSet<PathBuf>,
 }
 
 impl RecordedPoint {
@@ -206,6 +278,14 @@ impl RecordedPoint {
                     base.apply(op);
                 }
             }
+            // RFC 100 stage 3, §1: a subset that applies an entry
+            // "inside" a workspace directory without that directory's
+            // own `MkDir` being in the same subset is not a real power
+            // loss could leave -- the entry cannot exist without its
+            // parent. Drop it rather than skip the subset, since the
+            // other entries this subset selected are still a valid
+            // state on their own.
+            base.prune_orphans(&self.managed_dirs);
             Self::cartesian_writes(base, &inos, &candidates, 0, &mut out);
         }
         out
@@ -353,15 +433,23 @@ impl KeyFileOps for Simulated {
         Ok(())
     }
 
-    fn sync_dir(&self, point: &str, _dir: &Path) -> io::Result<()> {
+    fn sync_dir(&self, point: &str, dir: &Path) -> io::Result<()> {
         self.point(&format!("before {point}"));
         let mut inner = self.inner.borrow_mut();
-        let (dir, rest): (Vec<Op>, Vec<Op>) = inner
+        // RFC 100 stage 3: scoped to `dir` -- syncing the key file's
+        // directory must not also durableize an entry pending inside a
+        // still-unsynced workspace, and vice versa. `owning_dir` already
+        // excludes markers and writes (`None`, never equal to `Some(dir)`),
+        // so this subsumes the old unconditional "every non-marker op"
+        // filter for the one-directory case every earlier stage's tests
+        // exercise.
+        let dir = dir.to_path_buf();
+        let (matched, rest): (Vec<Op>, Vec<Op>) = inner
             .pending_entries
             .drain(..)
-            .partition(|o| !matches!(o, Op::Marker(_)));
+            .partition(|o| owning_dir(o).as_deref() == Some(dir.as_path()));
         inner.pending_entries = rest;
-        for op in dir {
+        for op in matched {
             inner.durable.apply(&op);
         }
         Ok(())
@@ -392,9 +480,52 @@ impl KeyFileOps for Simulated {
                 is_symlink: false,
                 symlink_target: None,
             })
+        } else if inner.view.dirs.contains(path) {
+            // RFC 100 stage 3: a workspace directory exists too --
+            // `Real`'s `symlink_metadata` reports a directory the same
+            // way it reports a file, so a leftover-workspace precondition
+            // check (stage 2's P3) sees the same thing here.
+            Ok(KeyFileMetadata {
+                uid: 0,
+                mode: 0o700,
+                is_symlink: false,
+                symlink_target: None,
+            })
         } else {
             Err(io::Error::new(io::ErrorKind::NotFound, "metadata"))
         }
+    }
+
+    fn create_dir(&self, point: &str, path: &Path) -> io::Result<()> {
+        self.point(&format!("before {point}"));
+        let mut inner = self.inner.borrow_mut();
+        if inner.view.dirs.contains(path) || inner.view.entries.contains_key(path) {
+            return Err(io::Error::new(io::ErrorKind::AlreadyExists, "create_dir"));
+        }
+        inner.managed_dirs.insert(path.to_path_buf());
+        let op = Op::MkDir(path.to_path_buf());
+        inner.view.apply(&op);
+        inner.pending_entries.push(op);
+        Ok(())
+    }
+
+    fn remove_dir(&self, point: &str, path: &Path) -> io::Result<()> {
+        self.point(&format!("before {point}"));
+        let mut inner = self.inner.borrow_mut();
+        if !inner.view.dirs.contains(path) {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "remove_dir"));
+        }
+        let not_empty = inner.view.entries.keys().any(|p| p.parent() == Some(path));
+        if not_empty {
+            return Err(io::Error::new(
+                io::ErrorKind::DirectoryNotEmpty,
+                "remove_dir: not empty",
+            ));
+        }
+        let op = Op::RmDir(path.to_path_buf());
+        inner.view.apply(&op);
+        inner.pending_entries.push(op);
+        Ok(())
     }
 
     /// SQLite's commit in WAL mode with `synchronous=NORMAL`: atomic,
@@ -427,13 +558,31 @@ impl KeyFileOps for Simulated {
 /// Write `disk`'s entries into `dir`, a real temporary directory, with
 /// owner-only permissions — the materialization step, before the
 /// real-code oracle runs against it.
+///
+/// **Both levels** (RFC 100 stage 3): each workspace directory the
+/// snapshot holds becomes a real `0700` directory under `dir`, and an
+/// entry whose parent is one lands inside it; every other entry lands in
+/// `dir` itself. A workspace the snapshot lost is simply absent, and so
+/// is everything that was in it — `power_loss_states` already pruned it.
 pub fn materialize(disk: &Disk, dir: &Path) -> io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    let file_name = |path: &Path| {
+        path.file_name()
+            .map(Path::new)
+            .map(Path::to_path_buf)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no file name"))
+    };
+    for workspace in &disk.dirs {
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(dir.join(file_name(workspace)?))?;
+    }
     for path in disk.paths() {
-        let name = path
-            .file_name()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no file name"))?;
-        let dest = dir.join(name);
+        let name = file_name(path)?;
+        let dest = match path.parent() {
+            Some(parent) if disk.dirs.contains(parent) => dir.join(file_name(parent)?).join(name),
+            _ => dir.join(name),
+        };
         let data = disk.read(path).unwrap_or(&[]);
         std::fs::write(&dest, data)?;
         std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o600))?;

@@ -48,6 +48,14 @@ pub trait KeyFileOps {
     fn read(&self, point: &str, path: &Path) -> io::Result<Vec<u8>>;
     fn remove(&self, point: &str, path: &Path) -> io::Result<()>;
     fn metadata(&self, point: &str, path: &Path) -> io::Result<KeyFileMetadata>;
+    /// RFC 100 stage 3: create the rotation workspace -- mode `0700`,
+    /// current owner, failing if anything (a file, directory, or symlink)
+    /// already exists at `path`. Never follows a symlink: the failure
+    /// mode is refusing to create, not creating through one.
+    fn create_dir(&self, point: &str, path: &Path) -> io::Result<()>;
+    /// The inverse of [`KeyFileOps::create_dir`]. Fails if `path` is not
+    /// an empty directory, the same as `rmdir(2)`.
+    fn remove_dir(&self, point: &str, path: &Path) -> io::Result<()>;
     /// Rotation calls this right after K07's transaction commits. A no-op
     /// outside [`Simulated`].
     fn db_committed(&self, label: &str);
@@ -117,6 +125,19 @@ impl KeyFileOps for Real {
             is_symlink,
             symlink_target: is_symlink.then(|| std::fs::read_link(path).ok()).flatten(),
         })
+    }
+
+    fn create_dir(&self, _point: &str, path: &Path) -> io::Result<()> {
+        use std::os::unix::fs::DirBuilderExt;
+        // No `.recursive(true)`: a plain `mkdir(2)`, which fails with
+        // `AlreadyExists` on anything already at `path` -- a file, a
+        // directory, or a symlink -- and never resolves a symlink for
+        // its own, final-component creation.
+        std::fs::DirBuilder::new().mode(0o700).create(path)
+    }
+
+    fn remove_dir(&self, _point: &str, path: &Path) -> io::Result<()> {
+        std::fs::remove_dir(path)
     }
 
     fn db_committed(&self, _label: &str) {}
@@ -263,6 +284,22 @@ pub mod failpoint {
                 Some(Action::Abort) => std::process::abort(),
                 Some(_) => Err(denied(point)),
                 None => Real.metadata(point, path),
+            }
+        }
+
+        fn create_dir(&self, point: &str, path: &Path) -> io::Result<()> {
+            match self.fire(point) {
+                Some(Action::Abort) => std::process::abort(),
+                Some(_) => Err(denied(point)),
+                None => Real.create_dir(point, path),
+            }
+        }
+
+        fn remove_dir(&self, point: &str, path: &Path) -> io::Result<()> {
+            match self.fire(point) {
+                Some(Action::Abort) => std::process::abort(),
+                Some(_) => Err(denied(point)),
+                None => Real.remove_dir(point, path),
             }
         }
 

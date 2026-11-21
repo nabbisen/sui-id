@@ -15,6 +15,9 @@ use sui_id_store::{Database, StoreError};
 #[path = "rotate/preconditions.rs"]
 pub mod preconditions;
 
+#[path = "rotate/journal.rs"]
+pub mod journal;
+
 /// What [`rotate_key_files`] reports on success: the same per-table
 /// counts `reseal_master_key` already returns.
 pub type RotateReport = sui_id_store::commands::RotationReport;

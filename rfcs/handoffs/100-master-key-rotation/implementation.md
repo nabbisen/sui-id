@@ -137,7 +137,11 @@ or refusal.
 
 ## Stage 3 — the journal
 
-**Dispatched 2026-11-21** — [`0.93.0-stage-3-the-journal-2026-11-21.md`](0.93.0-stage-3-the-journal-2026-11-21.md), cycle O's O4. Built as a module the live rotation does not yet use (recovery lands first, in stage 4); the adapter gains directory creation, and the simulator a second directory level.
+**Landed 2026-11-21** — [`0.93.0-stage-3-the-journal-2026-11-21.md`](0.93.0-stage-3-the-journal-2026-11-21.md), cycle O's O4. Built as a module the live rotation does not yet use (recovery lands first, in stage 4). The adapter gains directory creation, and the simulator a second directory level, which `materialize` reproduces. The journal refuses unknown fields and versions, accepts one spelling of a tag, and publishes only a readback byte-identical to the write.
+
+**Carried into the next stages:**
+- **stage 4** needs a removal the simulator can lose on a power loss (today `remove` changes only the live view), and must check that the journal's bound paths are the ones it derived, not just that the journal authenticates;
+- **stage 5** derives every canonical path in one place, the one stage 2's workspace check already uses; syncs both directories of the cross-directory publication from the workspace; and gives `review_at` a type.
 
 Unchanged from the RFC's *Preparation and the journal*:
 - the workspace `<active>.rotation-work`, mode `0700`, no symlink, whose

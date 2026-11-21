@@ -5,9 +5,10 @@
 **Audience:** implementer assigned after RFC 100 is Accepted
 **Status:** Planning companion. The RFC is **Accepted** (2026-11-14), and **every
 implementation prerequisite is met**: the crash-injection harness was approved
-2026-11-14. The build is planned for `0.92.0`, stage by stage
-([`implementation.md`](./implementation.md), rewritten 2026-11-14); nothing of it
-is dispatched yet. `0.91.0` stage 1, with its part A2, **landed** 2026-11-14.
+2026-11-14. The build goes stage by stage, and
+[`implementation.md`](./implementation.md) records each stage's state: stages 0–3
+have landed (stage 0 in `0.92.0`, stages 1–3 in cycle O, toward `0.93.0`).
+`0.91.0` stage 1, with its part A2, **landed** 2026-11-14.
 
 ## Entry gate
 
