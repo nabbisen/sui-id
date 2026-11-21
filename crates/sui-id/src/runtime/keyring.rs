@@ -61,7 +61,10 @@ pub fn resolve_impl(adapter: &dyn KeyFileOps, key_file: &Path) -> Result<Resolve
 /// needs to know whether a key is *present* before it is safe to decide
 /// whether generating one would be safe, which `resolve_impl`'s original,
 /// fused behaviour could not answer.
-fn read_existing_impl(adapter: &dyn KeyFileOps, key_file: &Path) -> Result<Option<ResolvedKey>> {
+pub(crate) fn read_existing_impl(
+    adapter: &dyn KeyFileOps,
+    key_file: &Path,
+) -> Result<Option<ResolvedKey>> {
     if let Ok(env_value) = std::env::var(ENV_VAR) {
         let key = MasterKey::from_base64(env_value.trim()).with_context(|| {
             format!("environment variable {ENV_VAR} did not contain a valid 32-byte base64 key")

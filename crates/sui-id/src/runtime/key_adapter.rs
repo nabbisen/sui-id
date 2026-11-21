@@ -18,16 +18,18 @@ use std::path::{Path, PathBuf};
 
 /// What [`KeyFileOps::metadata`] reports: enough to tell a key file from a
 /// symlink standing in for one, and to check its owner and mode, without
-/// `geteuid` or any `unsafe` — `std::os::unix::fs::MetadataExt` already
-/// reads what `stat(2)` filled in. `symlink_target` is `Some` only when
-/// `is_symlink` is true (RFC 100 stage 2, M6: the refusal names the link
-/// *and* its target, so simply reporting "this is a symlink" is not
-/// enough).
+/// `unsafe` — `std::os::unix::fs::MetadataExt` already reads what
+/// `stat(2)` filled in. `symlink_target` is `Some` only when `is_symlink`
+/// is true (RFC 100 stage 2, M6: the refusal names the link *and* its
+/// target, so simply reporting "this is a symlink" is not enough).
+/// `is_dir` (RFC 100 stage 4): recovery must tell the rotation workspace,
+/// a real directory, from a file or symlink planted at the same name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyFileMetadata {
     pub uid: u32,
     pub mode: u32,
     pub is_symlink: bool,
+    pub is_dir: bool,
     pub symlink_target: Option<PathBuf>,
 }
 
@@ -56,6 +58,11 @@ pub trait KeyFileOps {
     /// The inverse of [`KeyFileOps::create_dir`]. Fails if `path` is not
     /// an empty directory, the same as `rmdir(2)`.
     fn remove_dir(&self, point: &str, path: &Path) -> io::Result<()>;
+    /// RFC 100 stage 4: every entry directly inside `dir` (not
+    /// recursive), as full paths -- recovery's own classification needs
+    /// to see *everything* a workspace holds, to fail closed on anything
+    /// it does not bind, not just check for named paths one at a time.
+    fn list_dir(&self, point: &str, dir: &Path) -> io::Result<Vec<PathBuf>>;
     /// Rotation calls this right after K07's transaction commits. A no-op
     /// outside [`Simulated`].
     fn db_committed(&self, label: &str);
@@ -123,6 +130,7 @@ impl KeyFileOps for Real {
             uid: m.uid(),
             mode: m.mode() & 0o777,
             is_symlink,
+            is_dir: m.file_type().is_dir(),
             symlink_target: is_symlink.then(|| std::fs::read_link(path).ok()).flatten(),
         })
     }
@@ -138,6 +146,12 @@ impl KeyFileOps for Real {
 
     fn remove_dir(&self, _point: &str, path: &Path) -> io::Result<()> {
         std::fs::remove_dir(path)
+    }
+
+    fn list_dir(&self, _point: &str, dir: &Path) -> io::Result<Vec<PathBuf>> {
+        std::fs::read_dir(dir)?
+            .map(|entry| entry.map(|e| e.path()))
+            .collect()
     }
 
     fn db_committed(&self, _label: &str) {}
@@ -300,6 +314,14 @@ pub mod failpoint {
                 Some(Action::Abort) => std::process::abort(),
                 Some(_) => Err(denied(point)),
                 None => Real.remove_dir(point, path),
+            }
+        }
+
+        fn list_dir(&self, point: &str, dir: &Path) -> io::Result<Vec<std::path::PathBuf>> {
+            match self.fire(point) {
+                Some(Action::Abort) => std::process::abort(),
+                Some(_) => Err(denied(point)),
+                None => Real.list_dir(point, dir),
             }
         }
 

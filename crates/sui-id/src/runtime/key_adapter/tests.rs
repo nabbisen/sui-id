@@ -219,6 +219,8 @@ const FORBIDDEN: &[&str] = &[
     "std::fs::create_dir(",
     "std::fs::remove_dir(",
     "DirBuilder::new",
+    // RFC 100 stage 4: `list_dir`'s own primitive.
+    "std::fs::read_dir",
 ];
 
 fn stray_fs_calls(src: &str) -> Vec<&'static str> {

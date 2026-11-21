@@ -3454,6 +3454,7 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rusqlite",
+ "rustix",
  "rustls",
  "rustversion",
  "secrecy",

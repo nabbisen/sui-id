@@ -401,6 +401,18 @@ pub(crate) async fn run_admin_rotate_key(
         return run_rotate_check(&cfg.storage.key_file, &cfg.storage.db_path);
     }
 
+    // RFC 100 stage 4: this command resolves its key through
+    // `keyring::resolve_checked` directly, not `database::open_checked`,
+    // so it calls recovery explicitly -- before anything else, including
+    // the summary below, since it is the command most likely to meet
+    // its own leftover.
+    let adapter = crate::key_adapter::default_adapter();
+    crate::rotate::recovery::recover_and_report(
+        adapter.as_ref(),
+        &cfg.storage.key_file,
+        &cfg.storage.db_path,
+    )?;
+
     // RFC 112 D5: print a summary and ask for confirmation before the
     // database is even opened, so a refusal is the first thing read.
     crate::database::check(&cfg.storage.db_path)?;
@@ -445,7 +457,6 @@ pub(crate) async fn run_admin_rotate_key(
     // RFC 100 stage 2: P1-P4, gathered -- every failing precondition
     // named, not only the first. Nothing is created, removed or renamed
     // by this call.
-    let adapter = crate::key_adapter::default_adapter();
     let (results, resolved) =
         crate::rotate::preconditions::check(adapter.as_ref(), &old_path, &cfg.storage.db_path);
     let failures: Vec<&str> = results

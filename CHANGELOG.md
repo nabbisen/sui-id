@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one.
 - **`sui-id admin master-key rotate --check` reports whether a rotation
   could start, and changes nothing.**
+- **Startup now recovers a key rotation that stopped during
+  preparation**: it cleans the leftover workspace and continues on the
+  active key, or refuses before starting and changes nothing. Nothing
+  writes such a workspace yet, so no operator sees this until rotation
+  itself uses the journal.
 
 ### Changed
 

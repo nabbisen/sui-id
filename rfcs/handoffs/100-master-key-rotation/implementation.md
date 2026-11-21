@@ -141,7 +141,8 @@ or refusal.
 
 **Carried into the next stages:**
 - **stage 4** needs a removal the simulator can lose on a power loss (today `remove` changes only the live view), and must check that the journal's bound paths are the ones it derived, not just that the journal authenticates;
-- **stage 5** derives every canonical path in one place, the one stage 2's workspace check already uses; syncs both directories of the cross-directory publication from the workspace; and gives `review_at` a type.
+- **stage 5** derives every canonical path in one place, the one stage 2's workspace check already uses (**done in stage 4**: `RotationPaths`); syncs both directories of the cross-directory publication from the workspace; and gives `review_at` a type;
+- **stage 5 tells a running rotation from a stopped one** (found reviewing stage 4). Recovery reads "the workspace exists" as "stopped". A rotation running in another process when an `admin` command starts would have `next` and its journal removed beneath it, and K07 would then reseal under a key that no longer exists. The live rotation holds an exclusive `flock` on the workspace for its whole run; recovery takes it non-blocking before classifying, and fails closed on contention. The kernel releases it when the process dies.
 
 Unchanged from the RFC's *Preparation and the journal*:
 - the workspace `<active>.rotation-work`, mode `0700`, no symlink, whose
@@ -161,7 +162,7 @@ is atomic, **in all three modes**.
 
 ## Stage 4 — startup recovery
 
-**Dispatched 2026-11-21** — [`0.93.0-stage-4-startup-recovery-2026-11-21.md`](0.93.0-stage-4-startup-recovery-2026-11-21.md), cycle O's O5. As settled there on 2026-11-21: a rotation stopped before the database was resealed is **cleaned, and the service starts** (resume is not built); and a backup found during that cleanup is **removed once its key is verified to be the active one**.
+**Landed 2026-11-21** — [`0.93.0-stage-4-startup-recovery-2026-11-21.md`](0.93.0-stage-4-startup-recovery-2026-11-21.md), cycle O's O5. Recovery runs first in `database::open_checked` and in `admin master-key rotate`; every path comes from `RotationPaths`; a `next` or backup with no journal to bind it fails closed rather than being removed. As settled there on 2026-11-21: a rotation stopped before the database was resealed is **cleaned, and the service starts** (resume is not built); and a backup found during that cleanup is **removed once its key is verified to be the active one**.
 
 **Before stage 5.** It implements [`crash-matrix.md`](./crash-matrix.md)'s
 recovery table **rows 1–7 and 11** (the preparation prefix, and fail

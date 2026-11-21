@@ -28,15 +28,55 @@ pub fn sibling_with_suffix(key_file: &Path, suffix: &str) -> PathBuf {
 }
 
 /// `<key_file>.new` — the staged new key, during a rotation in progress.
+/// The *live*, non-journal rotation sequence's own name (`rotate.rs`),
+/// unrelated to [`RotationPaths::next`] below, which the journal binds
+/// once stage 5 wires it in.
 pub fn staged_path(key_file: &Path) -> PathBuf {
     sibling_with_suffix(key_file, ".new")
 }
 
-/// `<key_file>.rotation-work` — stage 3's workspace. Nothing creates this
-/// yet; P3 checks for one left over by a future stage anyway, so this
-/// stage's own naming does not need revisiting when stage 3 lands.
+/// RFC 100 stage 4 §2: every rotation-adjacent path, derived once from
+/// the key file -- a journal body, a precondition check, and recovery's
+/// own expectations can then never name three different things for
+/// "the workspace" or "next." Only one rotation is ever in progress at a
+/// time (the workspace is the lock), so `backup` is one fixed name, not
+/// a timestamp; a *retained* backup's longer-lived name past `Complete`
+/// is stage 7's to give it.
+pub struct RotationPaths {
+    pub active: PathBuf,
+    pub workspace: PathBuf,
+    pub next: PathBuf,
+    pub backup: PathBuf,
+    pub intent_temp: PathBuf,
+    pub update_temp: PathBuf,
+    pub next_temp: PathBuf,
+    pub backup_temp: PathBuf,
+}
+
+impl RotationPaths {
+    pub fn for_key_file(key_file: &Path) -> Self {
+        let workspace = sibling_with_suffix(key_file, ".rotation-work");
+        let intent_temp = workspace.join("intent.write");
+        let update_temp = workspace.join("update.write");
+        let next_temp = workspace.join("next.write");
+        let backup_temp = workspace.join("backup.write");
+        Self {
+            active: key_file.to_path_buf(),
+            next: sibling_with_suffix(key_file, ".next"),
+            backup: sibling_with_suffix(key_file, ".pre-rotation"),
+            workspace,
+            intent_temp,
+            update_temp,
+            next_temp,
+            backup_temp,
+        }
+    }
+}
+
+/// `<key_file>.rotation-work` — stage 3's workspace, now one call into
+/// [`RotationPaths`] so there is one derivation, not two.
 pub fn workspace_path(key_file: &Path) -> PathBuf {
-    sibling_with_suffix(key_file, ".rotation-work")
+    RotationPaths::for_key_file(key_file).workspace
 }
 
 fn probe_path(key_file: &Path) -> PathBuf {
@@ -198,9 +238,9 @@ fn leftover_staged_text(staged_path: &Path) -> String {
 fn leftover_workspace_text(workspace_path: &Path) -> String {
     format!(
         "refusing to rotate: {} already exists. A previous rotation \
-        may not have completed its preparation stage. Inspect it \
-        before removing it and retrying; it holds no key material, \
-        only the in-progress journal.",
+        may not have completed. Starting sui-id, or running \
+        `sui-id admin master-key rotate` again, lets recovery check it and either \
+        clean it or refuse and say why -- do not remove it by hand.",
         workspace_path.display()
     )
 }

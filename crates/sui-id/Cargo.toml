@@ -72,6 +72,9 @@ toml                        = { workspace = true }
 thiserror                   = { workspace = true }
 anyhow                      = { workspace = true }
 tracing                     = { workspace = true }
+# RFC 100 stage 4: recovery's own uid check (`rustix::process::geteuid`,
+# safe, no new crate -- `sui-id-store` already depends on it for `fs`).
+rustix                      = { workspace = true }
 tracing-subscriber          = { workspace = true }
 tracing-appender            = { workspace = true }
 chrono                      = { workspace = true }

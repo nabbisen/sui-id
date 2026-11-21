@@ -210,6 +210,13 @@ pub async fn open_checked(
     key_file: &Path,
     backup: PreMigrationBackup,
 ) -> anyhow::Result<(Database, crate::keyring::KeyOrigin)> {
+    // RFC 100 stage 4: recover a leftover rotation preparation workspace
+    // before anything else -- including `resolve_checked`, which a
+    // leftover `.new`-style precondition does not cover (that is
+    // rotation's own concern; a *workspace*, this module's).
+    let adapter = crate::key_adapter::default_adapter();
+    crate::rotate::recovery::recover_and_report(adapter.as_ref(), key_file, path)?;
+
     let resolved = crate::keyring::resolve_checked(key_file, path)?;
     let db = open(path, resolved.key, backup)?;
     sui_id_store::master_key_check::ensure_sentinel_written(&db, db.key())

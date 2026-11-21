@@ -46,6 +46,12 @@ enum Op {
     /// adapter's `remove_dir` already refuses a non-empty directory
     /// before this would ever be recorded).
     RmDir(PathBuf),
+    /// RFC 100 stage 4: a file's removal -- pending until its parent
+    /// directory is synced, exactly like `Link`'s creation. Before
+    /// stage 4, `remove` applied immediately and recorded nothing, so a
+    /// power loss could never bring a removed file back; recovery is
+    /// made of removals, so that was never exercised until now.
+    Unlink(PathBuf),
 }
 
 /// The directory an op's durability is tied to: which `sync_dir(dir)`
@@ -56,7 +62,9 @@ fn owning_dir(op: &Op) -> Option<PathBuf> {
     match op {
         Op::Link { name, .. } => name.parent().map(Path::to_path_buf),
         Op::Rename { to, .. } => to.parent().map(Path::to_path_buf),
-        Op::MkDir(path) | Op::RmDir(path) => path.parent().map(Path::to_path_buf),
+        Op::MkDir(path) | Op::RmDir(path) | Op::Unlink(path) => {
+            path.parent().map(Path::to_path_buf)
+        }
         Op::Write { .. } | Op::Marker(_) => None,
     }
 }
@@ -95,6 +103,9 @@ impl Disk {
             }
             Op::RmDir(path) => {
                 self.dirs.remove(path);
+            }
+            Op::Unlink(path) => {
+                self.entries.remove(path);
             }
         }
     }
@@ -467,17 +478,28 @@ impl KeyFileOps for Simulated {
     fn remove(&self, point: &str, path: &Path) -> io::Result<()> {
         self.point(&format!("before {point}"));
         let mut inner = self.inner.borrow_mut();
-        inner.view.entries.remove(path);
+        if !inner.view.entries.contains_key(path) {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "remove"));
+        }
+        let op = Op::Unlink(path.to_path_buf());
+        inner.view.apply(&op);
+        inner.pending_entries.push(op);
         Ok(())
     }
 
     fn metadata(&self, _point: &str, path: &Path) -> io::Result<KeyFileMetadata> {
         let inner = self.inner.borrow();
+        // RFC 100 stage 4: the real current euid, not a fixed `0` --
+        // every entry `Simulated` models is one *this* process "created,"
+        // same as `Real`'s own `create_new`/`create_dir` would report,
+        // so recovery's owner check is meaningfully exercisable here too.
+        let uid = rustix::process::geteuid().as_raw();
         if inner.view.entries.contains_key(path) {
             Ok(KeyFileMetadata {
-                uid: 0,
+                uid,
                 mode: 0o600,
                 is_symlink: false,
+                is_dir: false,
                 symlink_target: None,
             })
         } else if inner.view.dirs.contains(path) {
@@ -486,14 +508,38 @@ impl KeyFileOps for Simulated {
             // way it reports a file, so a leftover-workspace precondition
             // check (stage 2's P3) sees the same thing here.
             Ok(KeyFileMetadata {
-                uid: 0,
+                uid,
                 mode: 0o700,
                 is_symlink: false,
+                is_dir: true,
                 symlink_target: None,
             })
         } else {
             Err(io::Error::new(io::ErrorKind::NotFound, "metadata"))
         }
+    }
+
+    fn list_dir(&self, _point: &str, dir: &Path) -> io::Result<Vec<PathBuf>> {
+        let inner = self.inner.borrow();
+        if !inner.view.dirs.contains(dir) {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "list_dir"));
+        }
+        let mut out: Vec<PathBuf> = inner
+            .view
+            .entries
+            .keys()
+            .filter(|p| p.parent() == Some(dir))
+            .cloned()
+            .collect();
+        out.extend(
+            inner
+                .view
+                .dirs
+                .iter()
+                .filter(|p| p.parent() == Some(dir))
+                .cloned(),
+        );
+        Ok(out)
     }
 
     fn create_dir(&self, point: &str, path: &Path) -> io::Result<()> {

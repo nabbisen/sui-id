@@ -1035,3 +1035,284 @@ async fn rotation_on_minimal_db_only_rekeys_signing_key() {
     assert_eq!(report.smtp_config, 0);
     assert_eq!(report.total(), 1);
 }
+
+// ---------- RFC 100 stage 4 (2026-11-21): startup recovery, through the
+// real binary ----------
+mod recovery {
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Output};
+    use sui_id::key_adapter::{KeyFileOps, Real};
+    use sui_id::rotate::journal::{self, BackupDisposition, JournalBody, JournalState};
+    use sui_id::rotate::preconditions::RotationPaths;
+    use sui_id_store::Database;
+    use sui_id_store::crypto::MasterKey;
+    use sui_id_store::master_key_check::ensure_sentinel_written;
+
+    const BIN: &str = env!("CARGO_BIN_EXE_sui-id");
+
+    struct Home {
+        dir: tempfile::TempDir,
+    }
+
+    impl Home {
+        fn new() -> Self {
+            Self {
+                dir: tempfile::tempdir().expect("tempdir"),
+            }
+        }
+        fn db(&self) -> PathBuf {
+            self.dir.path().join("t.sqlite")
+        }
+        fn key(&self) -> PathBuf {
+            self.dir.path().join("t.key")
+        }
+        fn config(&self, port: u16) -> PathBuf {
+            let sample = Command::new(BIN)
+                .arg("--print-sample-config")
+                .output()
+                .expect("sample");
+            let mut text = String::from_utf8(sample.stdout).expect("utf8");
+            text = text
+                .replace("./sui-id.sqlite", &self.db().display().to_string())
+                .replace("./sui-id.key", &self.key().display().to_string())
+                .replace("127.0.0.1:8801", &format!("127.0.0.1:{port}"));
+            let path = self.dir.path().join("cfg.toml");
+            std::fs::write(&path, text).expect("config");
+            path
+        }
+        fn run(&self, args: &[&str], cfg: &Path) -> Output {
+            Command::new(BIN).args(args).arg(cfg).output().expect("run")
+        }
+        fn snapshot(&self) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+            fn walk(dir: &Path, out: &mut std::collections::BTreeMap<PathBuf, Vec<u8>>) {
+                for entry in std::fs::read_dir(dir).expect("read dir").flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        walk(&path, out);
+                    } else {
+                        out.insert(path.clone(), std::fs::read(&path).expect("read"));
+                    }
+                }
+            }
+            let mut out = std::collections::BTreeMap::new();
+            walk(self.dir.path(), &mut out);
+            out
+        }
+    }
+
+    fn stderr(o: &Output) -> String {
+        String::from_utf8_lossy(&o.stderr).into_owned()
+    }
+    fn stdout(o: &Output) -> String {
+        String::from_utf8_lossy(&o.stdout).into_owned()
+    }
+
+    fn write_key_at(path: &Path, key: &MasterKey, mode: u32) {
+        std::fs::write(path, format!("{}\n", key.to_base64())).expect("write key");
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).expect("chmod");
+    }
+
+    /// Seeds `home` with a real, sentinel-sealed database under a fresh
+    /// old key, and a real rotation workspace prepared (through the
+    /// library directly -- nothing in the live binary writes one yet)
+    /// up to `state`, with whatever outside-workspace artifacts that
+    /// state implies.
+    async fn seed_leftover(home: &Home, state: JournalState) -> RotationPaths {
+        let old_key = MasterKey::generate();
+        let new_key = MasterKey::generate();
+        let db = Database::open(&home.db(), old_key_copy(&old_key)).expect("open");
+        ensure_sentinel_written(&db, db.key())
+            .await
+            .expect("sentinel");
+        drop(db);
+        write_key_at(&home.key(), &old_key, 0o600);
+
+        let paths = RotationPaths::for_key_file(&home.key());
+        journal::lock_workspace(&Real, &paths.workspace).expect("lock");
+        let body = sample_body(&paths, &old_key, &new_key);
+        let mut envelope = journal::write_intent(&Real, &paths.workspace, body, &old_key, &new_key)
+            .expect("write_intent");
+        if state >= JournalState::NextTempVerified {
+            write_key_at(&paths.next_temp, &new_key, 0o600);
+            envelope = journal::advance(
+                &Real,
+                &paths.workspace,
+                &envelope,
+                JournalState::NextTempVerified,
+                &old_key,
+                &new_key,
+            )
+            .expect("advance");
+        }
+        if state >= JournalState::NextPublished {
+            Real.publish_no_replace("t.next.publish", &paths.next_temp, &paths.next)
+                .expect("publish next");
+            journal::advance(
+                &Real,
+                &paths.workspace,
+                &envelope,
+                JournalState::NextPublished,
+                &old_key,
+                &new_key,
+            )
+            .expect("advance");
+        }
+        paths
+    }
+
+    /// `JournalBody`'s own fields are all `pub`, but the convenience
+    /// constructor `journal::sample_body` is `pub(crate)` to `sui-id` --
+    /// invisible from this separate integration-test crate. The real
+    /// uid/mode here match what `Real::create_new` actually produces.
+    fn sample_body(paths: &RotationPaths, old_key: &MasterKey, new_key: &MasterKey) -> JournalBody {
+        let p = |path: &Path| path.to_str().expect("utf8").to_owned();
+        JournalBody {
+            rotation_id: "11111111-1111-1111-1111-111111111111".to_owned(),
+            old_fingerprint: sui_id_store::crypto::fingerprint(old_key),
+            new_fingerprint: sui_id_store::crypto::fingerprint(new_key),
+            active_path: p(&paths.active),
+            workspace_path: p(&paths.workspace),
+            next_path: p(&paths.next),
+            backup_path: p(&paths.backup),
+            intent_temp_path: p(&paths.intent_temp),
+            update_temp_path: p(&paths.update_temp),
+            next_temp_path: p(&paths.next_temp),
+            backup_temp_path: p(&paths.backup_temp),
+            expected_uid: rustix::process::geteuid().as_raw(),
+            expected_mode: 0o600,
+            backup_disposition: BackupDisposition::RemoveAfterVerified {
+                verification_reference: "test-only".to_owned(),
+            },
+            state: JournalState::Intent,
+        }
+    }
+
+    fn old_key_copy(key: &MasterKey) -> MasterKey {
+        let mut bytes = *key.as_bytes();
+        let copy = MasterKey::from_bytes(bytes);
+        zeroize::Zeroize::zeroize(&mut bytes);
+        copy
+    }
+
+    #[tokio::test]
+    async fn an_admin_command_cleans_a_leftover_and_reports_it_on_stderr_first() {
+        let home = Home::new();
+        let cfg = home.config(18816);
+        let paths = seed_leftover(&home, JournalState::Intent).await;
+
+        let out = home.run(
+            &[
+                "admin",
+                "user",
+                "unlock",
+                "--username",
+                "nobody",
+                "--config",
+            ],
+            &cfg,
+        );
+        let err = stderr(&out);
+        assert!(
+            err.starts_with("a stopped rotation was found and cleaned"),
+            "the report is the first thing printed: {err}"
+        );
+        assert!(
+            err.contains(&format!("removed {}", paths.workspace.display())),
+            "{err}"
+        );
+        assert!(!paths.workspace.exists());
+    }
+
+    #[tokio::test]
+    async fn the_server_itself_cleans_a_leftover_and_logs_it() {
+        use std::io::Read;
+        use std::time::{Duration, Instant};
+
+        let home = Home::new();
+        let cfg = home.config(18817);
+        let paths = seed_leftover(&home, JournalState::Intent).await;
+
+        let mut child = Command::new(BIN)
+            .arg("serve")
+            .arg("--config")
+            .arg(&cfg)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn");
+        let out_buf = drain(child.stdout.take().expect("stdout"));
+        let err_buf = drain(child.stderr.take().expect("stderr"));
+
+        let start = Instant::now();
+        loop {
+            if let Some(status) = child.try_wait().expect("wait") {
+                panic!(
+                    "sui-id serve exited early ({status:?}): stdout={} stderr={}",
+                    String::from_utf8_lossy(&out_buf.lock().expect("lock")),
+                    String::from_utf8_lossy(&err_buf.lock().expect("lock")),
+                );
+            }
+            let err_text = String::from_utf8_lossy(&err_buf.lock().expect("lock")).into_owned();
+            if err_text.contains("a stopped rotation was found and cleaned") {
+                assert!(
+                    err_text.contains(&format!("removed {}", paths.workspace.display())),
+                    "{err_text}"
+                );
+                let _ = child.kill();
+                return;
+            }
+            // A hang guard, not a speed assertion (see o2a_cli_registry.rs).
+            if start.elapsed() > Duration::from_secs(180) {
+                let _ = child.kill();
+                panic!("sui-id serve never reported the cleaned rotation: stderr={err_text}");
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+
+        fn drain(
+            mut pipe: impl Read + Send + 'static,
+        ) -> std::sync::Arc<std::sync::Mutex<Vec<u8>>> {
+            let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+            let shared = buf.clone();
+            std::thread::spawn(move || {
+                let mut chunk = [0u8; 4096];
+                loop {
+                    match pipe.read(&mut chunk) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => shared.lock().expect("lock").extend_from_slice(&chunk[..n]),
+                    }
+                }
+            });
+            buf
+        }
+    }
+
+    #[tokio::test]
+    async fn a_next_key_of_the_wrong_fingerprint_refuses_before_readiness_and_changes_nothing() {
+        let home = Home::new();
+        let cfg = home.config(18818);
+        let paths = seed_leftover(&home, JournalState::NextPublished).await;
+        write_key_at(&paths.next, &MasterKey::generate(), 0o600);
+        let before = home.snapshot();
+
+        let out = home.run(
+            &[
+                "admin",
+                "user",
+                "unlock",
+                "--username",
+                "nobody",
+                "--config",
+            ],
+            &cfg,
+        );
+        assert_ne!(out.status.code(), Some(0), "{}", stdout(&out));
+        assert!(stderr(&out).contains("fingerprint"), "{}", stderr(&out));
+        assert_eq!(
+            home.snapshot(),
+            before,
+            "byte-identical after a fail-closed refusal"
+        );
+    }
+}

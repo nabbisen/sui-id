@@ -160,8 +160,9 @@ pub fn lock_workspace(adapter: &dyn KeyFileOps, workspace: &Path) -> anyhow::Res
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             bail!(
                 "refusing to prepare a rotation: {} already exists. A previous \
-                 rotation or recovery may be in progress, or one stopped without \
-                 cleaning up -- do not remove it by hand; let recovery own it.",
+                 rotation may not have completed. Starting sui-id, or running \
+                 `sui-id admin master-key rotate` again, lets recovery check it and either \
+                 clean it or refuse and say why -- do not remove it by hand.",
                 workspace.display()
             );
         }
@@ -350,19 +351,25 @@ pub(crate) fn sample_body(
     old_key: &MasterKey,
     new_key: &MasterKey,
 ) -> JournalBody {
+    use super::preconditions::RotationPaths;
+    let paths = RotationPaths::for_key_file(active);
+    debug_assert_eq!(
+        paths.workspace, workspace,
+        "sample_body's own caller must pass the matching workspace"
+    );
     JournalBody {
         rotation_id: "11111111-1111-1111-1111-111111111111".to_owned(),
         old_fingerprint: crypto::fingerprint(old_key),
         new_fingerprint: crypto::fingerprint(new_key),
-        active_path: path_to_string(active).expect("utf8"),
-        workspace_path: path_to_string(workspace).expect("utf8"),
-        next_path: path_to_string(&active.with_extension("ready")).expect("utf8"),
-        backup_path: path_to_string(&active.with_extension("bak")).expect("utf8"),
-        intent_temp_path: path_to_string(&workspace.join(INTENT_TEMP_NAME)).expect("utf8"),
-        update_temp_path: path_to_string(&workspace.join(UPDATE_TEMP_NAME)).expect("utf8"),
-        next_temp_path: path_to_string(&workspace.join("next.write")).expect("utf8"),
-        backup_temp_path: path_to_string(&workspace.join("backup.write")).expect("utf8"),
-        expected_uid: 0,
+        active_path: path_to_string(&paths.active).expect("utf8"),
+        workspace_path: path_to_string(&paths.workspace).expect("utf8"),
+        next_path: path_to_string(&paths.next).expect("utf8"),
+        backup_path: path_to_string(&paths.backup).expect("utf8"),
+        intent_temp_path: path_to_string(&paths.intent_temp).expect("utf8"),
+        update_temp_path: path_to_string(&paths.update_temp).expect("utf8"),
+        next_temp_path: path_to_string(&paths.next_temp).expect("utf8"),
+        backup_temp_path: path_to_string(&paths.backup_temp).expect("utf8"),
+        expected_uid: rustix::process::geteuid().as_raw(),
         expected_mode: 0o600,
         backup_disposition: BackupDisposition::RemoveAfterVerified {
             verification_reference: "test-only".to_owned(),

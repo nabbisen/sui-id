@@ -520,6 +520,9 @@ impl KeyFileOps for RespellingReads {
     fn remove_dir(&self, p: &str, path: &Path) -> std::io::Result<()> {
         Real.remove_dir(p, path)
     }
+    fn list_dir(&self, p: &str, dir: &Path) -> std::io::Result<Vec<std::path::PathBuf>> {
+        Real.list_dir(p, dir)
+    }
     fn db_committed(&self, _label: &str) {}
     fn db_durable(&self, _label: &str) {}
 }
