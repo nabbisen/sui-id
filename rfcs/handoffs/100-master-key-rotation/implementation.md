@@ -137,6 +137,8 @@ or refusal.
 
 ## Stage 3 — the journal
 
+**Dispatched 2026-11-21** — [`0.93.0-stage-3-the-journal-2026-11-21.md`](0.93.0-stage-3-the-journal-2026-11-21.md), cycle O's O4. Built as a module the live rotation does not yet use (recovery lands first, in stage 4); the adapter gains directory creation, and the simulator a second directory level.
+
 Unchanged from the RFC's *Preparation and the journal*:
 - the workspace `<active>.rotation-work`, mode `0700`, no symlink, whose
   existence is the lock;
