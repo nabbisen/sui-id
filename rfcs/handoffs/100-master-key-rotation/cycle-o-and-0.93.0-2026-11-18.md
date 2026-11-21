@@ -52,7 +52,7 @@ secret are redacted, the rule the runbook kept for exactly this case.
 | **O3** | **Landed 2026-11-21** — [`0.93.0-stage-2-preconditions-and-check-2026-11-19.md`](0.93.0-stage-2-preconditions-and-check-2026-11-19.md). **RFC 100 stage 2**: preconditions, and `--check` | On `clap` |
 | **O4** | **Landed 2026-11-21** — [`0.93.0-stage-3-the-journal-2026-11-21.md`](0.93.0-stage-3-the-journal-2026-11-21.md). **RFC 100 stage 3**: the journal, a module the live rotation does not yet use | |
 | **O5** | **Landed 2026-11-21** — [`0.93.0-stage-4-startup-recovery-2026-11-21.md`](0.93.0-stage-4-startup-recovery-2026-11-21.md). **RFC 100 stage 4**: startup recovery of the preparation prefix (rows 1–7 and 11; rows 8–10 move to stage 6) | Recovery lands before stage 5's write path, as the stage rules require. Clean-and-start and the verified backup removal, settled 2026-11-21, are in the dispatch |
-| **S** | **The account-creation run** (§1) | **Whenever the owner can**, independent of O1–O5. It closes M4-B, and RFC 097's draft starts the same day |
+| **S** | **The account-creation run** (§1), **set up 2026-11-21**, before the preparation — [`../096-upstream-oidc-federation/096-b1-m4b-google-run-2026-11-21.md`](../096-upstream-oidc-federation/096-b1-m4b-google-run-2026-11-21.md) | It closes M4-B, and RFC 097's draft starts the same day |
 | **P** | the preparation | |
 
 **O1 is dispatched now.** It depends on nothing in §3.
