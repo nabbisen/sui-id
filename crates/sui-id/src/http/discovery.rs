@@ -537,15 +537,28 @@ pub fn validate_issuer(issuer: &str) -> Result<url::Url, DiscoveryError> {
 /// must not use" and gets its own handling (RFC 134 D3 §2c) — logged with
 /// the provider slug and the offending origin, audited, and surfaced to
 /// the browser as a generic `fed_error`, never the offending URL.
+///
+/// `0.93.0` O6 §3/§2: `Network` carries the raw `send()` failure (its
+/// `Display` already strips the URL — RFC 096's telemetry rule), and
+/// `Bounds` the transport bounds' own result (status, size, content
+/// type, or that same kind of `send`/read failure, one level further
+/// into the response) — kept apart from `Network` because only
+/// `Network`'s payload is a bare `reqwest::Error` a caller can classify
+/// further (preflight's own `TransportCause`); `Bounds`'s may or may not
+/// be. Both used to collapse into one pre-formatted `String`; carrying
+/// the typed value instead is what lets an administrator's page say
+/// more than "see the server log."
 pub enum FetchDiscoveryError {
-    Network(String),
+    Network(reqwest::Error),
+    Bounds(response_bounds::BoundsError),
     Invalid(DiscoveryError),
 }
 
 impl std::fmt::Display for FetchDiscoveryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Network(e) => write!(f, "{e}"),
+            Self::Network(e) => write!(f, "discovery fetch failed: {e}"),
+            Self::Bounds(e) => write!(f, "discovery fetch failed: {e}"),
             Self::Invalid(e) => write!(f, "{e}"),
         }
     }
@@ -587,19 +600,20 @@ pub async fn fetch_discovery_bytes(
         .get(&url)
         .send()
         .await
-        .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
+        .map_err(|e| FetchDiscoveryError::Network(e.without_url()))?;
     // RFC 134 D5 Tier 1: status (200 only), media type, and a byte cap
     // honored on bytes actually read (`read_bounded_body`) -- the
     // transport half. RFC 096-B1 stage 12a, §3: the structural/semantic
     // half is `validate_discovery_bytes`'s own tighter, discovery-specific
     // bounds. A body that trips one of these is `FetchDiscoveryError::
     // Invalid` -- "the upstream sent a document we must not trust" --
-    // rather than the generic `Network` variant; a genuine transport
-    // failure (wrong status, wrong media type, over the byte cap) is
-    // unaffected and still `Network`, from `read_bounded_body` itself.
+    // rather than the generic transport variants; a genuine transport
+    // failure (wrong status, wrong media type, over the byte cap, or a
+    // connection drop mid-read) is unaffected and still `Bounds`, from
+    // `read_bounded_body` itself.
     let bytes = crate::response_bounds::read_bounded_body(resp)
         .await
-        .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
+        .map_err(FetchDiscoveryError::Bounds)?;
     let validated = validate_discovery_bytes(&bytes, issuer, allowed_origins)
         .map_err(FetchDiscoveryError::Invalid)?;
     Ok((bytes, validated))

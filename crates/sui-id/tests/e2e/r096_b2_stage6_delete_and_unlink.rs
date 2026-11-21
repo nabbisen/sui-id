@@ -252,10 +252,14 @@ async fn delete_through_the_admin_surface_states_the_count_and_records_the_audit
     assert_eq!(confirm.status(), StatusCode::OK);
     let csrf = extract_set_cookie(confirm.headers(), "sui_id_csrf").expect("csrf");
     let confirm_body = String::from_utf8_lossy(&read_body(confirm.into_body()).await).into_owned();
+    // `0.93.0` O6 §4 item 2: the count is now its own prominent
+    // element (`<span class="confirm-impact__count">2</span>`), not
+    // interpolated into a plain "2 users" sentence.
     assert!(
-        confirm_body.contains("2 users"),
-        "does not state the exact count: {confirm_body}"
+        confirm_body.contains("<span class=\"confirm-impact__count\">2</span>"),
+        "does not state the exact count as its own element: {confirm_body}"
     );
+    assert!(confirm_body.contains("users will no longer be able to sign in"));
     assert!(confirm_body.contains("cannot be undone"));
 
     let before = audit_rows(&state).await;

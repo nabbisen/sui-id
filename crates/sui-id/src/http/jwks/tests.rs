@@ -530,3 +530,31 @@ fn a_missing_rsa_n_or_e_is_refused() {
         Err(KeySelectionError::RsaParameterInvalid)
     ));
 }
+
+// ---------- `0.93.0` O6 §2: no full URL in a transport failure ----------
+
+/// A fetch to a port nothing listens on fails at the transport, before any
+/// response -- `reqwest::Error`'s own `Display` would otherwise put the
+/// full request URL in the string, which RFC 096's telemetry rule
+/// forbids ("must not contain full URLs").
+#[tokio::test]
+async fn a_transport_failure_contains_no_full_url() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    drop(listener); // nothing listens here now
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{addr}/jwks-test-path");
+    let err = fetch_jwks(&client, &url)
+        .await
+        .expect_err("nothing listens on this port");
+    let text = err.to_string();
+    assert!(
+        !text
+            .find("://")
+            .is_some_and(|i| text[i + 3..].contains('/')),
+        "error text contains a full URL: {text}"
+    );
+}

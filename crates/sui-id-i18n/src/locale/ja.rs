@@ -648,6 +648,8 @@ pub static STRINGS_JA: Strings = Strings {
     client_detail_readonly_title: "アプリの詳細",
     confirm_rotate_signing_key_title: "署名鍵のローテーション",
     confirm_rotate_signing_key_impact: "新しい署名鍵が発行されます。以前の鍵で署名されたトークンは有効期限まで引き続き有効です。",
+    confirm_rotate_signing_key_count_suffix: |_n| "個の有効な署名鍵が失効します。".to_owned(),
+    confirm_rotate_signing_key_count_zero: "失効する有効な署名鍵はありません。",
     confirm_rotate_signing_key_reversibility: "この操作は元に戻せません。以前の鍵は廃止されます。",
     confirm_rotate_signing_key_button: "鍵をローテーション",
     confirm_email_settings_title: "メール設定の確認",
@@ -939,12 +941,97 @@ pub static STRINGS_JA: Strings = Strings {
     fed_err_check_too_old: "確認から 10 分以上経過しています。もう一度実行してください。",
     fed_err_step_up_lapsed: "確認の実行中に本人確認が失効しました。再度本人確認を行い、確認をもう一度実行してください。",
 
+    fed_cause_invalid_issuer: "プロバイダーに設定されたissuerまたはallowed_originsが受け付けられません。issuerは公開ホスト名上の絶対https URL、各allowed originは正規形のhttpsオリジンである必要があります。プロバイダーの設定ブロックを確認してください。",
+    fed_cause_not_absolute: |field| {
+        format!(
+            "アップストリームのディスカバリー文書の{field}が絶対URLではありません。これは使用できません。"
+        )
+    },
+    fed_cause_not_https: |field| {
+        format!(
+            "アップストリームのディスカバリー文書の{field}がhttpsではありません。このプロバイダーはhttpsエンドポイントのみを使用します。"
+        )
+    },
+    fed_cause_has_userinfo: |field| {
+        format!(
+            "アップストリームのディスカバリー文書の{field}にユーザー名またはパスワードが含まれています。これは許可されません。"
+        )
+    },
+    fed_cause_has_query: |field| {
+        format!(
+            "アップストリームのディスカバリー文書の{field}にクエリ文字列が含まれています。これは許可されません。"
+        )
+    },
+    fed_cause_has_fragment: |field| {
+        format!(
+            "アップストリームのディスカバリー文書の{field}にフラグメントが含まれています。これは許可されません。"
+        )
+    },
+    fed_cause_noncanonical: |field| {
+        format!(
+            "アップストリームのディスカバリー文書の{field}が正規のURLではありません。これは使用できません。"
+        )
+    },
+    fed_cause_origin_not_allowed: |field, origin| {
+        format!(
+            "アップストリームのディスカバリー文書は{field}を{origin}に置いていますが、このプロバイダーのallowed_originsにはそのオリジンがありません。\
+         このオリジンを信頼する場合は、allowed_originsに追加してsui-idを再起動してください。"
+        )
+    },
+    fed_cause_issuer_mismatch: "アップストリームのディスカバリー文書のissuerが設定されたissuerと完全に一致しません。両方をアップストリームの公開情報と照合してください。",
+    fed_cause_response_types_missing_code: "アップストリームのディスカバリー文書のresponse_typesに\"code\"が含まれていません。sui-idは認可コードフローのみを使用します。",
+    fed_cause_grant_types_missing_auth_code: "アップストリームのディスカバリー文書のgrant_typesに\"authorization_code\"が含まれていません。sui-idは認可コードフローのみを使用します。",
+    fed_cause_code_challenge_missing_s256: "アップストリームのディスカバリー文書のcode_challenge_methodsに\"S256\"が含まれていません。sui-idはS256を必須としています。",
+    fed_cause_auth_response_iss_not_true: "アップストリームのディスカバリー文書は、認可レスポンスに\"iss\"パラメータを送ることを確認していません。sui-idはこれを必須としています。",
+    fed_cause_subject_types_missing_public: "アップストリームのディスカバリー文書のsubject_typesに\"public\"が含まれていません。sui-idはpublicサブジェクトを必須としています。",
+    fed_cause_bounds_status: |code| {
+        format!(
+            "アップストリームはHTTPステータス{code}を返しました。ここでsui-idが受け付けるのは200 OKのみです。"
+        )
+    },
+    fed_cause_bounds_content_type: "アップストリームの応答はJSONであると宣言していません（Content-Typeがないか、別の種類です）。",
+    fed_cause_bounds_too_large: |limit| {
+        format!("アップストリームの応答がsui-idの読み取り上限（{limit}バイト）を超えています。")
+    },
+    fed_cause_bounds_structure: |limit| {
+        format!(
+            "アップストリームの応答の一か所に含まれるメンバー・要素・文字の数が、sui-idの上限（{limit}）を超えています。"
+        )
+    },
+    fed_cause_too_deep: |limit| {
+        format!(
+            "アップストリームの応答がsui-idの許容する深さ（{limit}階層）を超えてネストしています。これは有効な文書として使用できません。"
+        )
+    },
+    fed_cause_duplicate_member: "アップストリームの応答にフィールド名の重複があります。これは有効な文書として使用できません。",
+    fed_cause_not_json: "アップストリームの応答がJSONではありません。",
+    fed_cause_jwks_not_object: "アップストリームの署名鍵文書はJSONですが、ルートがオブジェクトではありません。",
+    fed_cause_jwks_no_keys: "アップストリームの署名鍵文書に\"keys\"配列がありません。",
+    fed_cause_jwks_too_many_keys: |limit| {
+        format!("アップストリームの署名鍵文書に{limit}個を超える鍵があります。")
+    },
+    fed_cause_jwks_key_not_object: "アップストリームの署名鍵のいずれかがオブジェクトではありません。",
+    fed_cause_jwks_duplicate_kid: "アップストリームの署名鍵のうち2つが同じ鍵IDを共有しています。",
+    fed_cause_no_ca_certificates: "このホストにはTLSを検証するCA証明書がありません。CA証明書バンドルをインストールしてsui-idを再起動してください。",
+    fed_cause_dns_over_cap: |host, count, cap| {
+        format!(
+            "{host}は{count}個のアドレスを返しましたが、sui-idが受け付けるのは最大{cap}個までです。"
+        )
+    },
+    fed_cause_dns_denied: |host, reason| {
+        format!("{host}はsui-idが接続しないアドレスに解決されます（{reason}）。")
+    },
+    fed_cause_tls: "アップストリームとのTLSハンドシェイクに失敗しました。このホストのCA証明書とアップストリームの証明書を確認してください。",
+    fed_cause_timeout: "アップストリームへのリクエストがタイムアウトしました。このホストのネットワークとアップストリームの可用性を確認してください。",
+    fed_cause_unreachable: "アップストリームに到達できませんでした。このホストのネットワークとDNSを確認し、サーバーログも確認してください。",
+    fed_cause_no_jwks_uri: "アップストリームのディスカバリー文書にjwks_uriが指定されていません。署名鍵を見つけられません。",
+    fed_cause_no_usable_key: "アップストリームの署名鍵のうち、両者が対応するアルゴリズムで使用できるものがありません。詳細はサーバーログを確認してください。",
+
     federation_providers_delete_button: "削除",
     confirm_delete_federation_provider_title: "このフェデレーションプロバイダーを削除",
-    confirm_delete_federation_provider_impact: |n| {
-        format!(
-            "{n} 人のユーザーがこのプロバイダー経由でサインインできなくなります。sui-id アカウント自体は残ります。"
-        )
+    confirm_delete_federation_provider_impact_zero: "このプロバイダー経由でサインインするユーザーはいません。",
+    confirm_delete_federation_provider_impact_suffix: |_n| {
+        "人のユーザーがこのプロバイダー経由でサインインできなくなります。sui-id アカウント自体は残ります。".to_owned()
     },
     confirm_delete_federation_provider_reversibility: "この操作は取り消せません。",
     federation_providers_deleted_flash: "プロバイダーを削除しました。",

@@ -926,7 +926,7 @@ pub async fn federated_callback(
     let token_resp = match token_resp {
         Ok(r) => r,
         Err(e) => {
-            tracing::warn!(error = %e, slug = %provider.slug, "token exchange failed");
+            tracing::warn!(error = %e.without_url(), slug = %provider.slug, "token exchange failed");
             terminalize_and_audit(
                 &app.db,
                 claimed.id,

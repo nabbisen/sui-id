@@ -102,7 +102,7 @@ pub async fn fetch_jwks_bytes(
         .get(jwks_uri)
         .send()
         .await
-        .map_err(|e| JwksError::Bounds(BoundsError::Transport(e)))?;
+        .map_err(|e| JwksError::Bounds(BoundsError::Transport(e.without_url())))?;
     let bytes = response_bounds::read_bounded_body(resp)
         .await
         .map_err(JwksError::Bounds)?;

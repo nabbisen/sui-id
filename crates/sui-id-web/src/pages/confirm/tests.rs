@@ -132,3 +132,81 @@ fn reason_field_has_no_placeholder() {
     );
     assert!(!html.contains("placeholder="));
 }
+
+// ── `0.93.0` O6 §4: the confirm page's own impact is no longer muted ────────
+
+/// No confirm page's impact (the page's lead consequence) is rendered
+/// inside `class="muted"` any more — it is full-contrast body text
+/// (RFC 144 tokens), visually tied to the action it describes.
+#[test]
+fn no_confirm_page_impact_is_muted() {
+    let html = render_confirm_delete_user(
+        ConfirmDeleteUserData {
+            user_id: "u1".into(),
+            username: "alice".into(),
+            csrf_token: csrf(),
+            admin_username: "admin".into(),
+        },
+        false,
+        LANG,
+    );
+    // The CSS for `.confirm-impact`/`.muted` is embedded on every page
+    // (`<style>`), so these check the *rendered element* around the
+    // impact text itself, not a bare substring of the class names.
+    let impact_text = "This user will be permanently removed from the user list. \
+                        Their audit history is preserved.";
+    assert!(html.contains(&format!("<p class=\"confirm-impact\">{impact_text}</p>")));
+    assert!(!html.contains(&format!("<p class=\"muted\">{impact_text}</p>")));
+}
+
+fn rotate(active_key_count: usize, lang: sui_id_i18n::Locale) -> String {
+    render_confirm_rotate_signing_key(
+        ConfirmRotateSigningKeyData {
+            csrf_token: csrf(),
+            active_key_count,
+            admin_username: "admin".into(),
+        },
+        false,
+        lang,
+    )
+}
+
+/// §4 item 3: the rotation page's count no longer builds English text
+/// in Rust (the old `"({} active key{} will become retired)"`) — the
+/// number is its own prominent element, and the sentence around it
+/// comes from the locale.
+#[test]
+fn rotate_signing_key_count_is_its_own_element_not_english_built_in_rust() {
+    let html = rotate(5, LANG);
+    assert!(!html.contains("active keys will become retired)"));
+    assert!(html.contains("<span class=\"confirm-impact__count\">5</span>"));
+    assert!(html.contains("active keys will become retired."));
+}
+
+/// §4 item 2: zero gets its own wording, not "0 active keys ...".
+#[test]
+fn rotate_signing_key_zero_active_keys_gets_its_own_wording() {
+    let html = rotate(0, LANG);
+    assert!(!html.contains("0 active key"));
+    assert!(html.contains("No active keys will become retired."));
+    assert!(!html.contains("<span class=\"confirm-impact__count\">"));
+}
+
+/// The rotation page renders no English leftovers in `ja` or
+/// `zh-Hans` — the count sentence comes entirely from the locale now,
+/// not a Rust format string.
+#[test]
+fn rotate_signing_key_count_has_no_english_in_other_locales() {
+    for lang in [sui_id_i18n::Locale::Ja, sui_id_i18n::Locale::ZhHans] {
+        let html = rotate(3, lang);
+        assert!(
+            !html.contains("active key") && !html.contains("will become retired"),
+            "{lang:?}: {html}"
+        );
+        let zero_html = rotate(0, lang);
+        assert!(
+            !zero_html.contains("active key") && !zero_html.contains("will become retired"),
+            "{lang:?} (zero): {zero_html}"
+        );
+    }
+}

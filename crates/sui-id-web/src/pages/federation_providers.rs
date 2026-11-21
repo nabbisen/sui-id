@@ -7,7 +7,7 @@
 //! FederationProviderSummary`] itself does not even carry one.
 
 use super::common::*;
-use super::confirm::{ConfirmScreenData, ReversibilityKind, confirm_screen};
+use super::confirm::{ConfirmScreenData, CountedImpact, ReversibilityKind, confirm_screen};
 use crate::components::empty_state;
 use leptos::prelude::*;
 use sui_id_shared::api::FederationProviderSummary;
@@ -306,13 +306,27 @@ pub fn render_confirm_delete_federation_provider(
         let t = lang.strings();
         let flash = data.flash;
         let username = data.username.clone();
+        // `0.93.0` O6 §4 item 2: zero gets its own wording ("No user
+        // signs in through this provider"), never "0 users ..."; a
+        // nonzero count is its own prominent element, not interpolated
+        // into the sentence.
+        let count = data.linked_users_count;
+        let impact = if count == 0 {
+            Some(t.confirm_delete_federation_provider_impact_zero.to_owned())
+        } else {
+            None
+        };
+        let impact_count = (count > 0).then(|| CountedImpact {
+            count,
+            suffix: (t.confirm_delete_federation_provider_impact_suffix)(count),
+        });
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_delete_federation_provider_title.into(),
                 identity: data.display_name.clone(),
-                impact: Some((t.confirm_delete_federation_provider_impact)(
-                    data.linked_users_count,
-                )),
+                impact,
+                impact_count,
+                impact_link: None,
                 badge: Some(ReversibilityKind::Irreversible),
                 reversibility_text: Some(t.confirm_delete_federation_provider_reversibility.into()),
                 action_url: format!("/admin/federation-providers/{}/delete", data.provider_id),
@@ -342,3 +356,6 @@ pub fn render_confirm_delete_federation_provider(
         }
     })
 }
+
+#[cfg(test)]
+mod tests;

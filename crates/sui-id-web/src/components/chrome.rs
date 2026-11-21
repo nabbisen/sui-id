@@ -83,6 +83,21 @@ p { margin: 0 0 var(--space-3) 0; }
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
 }
+/* `0.93.0` O6 §4: a destructive confirm page's own consequence -- full
+ * contrast (the default `color: var(--fg-default)` a plain `<p>`
+ * already has, stated explicitly so this never silently inherits a
+ * muted ancestor), medium weight to read as the page's lead sentence,
+ * not a side note. `__count` is the figure itself: bold, one step up
+ * the type scale, so a number inside the sentence cannot be skipped
+ * the way the sentence it used to end as a muted aside could be. */
+.confirm-impact {
+  color: var(--fg-default);
+  font-weight: var(--font-weight-medium);
+}
+.confirm-impact__count {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-h3);
+}
 code, pre, .mono {
   font-family: var(--font-mono);
   font-size: 0.92em;

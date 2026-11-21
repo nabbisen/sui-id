@@ -30,6 +30,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   common convention, instead of 1; a script that tests for exactly 1 after a
   usage error should test for non-zero. The help overview now fits an
   80-column terminal, one line per command.
+- **A destructive confirmation states its consequence in full, not a
+  muted aside, with any count shown as its own prominent figure** (how
+  many users lose a federation provider, how many signing keys retire);
+  **a refused federation-provider check says what failed and what to
+  do next**, instead of a generic "check the server log".
+
+### Fixed
+
+- **Federation with Google failed at Check and enable**: its signing-key
+  host answers with 16 DNS addresses, and sui-id refused any answer with
+  more than 8. The cap is now 32 in total, and every address in an
+  answer is still checked before one is used.
 
 ### Security
 

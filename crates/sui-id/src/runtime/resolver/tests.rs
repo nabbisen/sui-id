@@ -237,20 +237,72 @@ fn empty_answer_is_rejected() {
 
 #[test]
 fn over_limit_answer_is_rejected() {
-    let addrs = (0..9)
-        .map(|i| IpAddr::from(Ipv4Addr::new(1, 1, 1, i)))
+    let addrs = (0..33)
+        .map(|i| IpAddr::from(Ipv4Addr::new(1, 1, (i / 256) as u8, (i % 256) as u8)))
         .collect();
-    let err = validate_answer("x", addrs).expect_err("9 exceeds the limit");
-    assert!(err.to_string().contains("9 addresses"));
+    let err = validate_answer("x", addrs).expect_err("33 exceeds the limit");
+    assert!(err.to_string().contains("33 addresses"));
 }
 
 #[test]
-fn exactly_eight_ordinary_addresses_is_accepted() {
-    let addrs: Vec<IpAddr> = (0..8)
+fn exactly_thirty_two_ordinary_addresses_is_accepted() {
+    let addrs: Vec<IpAddr> = (0..32)
+        .map(|i| IpAddr::from(Ipv4Addr::new(1, 1, (i / 256) as u8, (i % 256) as u8)))
+        .collect();
+    let chosen = validate_answer("x", addrs.clone()).expect("32 is within the limit");
+    assert_eq!(chosen, addrs[0], "the first address is the one returned");
+}
+
+/// `0.93.0` O6: the exact shape a real Google DNS answer has --
+/// `www.googleapis.com` (Google's `jwks_uri` host) answers with 8 A and 8
+/// AAAA records. Real public resolver addresses (Cloudflare, Google,
+/// Quad9, OpenDNS), not a documentation prefix: `denied_by` refuses
+/// those.
+#[test]
+fn googles_answer_shape_eight_a_and_eight_aaaa_is_accepted() {
+    let v4 = [
+        "1.1.1.1",
+        "1.0.0.1",
+        "8.8.8.8",
+        "8.8.4.4",
+        "9.9.9.9",
+        "149.112.112.112",
+        "208.67.222.222",
+        "208.67.220.220",
+    ];
+    let v6 = [
+        "2606:4700:4700::1111",
+        "2606:4700:4700::1001",
+        "2001:4860:4860::8888",
+        "2001:4860:4860::8844",
+        "2620:fe::fe",
+        "2620:fe::9",
+        "2620:119:35::35",
+        "2620:119:53::53",
+    ];
+    assert_eq!(v4.len(), 8);
+    assert_eq!(v6.len(), 8);
+    let addrs: Vec<IpAddr> = v4
+        .iter()
+        .chain(v6.iter())
+        .map(|s| IpAddr::from_str(s).expect("valid address"))
+        .collect();
+    assert_eq!(addrs.len(), 16);
+    let chosen = validate_answer("www.googleapis.com", addrs.clone())
+        .expect("8 A + 8 AAAA, all public, must be accepted");
+    assert_eq!(chosen, addrs[0]);
+}
+
+#[test]
+fn googles_answer_shape_with_one_private_address_still_rejects_the_whole_answer() {
+    let mut addrs: Vec<IpAddr> = (0..15)
         .map(|i| IpAddr::from(Ipv4Addr::new(1, 1, 1, i)))
         .collect();
-    let chosen = validate_answer("x", addrs.clone()).expect("8 is within the limit");
-    assert_eq!(chosen, addrs[0], "the first address is the one returned");
+    addrs.push(IpAddr::from_str("10.0.0.1").expect("valid"));
+    assert_eq!(addrs.len(), 16);
+    let err =
+        validate_answer("x", addrs).expect_err("one private address rejects the whole answer");
+    assert!(matches!(err, ResolveError::Denied { .. }));
 }
 
 #[test]
@@ -283,4 +335,56 @@ fn multiple_ordinary_addresses_return_the_first_one() {
     let b = IpAddr::from_str("8.8.8.8").unwrap();
     assert_eq!(validate_answer("x", vec![a, b]).unwrap(), a);
     assert_eq!(validate_answer("x", vec![b, a]).unwrap(), b);
+}
+
+// ---------- `0.93.0` O6 §3: classifying a transport failure's cause ----------
+
+/// A real request through [`ValidatingResolver`], to a denied address
+/// (`localhost` -> loopback): confirms the exact chain depth
+/// `classify_dns` walks (measured: `reqwest::Error` ->
+/// `hyper_util::client::legacy::Error` -> `ConnectError` -> `DnsError`
+/// -> our own [`ResolveError`], reachable via `source()` at depth 3).
+#[tokio::test]
+async fn classify_dns_finds_a_denied_address_through_a_real_request() {
+    let client = reqwest::Client::builder()
+        .dns_resolver(std::sync::Arc::new(ValidatingResolver))
+        .build()
+        .expect("client");
+    let err = client.get("http://localhost/").send().await.unwrap_err();
+    match classify_dns(&err) {
+        Some(DnsOutcome::Denied { host, reason }) => {
+            assert_eq!(host, "localhost");
+            assert!(reason.contains("Loopback"), "{reason}");
+        }
+        other => panic!("expected Denied, got {other:?}"),
+    }
+}
+
+/// No real hostname under test control reliably answers with more than
+/// 32 records, so this builds the error chain directly: our own
+/// [`ResolveError`], wrapped one level deep in an `io::Error` the same
+/// way `hyper_util`'s own DNS error wraps it -- confirming `classify_dns`
+/// finds it by downcast through *some* wrapper, not only the exact
+/// types the live chain happens to use today.
+#[test]
+fn classify_dns_finds_an_over_limit_answer_through_a_wrapped_error() {
+    let addrs: Vec<IpAddr> = (0..33)
+        .map(|i| IpAddr::from(Ipv4Addr::new(1, 1, (i / 256) as u8, (i % 256) as u8)))
+        .collect();
+    let resolve_err = validate_answer("many.example", addrs).expect_err("33 exceeds the limit");
+    let boxed: Box<dyn std::error::Error + Send + Sync> = Box::new(resolve_err);
+    let outer = std::io::Error::other(boxed);
+    match classify_dns(&outer) {
+        Some(DnsOutcome::AnswerRejected { host, count }) => {
+            assert_eq!(host, "many.example");
+            assert_eq!(count, 33);
+        }
+        other => panic!("expected AnswerRejected, got {other:?}"),
+    }
+}
+
+#[test]
+fn classify_dns_finds_nothing_in_an_unrelated_error() {
+    let err = std::io::Error::other("something else entirely");
+    assert!(classify_dns(&err).is_none());
 }

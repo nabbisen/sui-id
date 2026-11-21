@@ -1,10 +1,12 @@
 use super::*;
 
 /// RFC 096-B2 S3 dispatch §B, "Errors": "No upstream body, URL query or
-/// key material in any variant." Every variant is a bare unit (no
-/// embedded data at all), so this is true by construction -- this test
-/// pins the operator-facing `Display` text instead, and that every
-/// variant's text names a plain, bounded reason.
+/// key material in any variant." This pins `PreflightError`'s own
+/// `Display` text, which stays the generic, log-facing summary even for
+/// `0.93.0` O6's typed variants -- their *specific* sentence is
+/// rendered only on the admin page
+/// (`handlers::admin::federation_providers`'s own exhaustive tests), so
+/// a representative payload is enough here.
 #[test]
 fn every_variant_has_a_bounded_operator_facing_message() {
     // Each message names the reason and the next step (the C17 decision,
@@ -32,18 +34,28 @@ fn every_variant_has_a_bounded_operator_facing_message() {
             "restart sui-id",
         ),
         (
-            PreflightError::Transport,
+            PreflightError::Transport(TransportCause::Unreachable),
             "could not be reached",
             "check this host's network",
         ),
         (
-            PreflightError::Discovery,
+            PreflightError::Discovery(crate::discovery::DiscoveryError::NotJson),
             "discovery document was refused",
             "see the server log",
         ),
         (
-            PreflightError::Jwks,
+            PreflightError::NoJwksUri,
+            "names no jwks_uri",
+            "signing keys cannot be found",
+        ),
+        (
+            PreflightError::Jwks(crate::jwks::JwksError::NotJson),
             "signing keys were refused",
+            "see the server log",
+        ),
+        (
+            PreflightError::NoUsableKey,
+            "none of the upstream's signing keys is usable",
             "see the server log",
         ),
         (
@@ -118,20 +130,32 @@ fn check_and_enable_errors_have_a_bounded_operator_facing_message() {
 /// administrator whose confirmation lapsed to "try again, see the log".
 #[test]
 fn enable_from_preflight_error_folds_into_check_and_enable_error() {
+    // `CheckAndEnableError` is no longer `PartialEq` (`0.93.0` O6: its
+    // `Transport`/`Discovery`/`Jwks` payloads are not), so each case is
+    // checked by pattern, not `assert_eq!`.
     use sui_id_store::commands::EnableFromPreflightError as E;
-    let cases = [
-        (E::ChangedSinceCheck, CheckAndEnableError::ChangedSinceCheck),
-        (E::CheckTooOld, CheckAndEnableError::CheckTooOld),
-        (E::AlreadyEnabled, CheckAndEnableError::AlreadyEnabled),
-        (E::NotFound, CheckAndEnableError::NotFound),
-        (E::StepUpRequired, CheckAndEnableError::StepUpRequired),
-        (E::Storage, CheckAndEnableError::Storage),
-    ];
-    for (store_err, expected) in cases {
-        assert_eq!(
-            CheckAndEnableError::from(store_err),
-            expected,
-            "{store_err:?} must fold into {expected:?}"
-        );
-    }
+    assert!(matches!(
+        CheckAndEnableError::from(E::ChangedSinceCheck),
+        CheckAndEnableError::ChangedSinceCheck
+    ));
+    assert!(matches!(
+        CheckAndEnableError::from(E::CheckTooOld),
+        CheckAndEnableError::CheckTooOld
+    ));
+    assert!(matches!(
+        CheckAndEnableError::from(E::AlreadyEnabled),
+        CheckAndEnableError::AlreadyEnabled
+    ));
+    assert!(matches!(
+        CheckAndEnableError::from(E::NotFound),
+        CheckAndEnableError::NotFound
+    ));
+    assert!(matches!(
+        CheckAndEnableError::from(E::StepUpRequired),
+        CheckAndEnableError::StepUpRequired
+    ));
+    assert!(matches!(
+        CheckAndEnableError::from(E::Storage),
+        CheckAndEnableError::Storage
+    ));
 }

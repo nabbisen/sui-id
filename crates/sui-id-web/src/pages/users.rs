@@ -2,7 +2,7 @@
 
 use super::audit::{AUDIT_COLUMNS, audit_row_view, audit_table_head};
 use super::common::*;
-use super::confirm::{ConfirmScreenData, ReversibilityKind, confirm_screen};
+use super::confirm::{ConfirmScreenData, ImpactLink, ReversibilityKind, confirm_screen};
 use crate::components::empty_state;
 use crate::layout::{Chrome, Shell};
 use leptos::prelude::*;
@@ -512,12 +512,22 @@ pub fn render_confirm_unlink_federation(
             .replace("{provider}", &data.provider_display_name);
         let identity = format!("{} — {}", data.username, data.provider_display_name);
         let user_url = format!("/admin/users/{}", data.user_id);
+        // `0.93.0` O6 §4 item 4: the sessions consequence, with its
+        // link to disable the account, joins the impact area -- it is
+        // part of what the action does, not a footnote after the form.
+        let impact_link = Some(ImpactLink {
+            text: t.confirm_unlink_federation_sessions_note.to_owned(),
+            href: user_url.clone(),
+            link_text: t.confirm_unlink_federation_sessions_link.to_owned(),
+        });
         let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_unlink_federation_title.into(),
                 identity,
                 impact: Some(impact),
+                impact_count: None,
+                impact_link,
                 // Irreversible: C19 is withdrawn (RFC 096 A1) and this
                 // release has no way to re-link, so nothing in the product
                 // can undo an unlink (S6 review).
@@ -549,12 +559,11 @@ pub fn render_confirm_unlink_federation(
             >
                 {flash_banner(flash)}
                 {body}
-                <p class="muted max-w-card">
-                    {t.confirm_unlink_federation_sessions_note}
-                    " "
-                    <a href=user_url>{t.confirm_unlink_federation_sessions_link}</a>
-                </p>
             </Shell>
         }
     })
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod tests;

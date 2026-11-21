@@ -15,10 +15,13 @@
 
 use super::forms::ConfirmedForm;
 use super::with_csrf_cookie;
+use crate::discovery::DiscoveryError;
 use crate::errors::HttpError;
-use crate::federation_preflight::{self, CheckAndEnableError, PreflightError};
+use crate::federation_preflight::{self, CheckAndEnableError, PreflightError, TransportCause};
 use crate::federation_provider_admin::{self, DeleteProviderError};
 use crate::handlers::{AppStateExt, CurrentAdmin, CurrentAdminOrAuditor};
+use crate::jwks::JwksError;
+use crate::response_bounds::BoundsError;
 use axum::Form;
 use axum::extract::{Path, Query, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
@@ -49,51 +52,170 @@ fn parse_provider_id(id: &str) -> Result<FederationProviderId, HttpError> {
     })
 }
 
-/// RFC 096-B2 S4 §D, translated: one i18n key per [`CheckAndEnableError`]
+/// `0.93.0` O6 §3: an administrator's page may show a field name (a
+/// fixed, closed set sui-id itself names), or a host/origin sui-id has
+/// already parsed and validated — bounded to 255 bytes, with the rest
+/// elided, so nothing attacker-sized ever reaches the page even once
+/// "safe" content is allowed through. Never applied to a raw
+/// upstream-supplied string (a URL's own text, a JSON member name, a
+/// `kid`) — those are not shown at all, named or not.
+fn bounded(s: &str) -> String {
+    const LIMIT: usize = 255;
+    if s.len() <= LIMIT {
+        return s.to_owned();
+    }
+    let mut end = LIMIT;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", &s[..end])
+}
+
+/// `0.93.0` O6 §3: [`DiscoveryError`]'s own closed set, each reaching a
+/// sentence an administrator can act on. Never the raw `value` a
+/// `NotAbsolute`/`NotHttps` carries (upstream-supplied, unbounded,
+/// possibly hostile) — only the field name, which sui-id itself chose.
+/// `InvalidIssuer`'s string is not shown either, even though it is
+/// ordinarily the administrator's own configured issuer: nothing here
+/// assumes that always holds.
+fn discovery_cause_text(e: &DiscoveryError, t: &'static sui_id_i18n::Strings) -> String {
+    match e {
+        DiscoveryError::InvalidIssuer(_) => t.fed_cause_invalid_issuer.to_owned(),
+        DiscoveryError::NotAbsolute { field, .. } => (t.fed_cause_not_absolute)(field),
+        DiscoveryError::NotHttps { field, .. } => (t.fed_cause_not_https)(field),
+        DiscoveryError::HasUserinfo { field } => (t.fed_cause_has_userinfo)(field),
+        DiscoveryError::HasQuery { field } => (t.fed_cause_has_query)(field),
+        DiscoveryError::HasFragment { field } => (t.fed_cause_has_fragment)(field),
+        DiscoveryError::Noncanonical { field } => (t.fed_cause_noncanonical)(field),
+        DiscoveryError::OriginNotAllowed { field, origin } => {
+            (t.fed_cause_origin_not_allowed)(field, &bounded(origin))
+        }
+        DiscoveryError::IssuerMismatch => t.fed_cause_issuer_mismatch.to_owned(),
+        DiscoveryError::ResponseTypesMissingCode => {
+            t.fed_cause_response_types_missing_code.to_owned()
+        }
+        DiscoveryError::GrantTypesMissingAuthorizationCode => {
+            t.fed_cause_grant_types_missing_auth_code.to_owned()
+        }
+        DiscoveryError::CodeChallengeMethodsMissingS256 => {
+            t.fed_cause_code_challenge_missing_s256.to_owned()
+        }
+        DiscoveryError::AuthorizationResponseIssNotTrue => {
+            t.fed_cause_auth_response_iss_not_true.to_owned()
+        }
+        DiscoveryError::SubjectTypesMissingPublic => {
+            t.fed_cause_subject_types_missing_public.to_owned()
+        }
+        DiscoveryError::Bounds(b) => bounds_cause_text(b, t),
+        DiscoveryError::TooDeep { limit } => (t.fed_cause_too_deep)(*limit),
+        DiscoveryError::DuplicateMember(_) => t.fed_cause_duplicate_member.to_owned(),
+        DiscoveryError::NotJson => t.fed_cause_not_json.to_owned(),
+    }
+}
+
+/// Same rule, for [`JwksError`]. Never the raw member name a
+/// `DuplicateMember` carries, nor the `kid` a `DuplicateKid` carries.
+fn jwks_cause_text(e: &JwksError, t: &'static sui_id_i18n::Strings) -> String {
+    match e {
+        JwksError::Bounds(b) => bounds_cause_text(b, t),
+        JwksError::NotJson => t.fed_cause_not_json.to_owned(),
+        JwksError::NotObject => t.fed_cause_jwks_not_object.to_owned(),
+        JwksError::NoKeys => t.fed_cause_jwks_no_keys.to_owned(),
+        JwksError::TooDeep { limit } => (t.fed_cause_too_deep)(*limit),
+        JwksError::DuplicateMember(_) => t.fed_cause_duplicate_member.to_owned(),
+        JwksError::TooManyKeys { limit } => (t.fed_cause_jwks_too_many_keys)(*limit),
+        JwksError::KeyNotObject { .. } => t.fed_cause_jwks_key_not_object.to_owned(),
+        JwksError::DuplicateKid(_) => t.fed_cause_jwks_duplicate_kid.to_owned(),
+    }
+}
+
+/// Same rule, for [`BoundsError`], shared by discovery and JWKS: the
+/// status as a number, and limits; never the upstream's content-type
+/// value or its JSON parser's text. A transport failure while reading is
+/// classified like any other.
+fn bounds_cause_text(b: &BoundsError, t: &'static sui_id_i18n::Strings) -> String {
+    match b {
+        BoundsError::WrongStatus(s) => (t.fed_cause_bounds_status)(s.as_u16()),
+        BoundsError::MissingContentType | BoundsError::WrongContentType(_) => {
+            t.fed_cause_bounds_content_type.to_owned()
+        }
+        BoundsError::TooLarge { limit } => (t.fed_cause_bounds_too_large)(*limit),
+        BoundsError::TooManyMembers { limit }
+        | BoundsError::ArrayTooLong { limit }
+        | BoundsError::StringTooLong { limit } => (t.fed_cause_bounds_structure)(*limit),
+        BoundsError::Json(_) => t.fed_cause_not_json.to_owned(),
+        BoundsError::Transport(e) => {
+            transport_cause_text(&federation_preflight::classify_transport(e), t)
+        }
+    }
+}
+
+/// Same rule, for [`TransportCause`]. `host` is sui-id's own resolution
+/// target (the configured endpoint's hostname), not upstream content;
+/// `reason` (`DnsDenied`) is the denied range's *class* -- never an
+/// address.
+fn transport_cause_text(c: &TransportCause, t: &'static sui_id_i18n::Strings) -> String {
+    match c {
+        TransportCause::NoCaCertificates => t.fed_cause_no_ca_certificates.to_owned(),
+        TransportCause::DnsAnswerRejected { host, count } => {
+            (t.fed_cause_dns_over_cap)(&bounded(host), *count, crate::resolver::MAX_ANSWERS)
+        }
+        TransportCause::DnsDenied { host, reason } => {
+            (t.fed_cause_dns_denied)(&bounded(host), reason)
+        }
+        TransportCause::Tls => t.fed_cause_tls.to_owned(),
+        TransportCause::Timeout => t.fed_cause_timeout.to_owned(),
+        TransportCause::Unreachable => t.fed_cause_unreachable.to_owned(),
+    }
+}
+
+/// RFC 096-B2 S4 §D, translated: one i18n key (or, for the typed causes
+/// `0.93.0` O6 adds, one rendering function) per [`CheckAndEnableError`]
 /// variant, an exhaustive `match` so a new variant fails to compile
 /// until it is translated (dispatch §B).
-fn check_and_enable_error_text(
-    e: CheckAndEnableError,
-    t: &'static sui_id_i18n::Strings,
-) -> &'static str {
+fn check_and_enable_error_text(e: CheckAndEnableError, t: &'static sui_id_i18n::Strings) -> String {
     match e {
-        CheckAndEnableError::NotFound => t.fed_err_not_found,
-        CheckAndEnableError::Storage => t.fed_err_storage,
-        CheckAndEnableError::NotDisabled => t.fed_err_not_disabled,
+        CheckAndEnableError::NotFound => t.fed_err_not_found.to_owned(),
+        CheckAndEnableError::Storage => t.fed_err_storage.to_owned(),
+        CheckAndEnableError::NotDisabled => t.fed_err_not_disabled.to_owned(),
         // Same operator-facing meaning as `NotDisabled` (`Display`'s own
         // comment, `federation_preflight.rs:427-429`): a race landed on
         // it at the very end instead of at the start.
-        CheckAndEnableError::AlreadyEnabled => t.fed_err_not_disabled,
-        CheckAndEnableError::NotInConfiguration => t.fed_err_not_in_configuration,
-        CheckAndEnableError::PolicyNotRecorded => t.fed_err_policy_not_recorded,
-        CheckAndEnableError::Transport => t.fed_err_transport,
-        CheckAndEnableError::Discovery => t.fed_err_discovery,
-        CheckAndEnableError::Jwks => t.fed_err_jwks,
-        CheckAndEnableError::AuthMethodUnsupported => t.fed_err_auth_method_unsupported,
-        CheckAndEnableError::NoCommonAlgorithm => t.fed_err_no_common_algorithm,
-        CheckAndEnableError::ChangedDuringPreflight => t.fed_err_changed_during_check,
-        CheckAndEnableError::ChangedSinceCheck => t.fed_err_changed_since_check,
-        CheckAndEnableError::CheckTooOld => t.fed_err_check_too_old,
-        CheckAndEnableError::StepUpRequired => t.fed_err_step_up_lapsed,
+        CheckAndEnableError::AlreadyEnabled => t.fed_err_not_disabled.to_owned(),
+        CheckAndEnableError::NotInConfiguration => t.fed_err_not_in_configuration.to_owned(),
+        CheckAndEnableError::PolicyNotRecorded => t.fed_err_policy_not_recorded.to_owned(),
+        CheckAndEnableError::Transport(c) => transport_cause_text(&c, t),
+        CheckAndEnableError::Discovery(e) => discovery_cause_text(&e, t),
+        CheckAndEnableError::NoJwksUri => t.fed_cause_no_jwks_uri.to_owned(),
+        CheckAndEnableError::Jwks(e) => jwks_cause_text(&e, t),
+        CheckAndEnableError::NoUsableKey => t.fed_cause_no_usable_key.to_owned(),
+        CheckAndEnableError::AuthMethodUnsupported => t.fed_err_auth_method_unsupported.to_owned(),
+        CheckAndEnableError::NoCommonAlgorithm => t.fed_err_no_common_algorithm.to_owned(),
+        CheckAndEnableError::ChangedDuringPreflight => t.fed_err_changed_during_check.to_owned(),
+        CheckAndEnableError::ChangedSinceCheck => t.fed_err_changed_since_check.to_owned(),
+        CheckAndEnableError::CheckTooOld => t.fed_err_check_too_old.to_owned(),
+        CheckAndEnableError::StepUpRequired => t.fed_err_step_up_lapsed.to_owned(),
     }
 }
 
 /// Same rule as [`check_and_enable_error_text`], for "Check only"
 /// (`preflight_provider` alone, no enable, so [`CheckAndEnableError`]'s
 /// three enable-only variants cannot occur here).
-fn preflight_error_text(e: PreflightError, t: &'static sui_id_i18n::Strings) -> &'static str {
+fn preflight_error_text(e: PreflightError, t: &'static sui_id_i18n::Strings) -> String {
     match e {
-        PreflightError::NotFound => t.fed_err_not_found,
-        PreflightError::Storage => t.fed_err_storage,
-        PreflightError::NotDisabled => t.fed_err_not_disabled,
-        PreflightError::NotInConfiguration => t.fed_err_not_in_configuration,
-        PreflightError::PolicyNotRecorded => t.fed_err_policy_not_recorded,
-        PreflightError::Transport => t.fed_err_transport,
-        PreflightError::Discovery => t.fed_err_discovery,
-        PreflightError::Jwks => t.fed_err_jwks,
-        PreflightError::AuthMethodUnsupported => t.fed_err_auth_method_unsupported,
-        PreflightError::NoCommonAlgorithm => t.fed_err_no_common_algorithm,
-        PreflightError::ChangedDuringPreflight => t.fed_err_changed_during_check,
+        PreflightError::NotFound => t.fed_err_not_found.to_owned(),
+        PreflightError::Storage => t.fed_err_storage.to_owned(),
+        PreflightError::NotDisabled => t.fed_err_not_disabled.to_owned(),
+        PreflightError::NotInConfiguration => t.fed_err_not_in_configuration.to_owned(),
+        PreflightError::PolicyNotRecorded => t.fed_err_policy_not_recorded.to_owned(),
+        PreflightError::Transport(c) => transport_cause_text(&c, t),
+        PreflightError::Discovery(e) => discovery_cause_text(&e, t),
+        PreflightError::NoJwksUri => t.fed_cause_no_jwks_uri.to_owned(),
+        PreflightError::Jwks(e) => jwks_cause_text(&e, t),
+        PreflightError::NoUsableKey => t.fed_cause_no_usable_key.to_owned(),
+        PreflightError::AuthMethodUnsupported => t.fed_err_auth_method_unsupported.to_owned(),
+        PreflightError::NoCommonAlgorithm => t.fed_err_no_common_algorithm.to_owned(),
+        PreflightError::ChangedDuringPreflight => t.fed_err_changed_during_check.to_owned(),
     }
 }
 
@@ -301,7 +423,7 @@ pub async fn federation_providers_check_post(
         }),
         Err(e) => Some(Flash {
             kind: FlashKind::Error,
-            text: preflight_error_text(e, lang.strings()).into(),
+            text: preflight_error_text(e, lang.strings()),
         }),
     };
     let token = crate::csrf::ensure_token(&jar);
@@ -340,7 +462,7 @@ async fn render_enable_confirm_with_error(
         csrf_token: token.clone(),
         flash: Some(Flash {
             kind: FlashKind::Error,
-            text: check_and_enable_error_text(e, lang.strings()).into(),
+            text: check_and_enable_error_text(e, lang.strings()),
         }),
         username,
     };

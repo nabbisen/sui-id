@@ -649,6 +649,8 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     client_detail_readonly_title: "应用详情",
     confirm_rotate_signing_key_title: "轮换签名密钥",
     confirm_rotate_signing_key_impact: "将颁发新的签名密钥。使用旧密钥签名的现有令牌在过期前仍然有效。",
+    confirm_rotate_signing_key_count_suffix: |_n| "个有效签名密钥将被停用。".to_owned(),
+    confirm_rotate_signing_key_count_zero: "没有需要停用的有效签名密钥。",
     confirm_rotate_signing_key_reversibility: "此操作无法撤销。旧密钥将被停用。",
     confirm_rotate_signing_key_button: "轮换密钥",
     confirm_email_settings_title: "确认邮件设置",
@@ -938,10 +940,65 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     fed_err_check_too_old: "该检查已超过 10 分钟。请重新运行。",
     fed_err_step_up_lapsed: "检查运行期间您的身份确认已过期。请重新确认身份，然后再次运行检查。",
 
+    fed_cause_invalid_issuer: "该提供方配置的issuer或allowed_origins不被接受：issuer必须是公共主机名上的绝对https URL，每个allowed origin必须是规范形式的https源。请检查该提供方的配置块。",
+    fed_cause_not_absolute: |field| format!("上游发现文档的{field}不是绝对URL，无法使用。"),
+    fed_cause_not_https: |field| {
+        format!("上游发现文档的{field}不是https。此提供方仅使用https端点。")
+    },
+    fed_cause_has_userinfo: |field| {
+        format!("上游发现文档的{field}带有用户名或密码，不允许这样做。")
+    },
+    fed_cause_has_query: |field| format!("上游发现文档的{field}带有查询字符串，不允许这样做。"),
+    fed_cause_has_fragment: |field| format!("上游发现文档的{field}带有片段，不允许这样做。"),
+    fed_cause_noncanonical: |field| format!("上游发现文档的{field}不是规范URL，无法使用。"),
+    fed_cause_origin_not_allowed: |field, origin| {
+        format!(
+            "上游发现文档将其{field}设置为{origin}，但此提供方的allowed_origins未列出该源。\
+         如果您信任该源，请将其加入allowed_origins并重启sui-id。"
+        )
+    },
+    fed_cause_issuer_mismatch: "上游发现文档的issuer与配置的issuer不完全一致。请对照上游自己的文档核实两者。",
+    fed_cause_response_types_missing_code: "上游发现文档的response_types未包含\"code\"。sui-id仅使用授权码流程。",
+    fed_cause_grant_types_missing_auth_code: "上游发现文档的grant_types遗漏了\"authorization_code\"。sui-id仅使用授权码流程。",
+    fed_cause_code_challenge_missing_s256: "上游发现文档的code_challenge_methods未包含\"S256\"。sui-id要求使用S256。",
+    fed_cause_auth_response_iss_not_true: "上游发现文档未确认它会在授权响应中发送\"iss\"参数，而sui-id要求必须如此。",
+    fed_cause_subject_types_missing_public: "上游发现文档的subject_types未包含\"public\"。sui-id要求支持public主体类型。",
+    fed_cause_bounds_status: |code| format!("上游返回了HTTP状态码{code}；此处sui-id只接受200 OK。"),
+    fed_cause_bounds_content_type: "上游的响应没有声明为JSON（缺少Content-Type或为其他类型）。",
+    fed_cause_bounds_too_large: |limit| {
+        format!("上游的响应超过了sui-id的读取上限（{limit}字节）。")
+    },
+    fed_cause_bounds_structure: |limit| {
+        format!("上游的响应在某一处包含的成员、元素或字符数超过了sui-id的上限（{limit}）。")
+    },
+    fed_cause_too_deep: |limit| {
+        format!("上游的响应嵌套层数超过了sui-id允许的深度（{limit}层），无法作为有效文档使用。")
+    },
+    fed_cause_duplicate_member: "上游的响应中存在重复的字段名，无法作为有效文档使用。",
+    fed_cause_not_json: "上游的响应不是JSON。",
+    fed_cause_jwks_not_object: "上游的签名密钥文档是JSON，但其根不是对象。",
+    fed_cause_jwks_no_keys: "上游的签名密钥文档没有\"keys\"数组。",
+    fed_cause_jwks_too_many_keys: |limit| format!("上游的签名密钥文档包含的密钥超过了{limit}个。"),
+    fed_cause_jwks_key_not_object: "上游的某个签名密钥不是对象。",
+    fed_cause_jwks_duplicate_kid: "上游的两个签名密钥共用了同一个密钥ID。",
+    fed_cause_no_ca_certificates: "此主机没有用于验证TLS的CA证书。请安装CA证书包并重启sui-id。",
+    fed_cause_dns_over_cap: |host, count, cap| {
+        format!("{host}返回了{count}个地址，而sui-id最多只接受{cap}个。")
+    },
+    fed_cause_dns_denied: |host, reason| {
+        format!("{host}解析到了一个sui-id从不连接的地址（{reason}）。")
+    },
+    fed_cause_tls: "与上游的TLS握手失败。请检查此主机的CA证书和上游的证书。",
+    fed_cause_timeout: "对上游的请求超时。请检查此主机的网络状况以及上游的可用性。",
+    fed_cause_unreachable: "无法连接到上游。请检查此主机的网络和DNS，并查看服务器日志。",
+    fed_cause_no_jwks_uri: "上游发现文档未指定jwks_uri，无法找到其签名密钥。",
+    fed_cause_no_usable_key: "上游的签名密钥中没有一个可用于双方都支持的算法。详情请查看服务器日志。",
+
     federation_providers_delete_button: "删除",
     confirm_delete_federation_provider_title: "删除此联合身份提供方",
-    confirm_delete_federation_provider_impact: |n| {
-        format!("将有 {n} 名用户无法再通过此提供方登录；他们的 sui-id 账户仍会保留。")
+    confirm_delete_federation_provider_impact_zero: "没有用户通过此提供方登录。",
+    confirm_delete_federation_provider_impact_suffix: |_n| {
+        "名用户将无法再通过此提供方登录；他们的 sui-id 账户仍会保留。".to_owned()
     },
     confirm_delete_federation_provider_reversibility: "此操作无法撤销。",
     federation_providers_deleted_flash: "该提供方已删除。",

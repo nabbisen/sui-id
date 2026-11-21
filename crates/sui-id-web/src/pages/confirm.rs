@@ -30,6 +30,27 @@ pub enum ReversibilityKind {
     Irreversible,
 }
 
+/// `0.93.0` O6 §4 item 2: "a structured count... a number and an i18n
+/// noun, with plural forms from the locale and never built in Rust."
+/// `suffix` is everything the sentence says *after* the number
+/// (already pluralized for `count` by the locale that produced it) --
+/// the number itself is rendered separately, as its own prominent
+/// element, never interpolated into a template string here.
+pub struct CountedImpact {
+    pub count: usize,
+    pub suffix: String,
+}
+
+/// `0.93.0` O6 §4 item 4: an impact sentence that ends with a link
+/// (the unlink page's own sessions note, with its link to disable the
+/// account) -- kept apart from `impact_count` since nothing else needs
+/// this shape today.
+pub struct ImpactLink {
+    pub text: String,
+    pub href: String,
+    pub link_text: String,
+}
+
 /// Data driving the shared `confirm_screen` component (RFC 059).
 ///
 /// Every dangerous-action confirm page builds one of these and
@@ -43,10 +64,22 @@ pub struct ConfirmScreenData {
     /// or `kid (RS256)` for signing keys. Rendered inside
     /// `<p><strong>...</strong></p>`.
     pub identity: String,
-    /// Optional impact description (`<p class="muted">`).
-    /// `None` skips the line entirely — used by the user re-enable
-    /// case where there is no destructive impact to warn about.
+    /// Optional impact description — the page's lead consequence,
+    /// rendered at full contrast (`<p class="confirm-impact">`, RFC 144
+    /// tokens; `0.93.0` O6 §4: no longer `.muted`). `None` skips the
+    /// line entirely — used by the user re-enable case where there is
+    /// no destructive impact to warn about.
     pub impact: Option<String>,
+    /// A counted consequence, its own prominent figure inside the
+    /// impact area (`0.93.0` O6 §4 item 2) — rendered as its own
+    /// paragraph, after `impact` if both are present. `None` for a
+    /// confirm page whose impact carries no count.
+    pub impact_count: Option<CountedImpact>,
+    /// An impact consequence that ends in a link (`0.93.0` O6 §4 item
+    /// 4: the unlink page's sessions note, with its link to disable the
+    /// account) — part of the impact area, not a `notice` footnote.
+    /// `None` for every other confirm page.
+    pub impact_link: Option<ImpactLink>,
     /// Reversibility badge kind. `None` skips the badge.
     pub badge: Option<ReversibilityKind>,
     /// Optional small-print reversibility note.
@@ -96,6 +129,8 @@ pub fn confirm_screen(data: ConfirmScreenData, lang: sui_id_i18n::Locale) -> imp
         title,
         identity,
         impact,
+        impact_count,
+        impact_link,
         badge,
         reversibility_text,
         action_url,
@@ -147,7 +182,18 @@ pub fn confirm_screen(data: ConfirmScreenData, lang: sui_id_i18n::Locale) -> imp
         <div class="auth-card max-w-card">
             <h1>{title_owned}</h1>
             <p><strong>{identity}</strong></p>
-            {impact.map(|s| view! { <p class="muted">{s}</p> })}
+            {impact.map(|s| view! { <p class="confirm-impact">{s}</p> })}
+            {impact_count.map(|c| view! {
+                <p class="confirm-impact">
+                    <span class="confirm-impact__count">{c.count.to_string()}</span>
+                    " " {c.suffix}
+                </p>
+            })}
+            {impact_link.map(|l| view! {
+                <p class="confirm-impact">
+                    {l.text} " " <a href=l.href>{l.link_text}</a>
+                </p>
+            })}
             {notice.map(|s| view! { <p class="muted">{s}</p> })}
             {badge_view.map(|b| view! { <p>{b}</p> })}
             {reversibility_text.map(|s| view! {
@@ -209,6 +255,8 @@ pub fn render_confirm_disable_user(
                 title: title.into(),
                 identity: data.username.clone(),
                 impact: impact_opt.map(|s| s.into()),
+                impact_count: None,
+                impact_link: None,
                 badge: (!data.is_disabled).then_some(ReversibilityKind::Recoverable),
                 reversibility_text: rev_opt.map(|s| s.into()),
                 action_url: format!("/admin/users/{}/disabled", data.user_id),
@@ -254,6 +302,8 @@ pub fn render_confirm_delete_user(
                 title: t.confirm_delete_user_title.into(),
                 identity: data.username.clone(),
                 impact: Some(t.confirm_delete_user_impact.into()),
+                impact_count: None,
+                impact_link: None,
                 badge: Some(ReversibilityKind::Irreversible),
                 reversibility_text: Some(t.confirm_delete_user_reversibility.into()),
                 action_url: format!("/admin/users/{}/delete", data.user_id),
@@ -299,6 +349,8 @@ pub fn render_confirm_reset_mfa(
                 title: t.confirm_reset_mfa_title.into(),
                 identity: data.username.clone(),
                 impact: Some(t.confirm_reset_mfa_impact.into()),
+                impact_count: None,
+                impact_link: None,
                 badge: Some(ReversibilityKind::Recoverable),
                 reversibility_text: Some(t.confirm_reset_mfa_reversibility.into()),
                 action_url: format!("/admin/users/{}/mfa-reset", data.user_id),
@@ -347,6 +399,8 @@ pub fn render_confirm_recovery_link(
                 title: t.confirm_recovery_link_title.into(),
                 identity: data.username.clone(),
                 impact: Some(t.confirm_recovery_link_impact.into()),
+                impact_count: None,
+                impact_link: None,
                 badge: Some(ReversibilityKind::Irreversible),
                 reversibility_text: Some(t.confirm_recovery_link_reversibility.into()),
                 action_url: format!("/admin/users/{}/recovery-link", data.user_id),
@@ -392,6 +446,8 @@ pub fn render_confirm_delete_client(
                 title: t.confirm_delete_client_title.into(),
                 identity: data.client_name.clone(),
                 impact: Some(t.confirm_delete_client_impact.into()),
+                impact_count: None,
+                impact_link: None,
                 badge: Some(ReversibilityKind::Irreversible),
                 reversibility_text: Some(t.confirm_delete_client_reversibility.into()),
                 action_url: format!("/admin/clients/{}/delete", data.client_id),
@@ -438,6 +494,8 @@ pub fn render_confirm_delete_signing_key(
                 title: t.confirm_delete_signing_key_title.into(),
                 identity,
                 impact: Some(t.confirm_delete_signing_key_impact.into()),
+                impact_count: None,
+                impact_link: None,
                 badge: Some(ReversibilityKind::Irreversible),
                 reversibility_text: Some(t.confirm_delete_signing_key_reversibility.into()),
                 action_url: format!("/admin/signing-keys/{}/delete", data.key_id),
@@ -478,25 +536,31 @@ pub fn render_confirm_rotate_signing_key(
 ) -> String {
     render(move || {
         let t = lang.strings();
-        let impact_text = format!(
-            "{} {}",
-            t.confirm_rotate_signing_key_impact,
-            if data.active_key_count > 0 {
-                format!(
-                    "({} active key{} will become retired)",
-                    data.active_key_count,
-                    if data.active_key_count == 1 { "" } else { "s" }
-                )
-            } else {
-                String::new()
-            }
-        );
+        // `0.93.0` O6 §4 item 3: the count's own sentence no longer
+        // builds English text in Rust (`"({} active key{} will become
+        // retired)"`) -- the locale's own pluralized suffix does, and
+        // the number is rendered as its own prominent element, not
+        // parenthesized into the lead sentence.
+        let impact = if data.active_key_count == 0 {
+            format!(
+                "{} {}",
+                t.confirm_rotate_signing_key_impact, t.confirm_rotate_signing_key_count_zero
+            )
+        } else {
+            t.confirm_rotate_signing_key_impact.to_owned()
+        };
+        let impact_count = (data.active_key_count > 0).then(|| CountedImpact {
+            count: data.active_key_count,
+            suffix: (t.confirm_rotate_signing_key_count_suffix)(data.active_key_count),
+        });
         let admin_username = data.admin_username.clone();
         let body = confirm_screen(
             ConfirmScreenData {
                 title: t.confirm_rotate_signing_key_title.into(),
                 identity: String::new(),
-                impact: Some(impact_text),
+                impact: Some(impact),
+                impact_count,
+                impact_link: None,
                 badge: Some(ReversibilityKind::Irreversible),
                 reversibility_text: Some(t.confirm_rotate_signing_key_reversibility.into()),
                 action_url: "/admin/signing-keys/rotate".into(),
@@ -547,6 +611,8 @@ pub fn render_settings_email_confirm(
                 title: t.confirm_email_settings_title.into(),
                 identity: data.summary.clone(),
                 impact: Some(t.confirm_email_settings_impact.into()),
+                impact_count: None,
+                impact_link: None,
                 badge: None,
                 reversibility_text: None,
                 action_url: "/admin/settings/email/confirm".into(),

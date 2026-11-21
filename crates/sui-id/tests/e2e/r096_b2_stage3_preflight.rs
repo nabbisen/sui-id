@@ -290,7 +290,7 @@ async fn no_federation_http_client_refuses_before_any_network_access() {
         .expect("seed provider");
 
     let result = preflight_provider(&state, provider_id).await;
-    assert!(matches!(result, Err(PreflightError::Transport)));
+    assert!(matches!(result, Err(PreflightError::Transport(_))));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -315,7 +315,7 @@ async fn an_invalid_discovery_document_is_refused() {
         .expect("seed provider");
 
     let result = preflight_provider(&state, provider_id).await;
-    assert!(matches!(result, Err(PreflightError::Discovery)));
+    assert!(matches!(result, Err(PreflightError::Discovery(_))));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -338,7 +338,7 @@ async fn an_invalid_jwks_document_is_refused() {
         .expect("seed provider");
 
     let result = preflight_provider(&state, provider_id).await;
-    assert!(matches!(result, Err(PreflightError::Jwks)));
+    assert!(matches!(result, Err(PreflightError::Jwks(_))));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -479,7 +479,7 @@ async fn a_jwks_with_no_usable_key_is_refused() {
         .expect("seed provider");
 
     let result = preflight_provider(&state, provider_id).await;
-    assert!(matches!(result, Err(PreflightError::Jwks)));
+    assert!(matches!(result, Err(PreflightError::NoUsableKey)));
 }
 
 /// The re-read's digest comparison, on its own: the policy changes while

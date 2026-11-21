@@ -1040,6 +1040,15 @@ pub struct Strings {
     // RFC 090: signing-key rotation confirm
     pub confirm_rotate_signing_key_title: &'static str,
     pub confirm_rotate_signing_key_impact: &'static str,
+    /// `0.93.0` O6 §4 item 3: everything the sentence says *after* the
+    /// count (already pluralized for it) -- the count itself is
+    /// rendered separately, as its own prominent element, never built
+    /// in Rust (replaces the old `"({} active key{} will become
+    /// retired)"`).
+    pub confirm_rotate_signing_key_count_suffix: fn(usize) -> String,
+    /// `0.93.0` O6 §4 item 2: zero gets its own wording, appended to
+    /// the lead sentence -- there is no count to make prominent.
+    pub confirm_rotate_signing_key_count_zero: &'static str,
     pub confirm_rotate_signing_key_reversibility: &'static str,
     pub confirm_rotate_signing_key_button: &'static str,
     // RFC 090: email settings pending-change confirm
@@ -1140,15 +1149,81 @@ pub struct Strings {
     pub fed_err_check_too_old: &'static str,
     pub fed_err_step_up_lapsed: &'static str,
 
+    // `0.93.0` O6 §3: one sentence per typed cause `PreflightError`/
+    // `CheckAndEnableError` now carries (`federation_preflight.rs`'s
+    // `DiscoveryError`/`JwksError`/`TransportCause`), rendered by
+    // `handlers/admin/federation_providers.rs`'s `discovery_cause_text`/
+    // `jwks_cause_text`/`transport_cause_text` — an exhaustive match, so
+    // a new variant there fails to compile until it has a sentence here
+    // too. Each names what failed and, where there is one, what to do;
+    // none shows a raw upstream-supplied string, a URL, or an address
+    // (only a field name sui-id itself chose, or a host/origin/class
+    // sui-id already parsed and bounded).
+    pub fed_cause_invalid_issuer: &'static str,
+    pub fed_cause_not_absolute: fn(&str) -> String,
+    pub fed_cause_not_https: fn(&str) -> String,
+    pub fed_cause_has_userinfo: fn(&str) -> String,
+    pub fed_cause_has_query: fn(&str) -> String,
+    pub fed_cause_has_fragment: fn(&str) -> String,
+    pub fed_cause_noncanonical: fn(&str) -> String,
+    pub fed_cause_origin_not_allowed: fn(&str, &str) -> String,
+    pub fed_cause_issuer_mismatch: &'static str,
+    pub fed_cause_response_types_missing_code: &'static str,
+    pub fed_cause_grant_types_missing_auth_code: &'static str,
+    pub fed_cause_code_challenge_missing_s256: &'static str,
+    pub fed_cause_auth_response_iss_not_true: &'static str,
+    pub fed_cause_subject_types_missing_public: &'static str,
+    /// `BoundsError::WrongStatus`, shared by discovery and JWKS: the
+    /// status code (a number, never upstream text).
+    pub fed_cause_bounds_status: fn(u16) -> String,
+    /// `BoundsError::MissingContentType`/`WrongContentType`: never the
+    /// upstream's content-type value itself.
+    pub fed_cause_bounds_content_type: &'static str,
+    /// `BoundsError::TooLarge`: the byte limit.
+    pub fed_cause_bounds_too_large: fn(usize) -> String,
+    /// `BoundsError::TooManyMembers`/`ArrayTooLong`/`StringTooLong`: the limit.
+    pub fed_cause_bounds_structure: fn(usize) -> String,
+    /// Shared by `DiscoveryError::TooDeep` and `JwksError::TooDeep`.
+    pub fed_cause_too_deep: fn(usize) -> String,
+    /// Shared by `DiscoveryError::DuplicateMember` and
+    /// `JwksError::DuplicateMember`.
+    pub fed_cause_duplicate_member: &'static str,
+    /// Shared by `DiscoveryError::NotJson` and `JwksError::NotJson`.
+    pub fed_cause_not_json: &'static str,
+    pub fed_cause_jwks_not_object: &'static str,
+    pub fed_cause_jwks_no_keys: &'static str,
+    pub fed_cause_jwks_too_many_keys: fn(usize) -> String,
+    pub fed_cause_jwks_key_not_object: &'static str,
+    pub fed_cause_jwks_duplicate_kid: &'static str,
+    pub fed_cause_no_ca_certificates: &'static str,
+    /// Host, the count it answered with, and the cap (`MAX_ANSWERS`).
+    pub fed_cause_dns_over_cap: fn(&str, usize, usize) -> String,
+    pub fed_cause_dns_denied: fn(&str, &str) -> String,
+    pub fed_cause_tls: &'static str,
+    pub fed_cause_timeout: &'static str,
+    pub fed_cause_unreachable: &'static str,
+    /// `PreflightError::NoJwksUri`: the discovery document is otherwise
+    /// valid, but names no `jwks_uri`.
+    pub fed_cause_no_jwks_uri: &'static str,
+    /// `PreflightError::NoUsableKey`: the JWKS document is otherwise
+    /// valid, but none of its keys works for an algorithm both sides
+    /// support.
+    pub fed_cause_no_usable_key: &'static str,
+
     // ---- Admin: federation provider delete (RFC 096-B2 S6, C18) ----
     pub federation_providers_delete_button: &'static str,
     pub confirm_delete_federation_provider_title: &'static str,
-    /// `{n}` users whose federated sign-in through this provider ends
-    /// (A3: "the confirmation states how many users' federated sign-in
-    /// ends, in words") — a function, not a template, so English can
+    /// `0.93.0` O6 §4 item 2: zero has its own wording ("No user signs
+    /// in through this provider"), never "0 users ...".
+    pub confirm_delete_federation_provider_impact_zero: &'static str,
+    /// Everything the sentence says *after* the count (already
+    /// pluralized for it) — a function, not a template, so English can
     /// pluralize "user"/"users" correctly (RFC 096-B2 S5's own
     /// `signing_keys_count_caption` precedent for a counted caption).
-    pub confirm_delete_federation_provider_impact: fn(usize) -> String,
+    /// The count itself is rendered separately, as its own prominent
+    /// element (replaces the old full-sentence
+    /// `confirm_delete_federation_provider_impact`).
+    pub confirm_delete_federation_provider_impact_suffix: fn(usize) -> String,
     pub confirm_delete_federation_provider_reversibility: &'static str,
     pub federation_providers_deleted_flash: &'static str,
     /// Precondition 3 (A3 as narrowed 2026-11-12):

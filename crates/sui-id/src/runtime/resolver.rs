@@ -527,10 +527,10 @@ pub fn denied_by(addr: IpAddr) -> Option<&'static str> {
 
 /// An answer rejected before any connection attempt. `Display` is safe to
 /// put in a server log (RFC 134 D2 S3c: "log the name and the reason");
-/// callers must never put it in front of the browser -- but nothing here
-/// does, since this surfaces through `reqwest`'s ordinary connect-error
-/// path, which `fetch_discovery`'s existing `FetchDiscoveryError::Network`
-/// handling already treats as a generic upstream failure.
+/// callers must never put it in front of the browser directly -- but
+/// [`classify_dns`] gives an administrator's page a safe summary
+/// (`0.93.0` O6 §3: a count, or the denied range's *class* -- never the
+/// address itself).
 #[derive(Debug)]
 enum ResolveError {
     EmptyOrOverLimit {
@@ -548,7 +548,10 @@ impl std::fmt::Display for ResolveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::EmptyOrOverLimit { name, count } => {
-                write!(f, "resolving {name:?}: {count} addresses (must be 1-8)")
+                write!(
+                    f,
+                    "resolving {name:?}: {count} addresses (must be 1-{MAX_ANSWERS})"
+                )
             }
             Self::Denied { name, addr, reason } => {
                 write!(f, "resolving {name:?}: {addr} is denied ({reason})")
@@ -559,9 +562,74 @@ impl std::fmt::Display for ResolveError {
 
 impl std::error::Error for ResolveError {}
 
+/// What a DNS-rejection cause looks like once it is safe to put in front
+/// of an administrator: a count, or the denied range's class -- never
+/// the address itself (`ResolveError::Denied`'s own `addr` field is
+/// deliberately not exposed past this conversion).
+#[derive(Debug)]
+pub(crate) enum DnsOutcome {
+    AnswerRejected { host: String, count: usize },
+    Denied { host: String, reason: &'static str },
+}
+
+impl From<&ResolveError> for DnsOutcome {
+    fn from(e: &ResolveError) -> Self {
+        match e {
+            ResolveError::EmptyOrOverLimit { name, count } => DnsOutcome::AnswerRejected {
+                host: name.clone(),
+                count: *count,
+            },
+            ResolveError::Denied { name, reason, .. } => DnsOutcome::Denied {
+                host: name.clone(),
+                reason,
+            },
+        }
+    }
+}
+
+/// `0.93.0` O6 §3: find a [`ResolveError`] in `err`'s own source chain,
+/// if one is there, and convert it to the administrator-safe
+/// [`DnsOutcome`]. Measured live (`resolver::tests::
+/// classify_dns_finds_a_denied_address_through_a_real_request`): a real
+/// `reqwest::Error` wraps ours through `hyper_util::client::legacy::
+/// Error` -> `ConnectError` -> `hyper_util`'s own `DnsError`, all
+/// reachable via the ordinary `source()` chain -- but this walks by
+/// downcast at every level rather than naming those wrapper types, since
+/// nothing here depends on that exact nesting staying fixed.
+pub(crate) fn classify_dns(err: &(dyn std::error::Error + 'static)) -> Option<DnsOutcome> {
+    let mut cursor: Option<&(dyn std::error::Error + 'static)> = Some(err);
+    while let Some(e) = cursor {
+        if let Some(resolve_err) = e.downcast_ref::<ResolveError>() {
+            return Some(DnsOutcome::from(resolve_err));
+        }
+        // `std::io::Error::source()` skips its own boxed inner value,
+        // returning that inner value's own source instead -- so an
+        // `io::Error` wrapping ours directly would otherwise never
+        // surface it to this walk at all. `get_ref()` reaches it; not
+        // measured on the live chain today (hyper-util's own wrapper
+        // types return their inner value from `source()` normally), but
+        // cheap insurance against a future `reqwest`/`hyper-util`
+        // release wrapping it through one.
+        if let Some(io_err) = e.downcast_ref::<std::io::Error>()
+            && let Some(inner) = io_err.get_ref()
+        {
+            if let Some(resolve_err) = inner.downcast_ref::<ResolveError>() {
+                return Some(DnsOutcome::from(resolve_err));
+            }
+            cursor = Some(inner as &(dyn std::error::Error + 'static));
+            continue;
+        }
+        cursor = e.source();
+    }
+    None
+}
+
 /// Maximum number of addresses a resolved name may carry before the
-/// answer is rejected outright (RFC 134 D2).
-pub const MAX_ANSWERS: usize = 8;
+/// answer is rejected outright (RFC 134 D2). `0.93.0` O6: measured live
+/// against Google's `jwks_uri` host (`www.googleapis.com`), which
+/// answers with 8 A and 8 AAAA records -- 8 rejected every Google
+/// sign-in. Raised to 32 (`@nabbisen`, 2026-11-21: "32 in total (Recommended)").
+pub const MAX_ANSWERS: usize = 32;
 
 /// RFC 134 D2: resolves through `tokio::net::lookup_host` (chosen over
 /// `reqwest`'s own `GaiResolver` because that type is private to

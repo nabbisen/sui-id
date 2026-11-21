@@ -148,6 +148,13 @@ impl ResponseCaps {
 /// detail must never reach the browser — every call site here maps this
 /// into whatever its own existing "the fetch failed" surface already is
 /// (RFC 134 D5 Tier 1 §4b: no new user-visible error class).
+///
+/// `0.93.0` O6 §2: RFC 096's telemetry rule is "must not contain full
+/// URLs" — `reqwest::Error`'s own `Display` includes the request URL, so
+/// every `Transport` is built with [`reqwest::Error::without_url`]
+/// already applied, at the one place it is constructed here. Nothing
+/// downstream (`Display` below, `JwksError`/`FetchDiscoveryError`'s own)
+/// needs to remember to strip it again.
 #[derive(Debug)]
 pub enum BoundsError {
     WrongStatus(reqwest::StatusCode),
@@ -209,7 +216,11 @@ async fn read_bounded_bytes(
     max_bytes: usize,
 ) -> Result<Vec<u8>, BoundsError> {
     let mut buf = Vec::new();
-    while let Some(chunk) = resp.chunk().await.map_err(BoundsError::Transport)? {
+    while let Some(chunk) = resp
+        .chunk()
+        .await
+        .map_err(|e| BoundsError::Transport(e.without_url()))?
+    {
         buf.extend_from_slice(&chunk);
         if buf.len() > max_bytes {
             return Err(BoundsError::TooLarge { limit: max_bytes });

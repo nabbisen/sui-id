@@ -651,6 +651,14 @@ pub static STRINGS_EN: Strings = Strings {
     client_detail_readonly_title: "App details",
     confirm_rotate_signing_key_title: "Rotate signing key",
     confirm_rotate_signing_key_impact: "A new signing key will be issued. Existing tokens signed with the previous key remain valid until they expire.",
+    confirm_rotate_signing_key_count_suffix: |n| {
+        if n == 1 {
+            "active key will become retired.".to_owned()
+        } else {
+            "active keys will become retired.".to_owned()
+        }
+    },
+    confirm_rotate_signing_key_count_zero: "No active keys will become retired.",
     confirm_rotate_signing_key_reversibility: "This cannot be undone. The previous key will be retired.",
     confirm_rotate_signing_key_button: "Rotate key",
     confirm_email_settings_title: "Confirm email settings",
@@ -942,18 +950,101 @@ pub static STRINGS_EN: Strings = Strings {
     fed_err_check_too_old: "The check is more than 10 minutes old. Run it again.",
     fed_err_step_up_lapsed: "Your identity confirmation expired while the check ran. Confirm it again, then run the check again.",
 
+    fed_cause_invalid_issuer: "The provider's configured issuer or allowed_origins is not acceptable: the issuer must be an absolute https URL on a public host name, and each allowed origin a canonical https origin. Check the provider's configuration block.",
+    fed_cause_not_absolute: |field| {
+        format!(
+            "The upstream's discovery document's {field} is not an absolute URL. This cannot be used."
+        )
+    },
+    fed_cause_not_https: |field| {
+        format!(
+            "The upstream's discovery document's {field} is not https. This provider only uses https endpoints."
+        )
+    },
+    fed_cause_has_userinfo: |field| {
+        format!(
+            "The upstream's discovery document's {field} carries a username or password. This is not allowed."
+        )
+    },
+    fed_cause_has_query: |field| {
+        format!(
+            "The upstream's discovery document's {field} carries a query string. This is not allowed."
+        )
+    },
+    fed_cause_has_fragment: |field| {
+        format!(
+            "The upstream's discovery document's {field} carries a fragment. This is not allowed."
+        )
+    },
+    fed_cause_noncanonical: |field| {
+        format!(
+            "The upstream's discovery document's {field} is not a canonical URL. This cannot be used."
+        )
+    },
+    fed_cause_origin_not_allowed: |field, origin| {
+        format!(
+            "The upstream's discovery document puts its {field} on {origin}, which this provider's \
+         allowed_origins does not list. If you trust that origin, add it to allowed_origins and \
+         restart sui-id."
+        )
+    },
+    fed_cause_issuer_mismatch: "The upstream's discovery document's issuer does not match the configured issuer exactly. Check both against the upstream's own documentation.",
+    fed_cause_response_types_missing_code: "The upstream's discovery document does not list \"code\" among its response types. sui-id only uses the authorization code flow.",
+    fed_cause_grant_types_missing_auth_code: "The upstream's discovery document lists grant types but omits \"authorization_code\". sui-id only uses the authorization code flow.",
+    fed_cause_code_challenge_missing_s256: "The upstream's discovery document does not list \"S256\" among its PKCE code challenge methods. sui-id requires S256.",
+    fed_cause_auth_response_iss_not_true: "The upstream's discovery document does not confirm that it sends an \"iss\" parameter on the authorization response. sui-id requires it.",
+    fed_cause_subject_types_missing_public: "The upstream's discovery document does not list \"public\" among its subject types. sui-id requires public subjects.",
+    fed_cause_bounds_status: |code| {
+        format!("The upstream answered with HTTP status {code}; sui-id accepts only 200 OK here.")
+    },
+    fed_cause_bounds_content_type: "The upstream's response does not declare itself as JSON (its Content-Type is missing or another type).",
+    fed_cause_bounds_too_large: |limit| {
+        format!("The upstream's response is larger than sui-id reads ({limit} bytes).")
+    },
+    fed_cause_bounds_structure: |limit| {
+        format!(
+            "The upstream's response has more members, items or characters in one place than sui-id allows ({limit})."
+        )
+    },
+    fed_cause_too_deep: |limit| {
+        format!(
+            "The upstream's response nests deeper than sui-id allows ({limit} levels). This is not a usable document."
+        )
+    },
+    fed_cause_duplicate_member: "The upstream's response repeats a field name. This is not a usable document.",
+    fed_cause_not_json: "The upstream's response is not JSON.",
+    fed_cause_jwks_not_object: "The upstream's signing-key document is JSON, but its root is not an object.",
+    fed_cause_jwks_no_keys: "The upstream's signing-key document has no \"keys\" array.",
+    fed_cause_jwks_too_many_keys: |limit| {
+        format!("The upstream's signing-key document has more than {limit} keys.")
+    },
+    fed_cause_jwks_key_not_object: "One of the upstream's signing keys is not an object.",
+    fed_cause_jwks_duplicate_kid: "Two of the upstream's signing keys share the same key ID.",
+    fed_cause_no_ca_certificates: "This host has no CA certificates to verify TLS with. Install a CA certificate bundle and restart sui-id.",
+    fed_cause_dns_over_cap: |host, count, cap| {
+        format!("{host} answered with {count} addresses; sui-id accepts at most {cap}.")
+    },
+    fed_cause_dns_denied: |host, reason| {
+        format!("{host} resolves to an address sui-id never connects to ({reason}).")
+    },
+    fed_cause_tls: "The TLS handshake with the upstream failed. Check this host's CA certificates and the upstream's certificate.",
+    fed_cause_timeout: "The request to the upstream timed out. Check this host's network and the upstream's availability.",
+    fed_cause_unreachable: "The upstream could not be reached. Check this host's network and DNS, and see the server log.",
+    fed_cause_no_jwks_uri: "The upstream's discovery document names no jwks_uri. Its signing keys cannot be found.",
+    fed_cause_no_usable_key: "None of the upstream's signing keys is usable for an algorithm both sides support. Check the server log for the reason.",
+
     federation_providers_delete_button: "Delete",
     confirm_delete_federation_provider_title: "Delete this federation provider",
-    confirm_delete_federation_provider_impact: |n| {
+    confirm_delete_federation_provider_impact_zero: "No user signs in through this provider.",
+    confirm_delete_federation_provider_impact_suffix: |n| {
         if n == 1 {
-            "1 user will no longer be able to sign in through this provider; their sui-id \
+            "user will no longer be able to sign in through this provider; their sui-id \
              account remains."
                 .to_owned()
         } else {
-            format!(
-                "{n} users will no longer be able to sign in through this provider; their \
-                 sui-id accounts remain."
-            )
+            "users will no longer be able to sign in through this provider; their sui-id \
+             accounts remain."
+                .to_owned()
         }
     },
     confirm_delete_federation_provider_reversibility: "This cannot be undone.",

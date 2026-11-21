@@ -40,14 +40,114 @@ use crate::discovery;
 use crate::jwks;
 use crate::state::AppState;
 
+/// `0.93.0` O6 §3: why a transport attempt failed, classified from the
+/// `reqwest::Error` itself -- never the error's own `Display`/`Debug`
+/// text, which `without_url` strips but which can still carry other
+/// upstream-influenced detail. Every field here is already
+/// administrator-safe: a host name sui-id itself resolved (not upstream
+/// content), a count, or a denied range's *class* (never the address --
+/// [`crate::resolver::DnsOutcome`] never carries one past that
+/// conversion).
+#[derive(Debug)]
+pub enum TransportCause {
+    /// This host has no CA certificates to verify TLS with -- checked
+    /// before any client exists, never from a `reqwest::Error`.
+    NoCaCertificates,
+    /// The resolved name answered with more addresses than sui-id
+    /// accepts (RFC 134 D2).
+    DnsAnswerRejected { host: String, count: usize },
+    /// The resolved name's answer included an address sui-id never
+    /// connects to.
+    DnsDenied { host: String, reason: &'static str },
+    /// The TLS handshake failed.
+    Tls,
+    /// The request timed out.
+    Timeout,
+    /// Anything else: connection refused, no route, or a cause this
+    /// classification does not distinguish further.
+    Unreachable,
+}
+
+/// `0.93.0` O6 §3: classify a genuine transport failure (`reqwest::Error`,
+/// from `send()` or a request-time I/O error reading the body) into the
+/// administrator-safe cause above. Order matters: `is_timeout` first
+/// (`reqwest`'s own classification, most specific), then DNS (walks the
+/// source chain for sui-id's own [`crate::resolver::ResolveError`]),
+/// then TLS (walks for a `rustls::Error`), else the catch-all.
+pub(crate) fn classify_transport(err: &reqwest::Error) -> TransportCause {
+    if err.is_timeout() {
+        return TransportCause::Timeout;
+    }
+    if let Some(outcome) = crate::resolver::classify_dns(err) {
+        return match outcome {
+            crate::resolver::DnsOutcome::AnswerRejected { host, count } => {
+                TransportCause::DnsAnswerRejected { host, count }
+            }
+            crate::resolver::DnsOutcome::Denied { host, reason } => {
+                TransportCause::DnsDenied { host, reason }
+            }
+        };
+    }
+    if is_tls_error(err) {
+        return TransportCause::Tls;
+    }
+    TransportCause::Unreachable
+}
+
+/// `reqwest`/`hyper-util` wrap a TLS failure in one or more
+/// `std::io::Error` "Custom" layers around the underlying `rustls::Error`
+/// (measured live: `resolver::tests::classify_dns_finds_a_denied_
+/// address_through_a_real_request`'s sibling probe for the TLS shape).
+/// `std::io::Error::source()` skips its own boxed inner value -- it
+/// returns that inner value's own source, not the inner value itself --
+/// so this walks by `get_ref()` instead of `source()` wherever the
+/// current link is an `io::Error`.
+fn is_tls_error(err: &reqwest::Error) -> bool {
+    let mut cursor: Option<&(dyn std::error::Error + 'static)> = Some(err);
+    while let Some(e) = cursor {
+        if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
+            if let Some(inner) = io_err.get_ref() {
+                if inner.downcast_ref::<rustls::Error>().is_some() {
+                    return true;
+                }
+                cursor = Some(inner as &(dyn std::error::Error + 'static));
+                continue;
+            }
+            return false;
+        }
+        cursor = e.source();
+    }
+    false
+}
+
+/// Fold [`discovery::FetchDiscoveryError::Bounds`]'s own transport case
+/// (a connection drop partway through reading the response) into the
+/// same classification a `send()` failure gets; a non-transport bounds
+/// violation (wrong status, size, or content type) is not further
+/// distinguished -- `Unreachable` is still a true, if generic, summary
+/// of "the upstream did not behave like a document server."
+fn classify_discovery_bounds(e: &crate::response_bounds::BoundsError) -> TransportCause {
+    match e {
+        crate::response_bounds::BoundsError::Transport(reqwest_err) => {
+            classify_transport(reqwest_err)
+        }
+        _ => TransportCause::Unreachable,
+    }
+}
+
 /// RFC 096 `:409-421`'s closed set of ways a preflight can refuse, in
-/// operator terms. Carries no upstream body, URL, query, or key
-/// material (each variant is a bare unit) — detail for an operator's
-/// own troubleshooting is logged separately, with `tracing`, at the
-/// call site that actually saw it, the same split
-/// [`discovery::FetchDiscoveryError`] already makes between what a log
-/// line may say and what a typed signal upward may carry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// operator terms.
+///
+/// `0.93.0` O6 §3: the transport/discovery/JWKS variants now carry the
+/// typed cause an administrator's page renders a specific sentence
+/// from, instead of a bare unit whose only recourse was "see the server
+/// log." Every payload type here is itself already filtered to what is
+/// safe to show (never a response body, an upstream-supplied string, or
+/// an address) -- the rendering layer (`http::handlers::admin::
+/// federation_providers`) still re-checks this (an exhaustive match,
+/// tested to reach a sentence for every variant, and a test that no
+/// rendered sentence contains a URL-shaped substring).
+#[derive(Debug)]
 pub enum PreflightError {
     /// No provider has this id (it was deleted, or the id is stale).
     NotFound,
@@ -61,14 +161,21 @@ pub enum PreflightError {
     /// not recorded, or a stored field fails validation. Startup's C23
     /// records it from the configuration block.
     PolicyNotRecorded,
-    /// The upstream could not be reached at all (including: this host
-    /// has no CA certificates to verify TLS with).
-    Transport,
-    /// The discovery document was invalid, or named no `jwks_uri`.
-    Discovery,
-    /// The JWKS response was invalid, or has no key that sign-in's own
-    /// key selection would accept for an algorithm both sides support.
-    Jwks,
+    /// The upstream could not be reached.
+    Transport(TransportCause),
+    /// The discovery document was invalid.
+    Discovery(discovery::DiscoveryError),
+    /// The discovery document is otherwise valid but names no
+    /// `jwks_uri` -- split from [`Self::Discovery`] because
+    /// [`discovery::DiscoveryError`] does not itself cover this; nothing
+    /// is attacker-controlled to carry here.
+    NoJwksUri,
+    /// The JWKS response was invalid.
+    Jwks(jwks::JwksError),
+    /// The JWKS response was structurally valid, but none of its keys is
+    /// usable for an algorithm both sides support -- split from
+    /// [`Self::Jwks`] for the same reason as [`Self::NoJwksUri`].
+    NoUsableKey,
     /// The discovery document does not support the policy's token-auth
     /// method.
     AuthMethodUnsupported,
@@ -83,8 +190,12 @@ pub enum PreflightError {
 
 /// Each message says what went wrong **and what to do next** (the C17
 /// decision, §3 item 6, approved 2026-11-11): an administrator reads this,
-/// and a reason with no next step leaves them guessing. Detail an
-/// administrator can act on goes to the server log, never here.
+/// and a reason with no next step leaves them guessing. This stays the
+/// generic, log-facing summary (every typed payload above gets its own
+/// specific sentence only on the admin page, in `http::handlers::admin::
+/// federation_providers`); detail an administrator can act on beyond
+/// this line still goes to the server log, logged separately at the
+/// call site that saw it.
 impl std::fmt::Display for PreflightError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = match self {
@@ -104,17 +215,24 @@ impl std::fmt::Display for PreflightError {
                 "the provider's trust policy has not been recorded from its configuration \
                  block yet; restart sui-id, and see the server log if it persists"
             }
-            Self::Transport => {
+            Self::Transport(_) => {
                 "the upstream identity provider could not be reached; check this host's \
                  network, DNS and CA certificates, and see the server log"
             }
-            Self::Discovery => {
+            Self::Discovery(_) => {
                 "the upstream's discovery document was refused; see the server log for the \
                  reason"
             }
-            Self::Jwks => {
-                "the upstream's signing keys were refused, or none of them is usable; see the \
-                 server log for the reason"
+            Self::NoJwksUri => {
+                "the upstream's discovery document names no jwks_uri; its signing keys \
+                 cannot be found"
+            }
+            Self::Jwks(_) => {
+                "the upstream's signing keys were refused; see the server log for the reason"
+            }
+            Self::NoUsableKey => {
+                "none of the upstream's signing keys is usable for an algorithm both sides \
+                 support; see the server log for the reason"
             }
             Self::AuthMethodUnsupported => {
                 "the upstream does not accept this provider's token-auth method \
@@ -243,7 +361,7 @@ pub async fn preflight_provider(
 
     let Some(client) = app.federation_http_client() else {
         tracing::warn!(provider_id = %provider_id, "preflight: no CA certificates on this host");
-        return Err(PreflightError::Transport);
+        return Err(PreflightError::Transport(TransportCause::NoCaCertificates));
     };
 
     let (discovery_bytes, discovery) = discovery::fetch_discovery_bytes(
@@ -255,8 +373,15 @@ pub async fn preflight_provider(
     .map_err(|e| {
         tracing::warn!(provider_id = %provider_id, error = %e, "preflight: discovery failed");
         match e {
-            discovery::FetchDiscoveryError::Network(_) => PreflightError::Transport,
-            discovery::FetchDiscoveryError::Invalid(_) => PreflightError::Discovery,
+            discovery::FetchDiscoveryError::Network(reqwest_err) => {
+                PreflightError::Transport(classify_transport(&reqwest_err))
+            }
+            discovery::FetchDiscoveryError::Bounds(bounds_err) => {
+                PreflightError::Transport(classify_discovery_bounds(&bounds_err))
+            }
+            discovery::FetchDiscoveryError::Invalid(disc_err) => {
+                PreflightError::Discovery(disc_err)
+            }
         }
     })?;
 
@@ -275,14 +400,19 @@ pub async fn preflight_provider(
     }
     let Some(jwks_uri) = discovery.jwks_uri() else {
         tracing::warn!(provider_id = %provider_id, "preflight: discovery names no jwks_uri");
-        return Err(PreflightError::Discovery);
+        return Err(PreflightError::NoJwksUri);
     };
 
     let (jwks_bytes, jwks_doc) = jwks::fetch_jwks_bytes(client, jwks_uri)
         .await
         .map_err(|e| {
             tracing::warn!(provider_id = %provider_id, error = %e, "preflight: JWKS failed");
-            PreflightError::Jwks
+            match e {
+                jwks::JwksError::Bounds(crate::response_bounds::BoundsError::Transport(
+                    reqwest_err,
+                )) => PreflightError::Transport(classify_transport(&reqwest_err)),
+                other => PreflightError::Jwks(other),
+            }
         })?;
     // Complete JWKS validation (RFC 094 `:508-509`), not only its structure:
     // at least one key must pass sign-in's own key selection
@@ -302,7 +432,7 @@ pub async fn preflight_provider(
     if !usable {
         tracing::warn!(provider_id = %provider_id,
             "preflight: no JWKS key is usable for an algorithm both sides support");
-        return Err(PreflightError::Jwks);
+        return Err(PreflightError::NoUsableKey);
     }
 
     // Clause 6: the fingerprints are SHA-256 over the exact bytes that
@@ -361,10 +491,12 @@ pub async fn preflight_provider(
 /// RFC 096-B2 S4 §D: every way [`check_and_enable`] can refuse — S3's
 /// [`PreflightError`] variants (the check itself refused), plus C17
 /// enable's own (the provider changed, or the check went stale, between
-/// the check finishing and the commit). Flat and closed, like
-/// `PreflightError` itself: no fingerprint, digest, URL, or upstream
-/// body in any variant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// the check finishing and the commit).
+///
+/// `0.93.0` O6 §3: carries the same typed causes `PreflightError` does,
+/// for the same reason -- `check_and_enable`'s own refusal is what the
+/// "Check and enable" admin action actually renders.
+#[derive(Debug)]
 pub enum CheckAndEnableError {
     /// See [`PreflightError::NotFound`].
     NotFound,
@@ -377,11 +509,15 @@ pub enum CheckAndEnableError {
     /// See [`PreflightError::PolicyNotRecorded`].
     PolicyNotRecorded,
     /// See [`PreflightError::Transport`].
-    Transport,
+    Transport(TransportCause),
     /// See [`PreflightError::Discovery`].
-    Discovery,
+    Discovery(discovery::DiscoveryError),
+    /// See [`PreflightError::NoJwksUri`].
+    NoJwksUri,
     /// See [`PreflightError::Jwks`].
-    Jwks,
+    Jwks(jwks::JwksError),
+    /// See [`PreflightError::NoUsableKey`].
+    NoUsableKey,
     /// See [`PreflightError::AuthMethodUnsupported`].
     AuthMethodUnsupported,
     /// See [`PreflightError::NoCommonAlgorithm`].
@@ -405,40 +541,70 @@ pub enum CheckAndEnableError {
 }
 
 /// Same rule as [`PreflightError::fmt`]: the reason **and** the next
-/// step, nothing an administrator cannot act on.
+/// step, nothing an administrator cannot act on. The shared variants'
+/// text is duplicated, not delegated to `PreflightError`'s own `Display`
+/// (its typed payloads are not `Clone`, so a borrowed `&self` here could
+/// not reconstruct one to delegate to).
 impl std::fmt::Display for CheckAndEnableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NotFound => write!(f, "{}", PreflightError::NotFound),
-            Self::Storage => write!(f, "{}", PreflightError::Storage),
-            Self::NotDisabled => write!(f, "{}", PreflightError::NotDisabled),
-            Self::NotInConfiguration => write!(f, "{}", PreflightError::NotInConfiguration),
-            Self::PolicyNotRecorded => write!(f, "{}", PreflightError::PolicyNotRecorded),
-            Self::Transport => write!(f, "{}", PreflightError::Transport),
-            Self::Discovery => write!(f, "{}", PreflightError::Discovery),
-            Self::Jwks => write!(f, "{}", PreflightError::Jwks),
-            Self::AuthMethodUnsupported => {
-                write!(f, "{}", PreflightError::AuthMethodUnsupported)
-            }
-            Self::NoCommonAlgorithm => write!(f, "{}", PreflightError::NoCommonAlgorithm),
-            Self::ChangedDuringPreflight => {
-                write!(f, "{}", PreflightError::ChangedDuringPreflight)
+        let msg = match self {
+            Self::NotFound => "this provider no longer exists; reload the provider list",
+            Self::Storage => {
+                "the provider could not be read from the database; try again, and see the \
+                 server log if it persists"
             }
             // Same operator-facing meaning as `NotDisabled` (a race landed
             // on it at the very end instead of at the start): same text.
-            Self::AlreadyEnabled => write!(f, "{}", PreflightError::NotDisabled),
-            Self::ChangedSinceCheck => {
-                write!(f, "the provider changed since the check; run it again")
+            Self::NotDisabled | Self::AlreadyEnabled => {
+                "the provider is already enabled; disable it first to check it again"
             }
-            Self::CheckTooOld => {
-                write!(f, "the check is more than 10 minutes old; run it again")
+            Self::NotInConfiguration => {
+                "no [[federation_providers]] block names this provider; add one and restart \
+                 sui-id"
             }
-            Self::StepUpRequired => write!(
-                f,
+            Self::PolicyNotRecorded => {
+                "the provider's trust policy has not been recorded from its configuration \
+                 block yet; restart sui-id, and see the server log if it persists"
+            }
+            Self::Transport(_) => {
+                "the upstream identity provider could not be reached; check this host's \
+                 network, DNS and CA certificates, and see the server log"
+            }
+            Self::Discovery(_) => {
+                "the upstream's discovery document was refused; see the server log for the \
+                 reason"
+            }
+            Self::NoJwksUri => {
+                "the upstream's discovery document names no jwks_uri; its signing keys \
+                 cannot be found"
+            }
+            Self::Jwks(_) => {
+                "the upstream's signing keys were refused; see the server log for the reason"
+            }
+            Self::NoUsableKey => {
+                "none of the upstream's signing keys is usable for an algorithm both sides \
+                 support; see the server log for the reason"
+            }
+            Self::AuthMethodUnsupported => {
+                "the upstream does not accept this provider's token-auth method \
+                 (client_secret_basic with a client secret, none without one); check \
+                 client_secret_env against the upstream's client registration"
+            }
+            Self::NoCommonAlgorithm => {
+                "the upstream signs ID tokens with none of this provider's id_token_algs; add \
+                 one it supports (see the server log) and restart sui-id"
+            }
+            Self::ChangedDuringPreflight => {
+                "the provider changed while the check was running; run the check again"
+            }
+            Self::ChangedSinceCheck => "the provider changed since the check; run it again",
+            Self::CheckTooOld => "the check is more than 10 minutes old; run it again",
+            Self::StepUpRequired => {
                 "your identity confirmation expired while the check ran; confirm it again, \
                  then run the check again"
-            ),
-        }
+            }
+        };
+        write!(f, "{msg}")
     }
 }
 
@@ -452,9 +618,11 @@ impl From<PreflightError> for CheckAndEnableError {
             PreflightError::NotDisabled => Self::NotDisabled,
             PreflightError::NotInConfiguration => Self::NotInConfiguration,
             PreflightError::PolicyNotRecorded => Self::PolicyNotRecorded,
-            PreflightError::Transport => Self::Transport,
-            PreflightError::Discovery => Self::Discovery,
-            PreflightError::Jwks => Self::Jwks,
+            PreflightError::Transport(c) => Self::Transport(c),
+            PreflightError::Discovery(e) => Self::Discovery(e),
+            PreflightError::NoJwksUri => Self::NoJwksUri,
+            PreflightError::Jwks(e) => Self::Jwks(e),
+            PreflightError::NoUsableKey => Self::NoUsableKey,
             PreflightError::AuthMethodUnsupported => Self::AuthMethodUnsupported,
             PreflightError::NoCommonAlgorithm => Self::NoCommonAlgorithm,
             PreflightError::ChangedDuringPreflight => Self::ChangedDuringPreflight,
