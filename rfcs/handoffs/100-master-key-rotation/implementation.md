@@ -161,9 +161,14 @@ is atomic, **in all three modes**.
 
 ## Stage 4 — startup recovery
 
-**Before stage 5.** It implements every row of
-[`crash-matrix.md`](./crash-matrix.md)'s recovery table, before normal
-database open:
+**Dispatched 2026-11-21** — [`0.93.0-stage-4-startup-recovery-2026-11-21.md`](0.93.0-stage-4-startup-recovery-2026-11-21.md), cycle O's O5. As settled there on 2026-11-21: a rotation stopped before the database was resealed is **cleaned, and the service starts** (resume is not built); and a backup found during that cleanup is **removed once its key is verified to be the active one**.
+
+**Before stage 5.** It implements [`crash-matrix.md`](./crash-matrix.md)'s
+recovery table **rows 1–7 and 11** (the preparation prefix, and fail
+closed), before normal database open. **Rows 8–10 move to stage 6**: they
+read the `master_key_rotation` row and run K05, both built there. Until
+then, a workspace beside a database the active key does not open fails
+closed and preserves every file. The rows' rules:
 - authenticate the journal with whichever key opens the **sentinel**;
 - act only on paths the journal binds;
 - delete only bound partial temporaries;
@@ -189,6 +194,12 @@ all three modes; a fingerprint mismatch on readback; no `Intent` without a
 disposition.
 
 ## Stage 6 — K07 extended, activation, K05
+
+**Recovery first, within this stage:** the crash matrix's rows 8–10 (DB new
+and pending with the active key old; DB new and pending with the active key
+new; DB new and complete), moved here from stage 4, land before K07 writes
+the pending row or activation runs. Until they do, stage 4 fails those
+states closed.
 
 - **K07** reseals the sentinel with every sealed column (**done in stage 1**,
   `0.93.0`), writes the
