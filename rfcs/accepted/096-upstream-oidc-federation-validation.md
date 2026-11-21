@@ -515,8 +515,14 @@ rejection therefore occurs before
 unbounded library header/HPACK/field-list allocation. HTTP/2 is deliberately
 unsupported rather than relying on advisory peer settings.
 
-Before each request, the resolver obtains at most eight A/AAAA answers for the
-exact endpoint host. IPv4-mapped IPv6 is normalized to IPv4 and evaluated by
+Before each request, the resolver obtains at most 32 A/AAAA answers, in total,
+for the exact endpoint host. *(Amended 2026-11-21, non-material: was "eight".
+The M4-B run found that Google's signing-key host answers with 8 A plus 8 AAAA
+records, which the old cap refused, so sui-id could not federate with Google at
+all. The cap is a bound on work (RFC 134, Q3); the security property is that
+every answer must pass the predicate below and exactly one is dialled, and
+neither changes. `@nabbisen`, asked how the cap should change: *"32 in total
+(Recommended)"*.)* IPv4-mapped IPv6 is normalized to IPv4 and evaluated by
 the IPv4 policy. Every answer—not merely one chosen answer—must pass this
 closed predicate:
 

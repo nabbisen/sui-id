@@ -92,7 +92,11 @@ The SSRF control belongs in DNS resolution, not in a check before or after it.
 `reqwest::dns::Resolve` is implemented by an egress resolver that:
 
 1. resolves the name through the system resolver;
-2. rejects an empty answer, or more than 8;
+2. rejects an empty answer, or more than 8; *(amended 2026-11-21: more than
+   32, in total, after a live run found Google's signing-key host answers with
+   16. See RFC 096's resolver paragraph, where the amendment is recorded.
+   Q3's reasoning below stands: the cap bounds work, and security comes from
+   step 3);*
 3. normalizes every address and rejects any that is not ordinary public unicast —
    every IANA special-purpose prefix **regardless of its "globally reachable"
    flag**, plus the explicit deny list: NAT64 (both prefixes), 6to4, Teredo,
