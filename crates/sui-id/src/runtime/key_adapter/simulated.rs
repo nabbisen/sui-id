@@ -390,6 +390,7 @@ impl KeyFileOps for Simulated {
                 uid: 0,
                 mode: 0o600,
                 is_symlink: false,
+                symlink_target: None,
             })
         } else {
             Err(io::Error::new(io::ErrorKind::NotFound, "metadata"))

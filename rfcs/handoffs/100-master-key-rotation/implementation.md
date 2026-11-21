@@ -116,7 +116,7 @@ and the custody disposition.
 
 ## Stage 2 — preconditions and `--check`
 
-**Dispatched 2026-11-19** — [`0.93.0-stage-2-preconditions-and-check-2026-11-19.md`](0.93.0-stage-2-preconditions-and-check-2026-11-19.md), cycle O's O3. It settles one point: the primitives probe writes a file, so `--check` does not probe, and says so; a real rotation probes first.
+**Landed 2026-11-21** — [`0.93.0-stage-2-preconditions-and-check-2026-11-19.md`](0.93.0-stage-2-preconditions-and-check-2026-11-19.md), cycle O's O3. It settles one point: the primitives probe writes a file, so `--check` does not probe, and says so; a real rotation probes first.
 
 Rotation refuses **before creating anything** unless:
 - the active, workspace, next, temporary and backup paths share one

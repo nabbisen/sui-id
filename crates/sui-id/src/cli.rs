@@ -305,6 +305,8 @@ enum AdminCommand {
         new_key: Option<PathBuf>,
         #[arg(long, short = 'y')]
         yes: bool,
+        #[arg(long)]
+        check: bool,
     },
     #[command(hide = true)]
     RotateMetricsToken,
@@ -386,6 +388,9 @@ enum AdminMasterKeyCommand {
         /// Skip the interactive confirmation prompt.
         #[arg(long, short = 'y')]
         yes: bool,
+        /// Check whether a rotation could start, and change nothing.
+        #[arg(long)]
+        check: bool,
     },
 }
 
@@ -684,9 +689,11 @@ async fn dispatch_admin(
                     generate_new_key,
                     new_key,
                     yes,
+                    check,
                 },
         }) => {
-            handlers::run_admin_rotate_key(cfg_path, policy, generate_new_key, new_key, yes).await
+            handlers::run_admin_rotate_key(cfg_path, policy, generate_new_key, new_key, yes, check)
+                .await
         }
         AdminCommand::MetricsToken(AdminMetricsTokenArgs {
             command: AdminMetricsTokenCommand::Rotate,
@@ -727,9 +734,11 @@ async fn dispatch_admin(
             generate_new_key,
             new_key,
             yes,
+            check,
         } => {
             alias_notice("admin rotate-key", "admin master-key rotate");
-            handlers::run_admin_rotate_key(cfg_path, policy, generate_new_key, new_key, yes).await
+            handlers::run_admin_rotate_key(cfg_path, policy, generate_new_key, new_key, yes, check)
+                .await
         }
         AdminCommand::RotateMetricsToken => {
             alias_notice("admin rotate-metrics-token", "admin metrics-token rotate");

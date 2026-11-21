@@ -14,17 +14,21 @@
 //! the production source.
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// What [`KeyFileOps::metadata`] reports: enough to tell a key file from a
 /// symlink standing in for one, and to check its owner and mode, without
 /// `geteuid` or any `unsafe` — `std::os::unix::fs::MetadataExt` already
-/// reads what `stat(2)` filled in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// reads what `stat(2)` filled in. `symlink_target` is `Some` only when
+/// `is_symlink` is true (RFC 100 stage 2, M6: the refusal names the link
+/// *and* its target, so simply reporting "this is a symlink" is not
+/// enough).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyFileMetadata {
     pub uid: u32,
     pub mode: u32,
     pub is_symlink: bool,
+    pub symlink_target: Option<PathBuf>,
 }
 
 /// The primitives RFC 100 names for touching a key file or its directory.
@@ -106,10 +110,12 @@ impl KeyFileOps for Real {
     fn metadata(&self, _point: &str, path: &Path) -> io::Result<KeyFileMetadata> {
         use std::os::unix::fs::MetadataExt;
         let m = std::fs::symlink_metadata(path)?;
+        let is_symlink = m.file_type().is_symlink();
         Ok(KeyFileMetadata {
             uid: m.uid(),
             mode: m.mode() & 0o777,
-            is_symlink: m.file_type().is_symlink(),
+            is_symlink,
+            symlink_target: is_symlink.then(|| std::fs::read_link(path).ok()).flatten(),
         })
     }
 

@@ -413,6 +413,181 @@ mod ordering {
     }
 }
 
+// ---------- RFC 100 stage 2 (2026-11-21): `--check` ----------
+mod check_mode {
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Output};
+
+    const BIN: &str = env!("CARGO_BIN_EXE_sui-id");
+
+    struct Home {
+        dir: tempfile::TempDir,
+    }
+
+    impl Home {
+        fn new() -> Self {
+            Self {
+                dir: tempfile::tempdir().expect("tempdir"),
+            }
+        }
+        fn db(&self) -> PathBuf {
+            self.dir.path().join("t.sqlite")
+        }
+        fn key(&self) -> PathBuf {
+            self.dir.path().join("t.key")
+        }
+        fn config(&self) -> PathBuf {
+            let sample = Command::new(BIN)
+                .arg("--print-sample-config")
+                .output()
+                .expect("sample");
+            let mut text = String::from_utf8(sample.stdout).expect("utf8");
+            text = text
+                .replace("./sui-id.sqlite", &self.db().display().to_string())
+                .replace("./sui-id.key", &self.key().display().to_string())
+                .replace("127.0.0.1:8801", "127.0.0.1:18815");
+            let path = self.dir.path().join("cfg.toml");
+            std::fs::write(&path, text).expect("config");
+            path
+        }
+        fn create(&self, cfg: &Path) {
+            let out = self.run(
+                &["admin", "unlock-user", "--username", "nobody", "--config"],
+                cfg,
+            );
+            assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+            assert!(self.db().exists());
+            assert!(self.key().exists());
+        }
+        fn run(&self, args: &[&str], cfg: &Path) -> Output {
+            Command::new(BIN).args(args).arg(cfg).output().expect("run")
+        }
+        fn run_with_master_key_env(&self, args: &[&str], cfg: &Path, key_b64: &str) -> Output {
+            Command::new(BIN)
+                .args(args)
+                .arg(cfg)
+                .env("SUI_ID_MASTER_KEY", key_b64)
+                .output()
+                .expect("run")
+        }
+        /// Every file under `dir`, with its contents, independent of
+        /// `readdir` order -- `--check` claims to touch nothing, and this
+        /// is what proves it, not just "the same files still exist."
+        fn snapshot(&self) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+            std::fs::read_dir(self.dir.path())
+                .expect("read dir")
+                .filter_map(|e| e.ok())
+                .map(|e| {
+                    let path = e.path();
+                    let body = std::fs::read(&path).expect("read");
+                    (path, body)
+                })
+                .collect()
+        }
+    }
+
+    fn stderr(o: &Output) -> String {
+        String::from_utf8_lossy(&o.stderr).into_owned()
+    }
+    fn stdout(o: &Output) -> String {
+        String::from_utf8_lossy(&o.stdout).into_owned()
+    }
+
+    #[test]
+    fn a_healthy_instance_passes_and_the_directory_is_byte_identical_after() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+        let before = h.snapshot();
+
+        let out = h.run(
+            &["admin", "master-key", "rotate", "--check", "--config"],
+            &cfg,
+        );
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+        assert!(
+            stdout(&out).contains("All checked preconditions passed."),
+            "{}",
+            stdout(&out)
+        );
+
+        assert_eq!(
+            h.snapshot(),
+            before,
+            "--check must create, remove or rename nothing"
+        );
+    }
+
+    #[test]
+    fn a_symlinked_key_file_refuses_and_names_the_link() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+        let real = h.dir.path().join("t.key.real");
+        std::fs::rename(h.key(), &real).expect("move key aside");
+        std::os::unix::fs::symlink(&real, h.key()).expect("symlink");
+
+        let out = h.run(
+            &["admin", "master-key", "rotate", "--check", "--config"],
+            &cfg,
+        );
+        assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
+        let report = stdout(&out);
+        assert!(
+            report.contains(&h.key().display().to_string())
+                && report.contains(&real.display().to_string()),
+            "the report names the link and its target: {report}"
+        );
+    }
+
+    #[test]
+    fn refuses_when_the_key_came_from_the_environment() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+        let key_body = std::fs::read_to_string(h.key()).expect("key");
+        let before = h.snapshot();
+
+        let out = h.run_with_master_key_env(
+            &["admin", "master-key", "rotate", "--check", "--config"],
+            &cfg,
+            key_body.trim(),
+        );
+        assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
+        assert!(
+            stdout(&out).contains("SUI_ID_MASTER_KEY"),
+            "{}",
+            stdout(&out)
+        );
+        assert_eq!(h.snapshot(), before, "--check creates nothing");
+    }
+
+    #[test]
+    fn reports_every_failing_precondition_at_once() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+        let staged = h.dir.path().join("t.key.new");
+        std::fs::write(&staged, "leftover").expect("leftover");
+        let real = h.dir.path().join("t.key.real");
+        std::fs::rename(h.key(), &real).expect("move key aside");
+        std::os::unix::fs::symlink(&real, h.key()).expect("symlink");
+
+        let out = h.run(
+            &["admin", "master-key", "rotate", "--check", "--config"],
+            &cfg,
+        );
+        assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
+        let report = stdout(&out);
+        assert!(report.contains("[FAIL] P3"), "{report}");
+        assert!(report.contains("[FAIL] P4"), "{report}");
+        assert!(
+            report.contains("2 of 4 checked precondition(s) failed"),
+            "{report}"
+        );
+    }
+}
+
 // ---------- RFC 100 stage 0 (2026-11-16): the crash-injection
 // harness's Failpoint adapter, through the real binary ----------
 //
@@ -631,6 +806,56 @@ mod failpoint {
             h.bak_files().is_empty(),
             "no rename happened -- the database was never re-sealed"
         );
+    }
+
+    /// RFC 100 stage 2, P5: a real rotation probes the filesystem first,
+    /// after preconditions pass and before anything else. A failure at
+    /// any of its primitives must refuse before the staged key or the
+    /// `.bak` file ever appear, and the probe file must not be left
+    /// behind under either of its two possible names.
+    const PROBE_POINTS: &[&str] = &[
+        "rotate.probe.create_new",
+        "rotate.probe.write",
+        "rotate.probe.sync_file",
+        "rotate.probe.sync_dir",
+        "rotate.probe.rename",
+        "rotate.probe.sync_dir.after_rename",
+    ];
+
+    #[tokio::test]
+    async fn probe_failure_at_each_primitive_refuses_before_anything_else() {
+        for point in PROBE_POINTS {
+            let h = Home::new();
+            let cfg = h.config();
+            h.create(&cfg).await;
+            let old_key_body = std::fs::read_to_string(h.key()).expect("old key");
+            let spec = format!("{point}:error");
+
+            let out =
+                h.run_with_failpoint(&["admin", "rotate-key", "--yes", "--config"], &cfg, &spec);
+            assert_eq!(out.status.code(), Some(1), "at {point}: {}", stderr(&out));
+            assert!(
+                stderr(&out).contains("does not support"),
+                "at {point}, the refusal names a filesystem limitation: {}",
+                stderr(&out)
+            );
+            assert_eq!(
+                std::fs::read_to_string(h.key()).expect("old key"),
+                old_key_body,
+                "at {point}: the old key file is untouched"
+            );
+            assert!(
+                !h.staged_key().exists(),
+                "at {point}: nothing was staged -- the probe runs first"
+            );
+            assert!(h.bak_files().is_empty(), "at {point}: no rename happened");
+            for probe_name in ["t.key.rotation-probe", "t.key.rotation-probe.2"] {
+                assert!(
+                    !h.dir.path().join(probe_name).exists(),
+                    "at {point}: the probe file must not be left behind"
+                );
+            }
+        }
     }
 }
 

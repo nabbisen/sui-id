@@ -156,6 +156,16 @@ re-sealed. Unset the variable and point `key_file` at a file holding the
 current key before rotating here, or rotate the key wherever the
 deployment system that sets the variable manages it.
 
+**`sui-id admin master-key rotate --check`** reports whether a rotation
+could start, without changing anything: it checks that the current key
+comes from the key file (not `SUI_ID_MASTER_KEY`), that it opens the
+sentinel, that no staged key or workspace is left over from a previous
+attempt, and that the key file is a regular file, not a symlink — then
+exits 0 if all of those pass and 1 if any fail. It does not probe
+whether the filesystem itself supports what rotation needs (that would
+mean writing a file, so it says so instead); a real rotation checks that
+first, before anything else.
+
 A typical run looks like:
 
 ```sh

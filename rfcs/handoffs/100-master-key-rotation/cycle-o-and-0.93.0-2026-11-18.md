@@ -49,7 +49,7 @@ secret are redacted, the rule the runbook kept for exactly this case.
 |---|---|---|
 | **O1** | **Landed 2026-11-19** (`92b3d01`). **RFC 100 stage 1**: the sentinel and the startup key check, with the confirmed upgrade rule | The long pole goes first, as in cycle N. It touches startup and `resolve`, not the command parser |
 | **O2** | **RFC 148**: one command registry, `clap`; closes RFC 107. **O2a landed 2026-11-19** — [`../148-one-command-system/0.93.0-o2a-one-registry-2026-11-19.md`](../148-one-command-system/0.93.0-o2a-one-registry-2026-11-19.md); **O2b landed 2026-11-19** — [`../148-one-command-system/0.93.0-o2b-init-and-a-legible-map-2026-11-19.md`](../148-one-command-system/0.93.0-o2b-init-and-a-legible-map-2026-11-19.md) (`init`, the first run, and O2a's three carried items) | Before stage 2, so `admin rotate-key --check` is written once, on the new parser, not twice |
-| **O3** | **Dispatched 2026-11-19** — [`0.93.0-stage-2-preconditions-and-check-2026-11-19.md`](0.93.0-stage-2-preconditions-and-check-2026-11-19.md). **RFC 100 stage 2**: preconditions, and `--check` | On `clap` |
+| **O3** | **Landed 2026-11-21** — [`0.93.0-stage-2-preconditions-and-check-2026-11-19.md`](0.93.0-stage-2-preconditions-and-check-2026-11-19.md). **RFC 100 stage 2**: preconditions, and `--check` | On `clap` |
 | **O4** | **RFC 100 stage 3**: the journal | |
 | **O5** | **RFC 100 stage 4**: startup recovery | Recovery lands before stage 5's write path, as the stage rules require |
 | **S** | **The account-creation run** (§1) | **Whenever the owner can**, independent of O1–O5. It closes M4-B, and RFC 097's draft starts the same day |

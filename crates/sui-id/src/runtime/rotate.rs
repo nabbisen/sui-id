@@ -12,6 +12,9 @@ use std::path::Path;
 use sui_id_store::crypto::MasterKey;
 use sui_id_store::{Database, StoreError};
 
+#[path = "rotate/preconditions.rs"]
+pub mod preconditions;
+
 /// What [`rotate_key_files`] reports on success: the same per-table
 /// counts `reseal_master_key` already returns.
 pub type RotateReport = sui_id_store::commands::RotationReport;

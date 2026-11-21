@@ -369,8 +369,8 @@ pub(crate) async fn run_admin_issue_recovery_link(
 }
 
 /// `sui-id admin master-key rotate [--generate-new-key | --new-key PATH]
-/// [--yes]`. Mutual exclusion between the two key-source flags is enforced
-/// by clap (`conflicts_with`) before this runs.
+/// [--yes] [--check]`. Mutual exclusion between the two key-source flags
+/// is enforced by clap (`conflicts_with`) before this runs.
 ///
 /// Re-seal every encrypted column in the database under a new 32-byte
 /// XChaCha20-Poly1305 master key. Runs offline: the caller is expected to
@@ -378,21 +378,32 @@ pub(crate) async fn run_admin_issue_recovery_link(
 /// current key file, and only then to invoke this. See the pre-148
 /// `run_admin_rotate_key`'s own doc history for the full step-by-step
 /// durability rationale (RFC 094, RFC 100 stage 0/1) — unchanged here.
+///
+/// RFC 100 stage 2: `--check` runs only `rotate::preconditions::check`
+/// (P1-P4) and reports; it opens no database for writing, prompts for
+/// nothing, and creates, removes or renames no file. A real rotation
+/// runs the identical check after the confirmation prompt, then P5's
+/// filesystem probe, before anything today's sequence does.
 pub(crate) async fn run_admin_rotate_key(
     config_path: &Path,
     policy: PreMigrationBackup,
     generate_new_key: bool,
     new_key: Option<PathBuf>,
     yes: bool,
+    check: bool,
 ) -> Result<()> {
     let _ = generate_new_key; // the default when neither flag is given; no separate branch needed
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
+    let provided_new_key_path = new_key;
+
+    if check {
+        return run_rotate_check(&cfg.storage.key_file, &cfg.storage.db_path);
+    }
+
     // RFC 112 D5: print a summary and ask for confirmation before the
     // database is even opened, so a refusal is the first thing read.
     crate::database::check(&cfg.storage.db_path)?;
-
-    let provided_new_key_path = new_key;
 
     eprintln!(
         "About to rotate the master key for the database at {}.",
@@ -429,45 +440,27 @@ pub(crate) async fn run_admin_rotate_key(
     }
 
     let old_path = cfg.storage.key_file.clone();
-    let staged_path = {
-        let mut p = old_path.clone();
-        let mut new_name = p
-            .file_name()
-            .map(|s| s.to_owned())
-            .unwrap_or_else(|| std::ffi::OsString::from("master.key"));
-        new_name.push(".new");
-        p.set_file_name(new_name);
-        p
-    };
+    let staged_path = crate::rotate::preconditions::staged_path(&old_path);
 
-    if staged_path.exists() {
-        bail!(
-            "refusing to rotate: {} already exists. A previous rotation \
-            may not have completed -- that file may be the only copy of \
-            the master key the database is already sealed under. Check \
-            it against the database (does it open with it as the \
-            key_file?) before removing it and retrying.",
-            staged_path.display()
-        );
+    // RFC 100 stage 2: P1-P4, gathered -- every failing precondition
+    // named, not only the first. Nothing is created, removed or renamed
+    // by this call.
+    let adapter = crate::key_adapter::default_adapter();
+    let (results, resolved) =
+        crate::rotate::preconditions::check(adapter.as_ref(), &old_path, &cfg.storage.db_path);
+    let failures: Vec<&str> = results
+        .iter()
+        .filter_map(|r| r.failure.as_deref())
+        .collect();
+    if !failures.is_empty() {
+        bail!(failures.join("\n\n"));
     }
+    #[allow(clippy::expect_used)] // every precondition passed, so `check` guarantees `Some`
+    let resolved_old = resolved.expect("all preconditions passed, so a key was resolved");
 
-    let resolved_old = crate::keyring::resolve_checked(&cfg.storage.key_file, &cfg.storage.db_path)
-        .context("loading old master key")?;
-
-    if resolved_old.origin == crate::keyring::KeyOrigin::Env {
-        bail!(
-            "refusing to rotate: the current master key came from the \
-            SUI_ID_MASTER_KEY environment variable, not the key file at \
-            {}. Rotation only writes the key *file* -- with the \
-            variable still set, the server would ignore that file on \
-            its next start and keep using the old key, which would no \
-            longer open a database this command had already re-sealed. \
-            Unset SUI_ID_MASTER_KEY and point key_file at a file \
-            holding the current key before rotating here, or rotate \
-            the key in whatever deployment system sets the variable.",
-            cfg.storage.key_file.display()
-        );
-    }
+    // P5: prove the filesystem actually supports what rotation needs,
+    // before anything else -- a temporary probe file, removed either way.
+    crate::rotate::preconditions::probe_filesystem(adapter.as_ref(), &old_path).await?;
 
     let db = crate::database::open(&cfg.storage.db_path, resolved_old.key, policy)?;
     sui_id_store::master_key_check::ensure_sentinel_written(&db, db.key())
@@ -489,18 +482,9 @@ pub(crate) async fn run_admin_rotate_key(
 
     let now = chrono::Utc::now();
     let stamp = now.format("%Y-%m-%dT%H-%M-%SZ").to_string();
-    let bak_path = {
-        let mut p = old_path.clone();
-        let mut new_name = p
-            .file_name()
-            .map(|s| s.to_owned())
-            .unwrap_or_else(|| std::ffi::OsString::from("master.key"));
-        new_name.push(format!(".bak.{stamp}"));
-        p.set_file_name(new_name);
-        p
-    };
+    let bak_path =
+        crate::rotate::preconditions::sibling_with_suffix(&old_path, &format!(".bak.{stamp}"));
 
-    let adapter = crate::key_adapter::default_adapter();
     let report = match crate::rotate::rotate_key_files(
         adapter.as_ref(),
         &db,
@@ -571,6 +555,50 @@ pub(crate) async fn run_admin_rotate_key(
         eprintln!("your audit trail needs to be complete.");
     }
     Ok(())
+}
+
+/// `sui-id admin master-key rotate --check`. RFC 100 stage 2 §2: P1-P4
+/// only, read-only, creating nothing -- P5 (the filesystem probe) needs
+/// a write, so it is not checked here, and this says so. Exits 0 if
+/// every precondition passed, 1 otherwise, bypassing the generic
+/// `Error: {err:?}` wrapper so the report is the only thing printed.
+fn run_rotate_check(key_file: &Path, db_path: &Path) -> Result<()> {
+    let adapter = crate::key_adapter::default_adapter();
+    let (results, _resolved) =
+        crate::rotate::preconditions::check(adapter.as_ref(), key_file, db_path);
+
+    println!(
+        "Rotation precondition check for the database at {}.",
+        db_path.display()
+    );
+    println!();
+    let all_passed = results.iter().all(|r| r.passed());
+    for r in &results {
+        let mark = if r.passed() { "ok" } else { "FAIL" };
+        println!("  [{mark}] {:<2}  {}", r.id, r.label);
+        if let Some(failure) = &r.failure {
+            for line in failure.lines() {
+                println!("         {line}");
+            }
+        }
+    }
+    println!();
+    println!(
+        "not checked here: whether this filesystem supports the operations rotation needs; \
+         a rotation probes that first, with a temporary file it removes."
+    );
+    println!();
+    if all_passed {
+        println!("All checked preconditions passed.");
+        Ok(())
+    } else {
+        let failed = results.iter().filter(|r| !r.passed()).count();
+        println!(
+            "{failed} of {} checked precondition(s) failed. Rotation would refuse.",
+            results.len()
+        );
+        std::process::exit(1);
+    }
 }
 
 /// `sui-id setup --admin-username NAME [--admin-email EMAIL]

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`--production` for the production template), and never overwrites a
   file; `sui-id` run in a terminal with no configuration offers to create
   one.
+- **`sui-id admin master-key rotate --check` reports whether a rotation
+  could start, and changes nothing.**
 
 ### Changed
 
@@ -31,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sign-in**; a missing key file over existing data is refused instead
   of being silently replaced by a new key, which would have made that
   data unreadable.
+- **Rotation refuses a symlinked key file, and checks that the filesystem
+  supports what it needs before it starts.**
 
 ## [0.92.0] — 2026-11-18
 
