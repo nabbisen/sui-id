@@ -1,9 +1,8 @@
 # RFC 096-B1 — completion assessment
 
-> ## Whose turn it is: **the owner's.**
-> RFC 096's closure rule names who accepts this evidence. This document
-> **recommends** acceptance; it does not grant it. Acceptance closes 096-B1, and with it ROADMAP
-> milestone **M4-B**. RFC 097 (M5) then starts.
+> ## Accepted 2026-11-23
+> `@nabbisen`: *"Accept 096-B1 (Recommended)"*. 096-B1 is closed, and with
+> it ROADMAP milestone **M4-B**. RFC 097 (M5) starts.
 
 **Written.** 2026-11-22, by the architect.
 
