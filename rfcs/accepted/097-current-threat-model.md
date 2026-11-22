@@ -1,10 +1,13 @@
 # RFC 097 — Current Threat Model and Security-Assurance Baseline
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-23, by `@nabbisen`: *"Your recommendation is accepted."* That answered the architect's [method draft](../handoffs/097-threat-model/method-2026-11-23.md), §7, and accepts all three of its points: the method, the owner as security reviewer, and stage 1 in cycle P.
+**Approved by.** `@nabbisen`, 2026-11-23: *"Your recommendation is accepted."*
 **Security review.** Required
+**Independent design review.** By `@nabbisen`, who did not author this RFC or its [method](../handoffs/097-threat-model/method-2026-11-23.md). His review is recorded as that acceptance of the method draft's §7, with no separate findings document. The method's own stages put each boundary's evidence to review as it is built.
 **Design prerequisites.** RFC 093 (M1a **and** M1b), RFC 094 (M2a **and** M2b), RFC 095, and RFC 096 (096-A **and** 096-B) Implemented; RFC 098 authority decision Accepted. Stage names are load-bearing after the 2026-07-28 restructure: a partially converted M2a or a validation-only 096-A does not satisfy this prerequisite, because the threat model must describe finished behaviour.
 **Implementation prerequisites.** This RFC Accepted; verified behaviour and evidence available for every stage named above.
-**Master-key boundary.** Offline master-key rotation is designed in [RFC 100](../accepted/100-master-key-rotation-recovery.md), not RFC 094. If RFC 100 is not Implemented when this baseline is drafted, the threat model must record master-key rotation as a **manual, not-crash-safe operator procedure** with its interruption modes as explicit residual risk, rather than omitting the boundary or implying it is covered.
+**Master-key boundary.** Offline master-key rotation is designed in [RFC 100](100-master-key-rotation-recovery.md), not RFC 094. If RFC 100 is not Implemented when this baseline is drafted, the threat model must record master-key rotation as a **manual, not-crash-safe operator procedure** with its interruption modes as explicit residual risk, rather than omitting the boundary or implying it is covered.
 **Closure prerequisites.** Every shipped external trust boundary and material cross-boundary attack has an owner, control/evidence link, failure/rollback analysis, and independently accepted residual risk. **Consolidated 2026-10-06 with `ROADMAP.md`'s M5 row**, which required that **authoritative documents are identified, the mdBook and integrity gates pass, and public claims match code** — the documentation half of M5, which belongs to RFC 098. **RFC 098 is closed in `done/` and is deliberately not edited**; its clauses are recorded here so M5 has one place to be read from, and the ROADMAP row points at both.
 **Tracks.** ROADMAP M5 — Threat-model reconciliation.
 **Handoff.** [`../handoffs/097-threat-model/README.md`](../handoffs/097-threat-model/README.md)
@@ -72,5 +75,5 @@ It also proposes:
 
 **Master-key rotation** is recorded as this RFC requires while RFC 100 is
 part-built: a manual, not-crash-safe procedure, with the stage 1–4
-protections recorded as protected. These are proposals; the RFC stays
-*Proposed* until accepted.
+protections recorded as protected. **Accepted 2026-11-23**, with that
+method.

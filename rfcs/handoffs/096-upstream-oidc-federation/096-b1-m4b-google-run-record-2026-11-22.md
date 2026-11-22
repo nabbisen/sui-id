@@ -105,4 +105,4 @@ which stage 14 also used, is a guess, not a finding.
 - The instance was deleted, with its database, key, logs and the
   secret's file.
 - The build clone `../sui-id-stage14` is kept; it holds no secret.
-- **The owner deletes the Google OAuth client.** The architect cannot.
+- **The Google OAuth client is deleted**, by the owner, on 2026-11-23.

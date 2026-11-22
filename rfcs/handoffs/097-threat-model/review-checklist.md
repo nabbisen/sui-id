@@ -1,6 +1,6 @@
 # RFC 097 security-review checklist
 
-**Governing RFC:** [RFC 097](../../proposed/097-current-threat-model.md)
+**Governing RFC:** [RFC 097](../../accepted/097-current-threat-model.md)
 
 ## 1 — Inventory before analysis
 

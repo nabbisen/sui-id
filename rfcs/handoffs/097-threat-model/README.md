@@ -1,10 +1,11 @@
 # RFC 097 handoff — current threat model baseline
 
-**Governing RFC:** [RFC 097](../../proposed/097-current-threat-model.md) — Proposed
+**Governing RFC:** [RFC 097](../../accepted/097-current-threat-model.md) — **Accepted 2026-11-23** (`@nabbisen`: *"Your recommendation is accepted."*), with the [method](./method-2026-11-23.md)
 **Milestone:** M5
 **Audience:** security reviewer and documentation owner
 **Status:** Planning companion; inherits the governing RFC's current status —
-Proposed.
+**Accepted 2026-11-23.** Stage 1 (the contract and its gate, with the
+inventory) is scheduled for cycle P.
 
 ## Entry gate
 
