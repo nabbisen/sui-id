@@ -16,7 +16,7 @@ use chrono::Duration;
 use sui_id_shared::ids::{SessionId, UserId};
 use sui_id_store::Database;
 use sui_id_store::models::{AuditLogRow, SessionRow};
-use sui_id_store::repos::{audit, credentials, sessions, users};
+use sui_id_store::repos::{audit, credentials, federation_link, sessions, users};
 
 const SESSION_LIFETIME_HOURS: i64 = 12;
 
@@ -168,6 +168,24 @@ pub async fn login_with_mfa(
     if user.is_disabled || user.is_deleted {
         let _ = verify_password(password, DUMMY_PHC).await;
         record_login_failure(db, clock, username, "user disabled or deleted").await;
+        return Err(CoreError::InvalidCredentials);
+    }
+
+    // RFC 103 T10 (`0.93.0` O7 §0, defence in depth): a user with a
+    // federation link signs in through the upstream, never with a local
+    // password -- the same rule `step_up::first_factor_proof` already
+    // applies, "whatever `source` says" (F04 stores such a user with
+    // `source = local`). Checked here too, not only at recovery-link
+    // issue and completion, because the only way such a user could hold
+    // a password at all was the recovery-link defect those two checks
+    // close -- this is a backstop for anything that defect already
+    // produced, not the primary fix.
+    if !federation_link::list_for_user(db, user.id)
+        .await?
+        .is_empty()
+    {
+        let _ = verify_password(password, DUMMY_PHC).await;
+        record_login_failure(db, clock, username, "federated account").await;
         return Err(CoreError::InvalidCredentials);
     }
 
@@ -484,3 +502,7 @@ mod lockout_tests;
 #[cfg(test)]
 #[path = "session/session_limit_tests.rs"]
 mod session_limit_tests;
+
+#[cfg(test)]
+#[path = "session/tests_federated_login.rs"]
+mod tests_federated_login;

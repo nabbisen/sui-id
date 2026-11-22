@@ -29,6 +29,29 @@ custom scopes kept. **The RFC was accepted 2026-11-15.**
   - `me_security/security.rs`'s `page_get` is dead (no route reaches it):
     delete it when the `/me` pages are rebuilt.
 
+- **From the M4-B Google run (2026-11-22)**
+  ([record](../096-upstream-oidc-federation/096-b1-m4b-google-run-record-2026-11-22.md)):
+  - **the footer is noise on every page.** `@nabbisen`: *"there is
+    improvement around common footer which always shows static sentences
+    and color theme selector. They can be noise."* Asked when, he chose:
+    *"Cycle P, with the chrome redesign (Recommended)"*.
+    `sui-id-web/src/layout.rs:270-304` carries:
+    - a tagline;
+    - three non-interactive accessibility self-claims;
+    - the theme toggle;
+    - the version.
+
+    Design it with the sidebar and the account menu, once. The likely
+    shape:
+    - keep the version;
+    - move the theme selector into the account menu beside Language;
+    - drop the tagline and the self-claims, which belong in the docs if
+      anywhere;
+  - **`fed_cause_dns_denied` embeds the deny table's English reason**,
+    sometimes long (*"IPv4-compatible Address -- RFC 4291 S2.5.5.1 …"*),
+    into Japanese and Chinese pages. Give each denied class a short
+    localized label.
+
 ## The mockups
 
 Open each file in a browser, straight from disk. They are static: no

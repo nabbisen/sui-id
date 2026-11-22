@@ -496,6 +496,10 @@ pub struct ConfirmUnlinkFederationData {
     /// RFC 144 (Refresh, §4): the signed-in administrator's own name,
     /// for the account menu — distinct from `username` above.
     pub admin_username: String,
+    /// `0.93.0` O7 §1: every other way this user can sign in, besides
+    /// the link about to be removed — decides whether the page names
+    /// what remains or states plainly that nothing does.
+    pub methods: sui_id_store::repos::users::SignInMethods,
 }
 
 pub fn render_confirm_unlink_federation(
@@ -506,10 +510,35 @@ pub fn render_confirm_unlink_federation(
     render(move || {
         let t = lang.strings();
         let flash = data.flash;
-        let impact = t
+        let lead = t
             .confirm_unlink_federation_impact
             .replace("{user}", &data.username)
             .replace("{provider}", &data.provider_display_name);
+        // `0.93.0` O7 §2: name what remains, or say plainly that
+        // nothing does — never the old unconditional "their other
+        // sign-in methods remain", which was false for a
+        // federation-only user.
+        let methods = data.methods;
+        let consequence = if methods.any() {
+            let mut names = Vec::new();
+            if methods.password {
+                names.push(t.sign_in_method_password.to_owned());
+            }
+            if methods.passkeys {
+                names.push(t.sign_in_method_passkey.to_owned());
+            }
+            if methods.other_links {
+                names.push(t.sign_in_method_other_federation.to_owned());
+            }
+            if methods.directory {
+                names.push(t.sign_in_method_directory.to_owned());
+            }
+            (t.confirm_unlink_federation_methods_remain)(&(t.join_sign_in_methods)(&names))
+        } else {
+            t.confirm_unlink_federation_no_methods_remain
+                .replace("{user}", &data.username)
+        };
+        let impact = format!("{lead} {consequence}");
         let identity = format!("{} — {}", data.username, data.provider_display_name);
         let user_url = format!("/admin/users/{}", data.user_id);
         // `0.93.0` O6 §4 item 4: the sessions consequence, with its
@@ -548,6 +577,31 @@ pub fn render_confirm_unlink_federation(
             },
             lang,
         );
+        // `0.93.0` O7 §2: when nothing else lets this user sign in,
+        // offer the follow-up actions the owner chose -- each a link to
+        // its own existing confirm page, nothing a POST here. Shown
+        // only in that case: an account that still has a way in needs
+        // no such offer.
+        let offer = (!methods.any()).then(|| {
+            let disable_url = format!("/admin/users/{}/disable-confirm", data.user_id);
+            let delete_url = format!("/admin/users/{}/delete-confirm", data.user_id);
+            let recovery_url = format!("/admin/users/{}/recovery-link-confirm", data.user_id);
+            view! {
+                <h2>{t.confirm_unlink_federation_offer_heading}</h2>
+                <p>
+                    <a href=disable_url>{t.confirm_unlink_federation_offer_disable_link}</a>
+                    {t.confirm_unlink_federation_offer_disable_text}
+                </p>
+                <p>
+                    <a href=delete_url>{t.confirm_unlink_federation_offer_delete_link}</a>
+                    {t.confirm_unlink_federation_offer_delete_text}
+                </p>
+                <p>
+                    <a href=recovery_url>{t.confirm_unlink_federation_offer_recovery_link_link}</a>
+                    {t.confirm_unlink_federation_offer_recovery_link_text}
+                </p>
+            }
+        });
         view! {
             <Shell
                 title=t.confirm_unlink_federation_title.to_string()
@@ -559,6 +613,7 @@ pub fn render_confirm_unlink_federation(
             >
                 {flash_banner(flash)}
                 {body}
+                {offer}
             </Shell>
         }
     })

@@ -889,6 +889,7 @@ pub static STRINGS_JA: Strings = Strings {
     recovery_refused_target_self: "自分自身の復旧リンクは発行できません。セキュリティ設定でパスワードを変更するか、パスワードをお忘れの場合のページを使ってください。",
     recovery_refused_target_admin: "管理者アカウントは管理画面から復旧できません。ホスト上で運用担当者に sui-id admin issue-recovery-link を実行してもらってください。",
     recovery_refused_target_non_local: "このアカウントはディレクトリまたは外部プロバイダー経由でサインインするため、パスワードはここでは管理されません。",
+    recovery_refused_target_federated: "このアカウントはフェデレーションプロバイダーにリンクされており、ローカルパスワードではなくそのプロバイダー経由でサインインします。先にリンクを解除してから、解除後に回復リンクを発行してください。",
     recovery_refused_target_disabled: "このユーザーは無効化されています。先にアカウントを有効化してください。",
     recovery_refused_target_deleted: "このユーザーは削除されています。",
     recovery_refused_throttled: "1 時間に発行できる復旧リンクの上限に達しました。しばらくしてからもう一度お試しください。",
@@ -1044,10 +1045,26 @@ pub static STRINGS_JA: Strings = Strings {
     user_detail_federation_unlink_button: "連携解除",
     user_detail_federation_empty: "連携されたフェデレーションサインインはありません。",
     confirm_unlink_federation_title: "このフェデレーションサインインを解除",
-    confirm_unlink_federation_impact: "{user} は {provider} 経由でサインインできなくなります。アカウントと他のサインイン方法は残ります。このリリースには再連携の手段がないため、管理画面から連携を元に戻すことはできません。",
+    confirm_unlink_federation_impact: "{user} は {provider} 経由でサインインできなくなります。このリリースには再連携の手段がないため、管理画面から連携を元に戻すことはできません。",
     confirm_unlink_federation_sessions_note: "すでに開いているセッションと、アプリケーションに発行済みのトークンは有効なままです — 連携解除ではこれらは終了しません。終了するには、このユーザーのページでアカウントを無効化してください。",
     confirm_unlink_federation_sessions_link: "このユーザーのページへ",
     fed_err_link_not_found: "この連携は既に存在しません。ページを再読み込みしてください。",
+    sign_in_method_password: "パスワード",
+    sign_in_method_passkey: "パスキー",
+    sign_in_method_other_federation: "別のフェデレーションプロバイダー",
+    sign_in_method_directory: "組織のディレクトリ",
+    join_sign_in_methods: |methods| methods.join("、"),
+    confirm_unlink_federation_methods_remain: |methods| {
+        format!("アカウントは残り、{methods}でサインインできます。")
+    },
+    confirm_unlink_federation_no_methods_remain: "{user} には他のサインイン方法がありません。この操作の後、まったくサインインできなくなります。再度アクセスできるようにするには、本人のページから回復リンクを発行してください。",
+    confirm_unlink_federation_offer_heading: "次にできること",
+    confirm_unlink_federation_offer_disable_link: "このユーザーを無効化",
+    confirm_unlink_federation_offer_disable_text: "：開いているセッションとアプリケーションに発行済みのトークンを終了します。",
+    confirm_unlink_federation_offer_delete_link: "このユーザーを削除",
+    confirm_unlink_federation_offer_delete_text: "：アカウントとその個人データを削除します。",
+    confirm_unlink_federation_offer_recovery_link_link: "回復リンクを発行",
+    confirm_unlink_federation_offer_recovery_link_text: "：連携を解除した後に、本人が選ぶパスワードで再度アクセスできるようにします。連携が残っている間は回復リンクを発行できません。",
 };
 
 // ── Formatters ───────────────────────────────────────────────────────────────

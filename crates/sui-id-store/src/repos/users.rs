@@ -680,20 +680,34 @@ pub async fn has_mfa(db: &Database, user_id: &UserId) -> StoreResult<bool> {
 }
 
 /// RFC 103 D13: whether the user may receive a local password — active,
-/// not deleted, and `source = local` — read inside the caller's
-/// transaction. A missing user is `NotFound`.
+/// not deleted, `source = local`, and **no `federation_link` row** —
+/// read inside the caller's transaction. A missing user is `NotFound`.
+///
+/// The `federation_link` check (`0.93.0` O7 §0, RFC 103 T10) is not
+/// redundant with `source = local`: RFC 096-B1 stage 7's F04 stores a
+/// provisioned federated user with `source = local`, so a user still
+/// linked to an upstream would otherwise pass this check and receive a
+/// local password that bypasses it entirely. This function has exactly
+/// one caller (`commands::consume_and_reset_password`, U10/D13's own
+/// completion recheck), which is why the federation check lives here
+/// rather than in a sibling function.
 pub fn is_active_local_within_tx(conn: &rusqlite::Connection, id: UserId) -> StoreResult<bool> {
-    let (disabled, deleted, source): (i64, i64, String) = conn
+    let (disabled, deleted, source, has_federation_link): (i64, i64, String, i64) = conn
         .query_row(
-            "SELECT is_disabled, is_deleted, source FROM users WHERE id = ?1",
+            "SELECT is_disabled, is_deleted, source, \
+                    EXISTS (SELECT 1 FROM federation_link WHERE federation_link.user_id = users.id) \
+             FROM users WHERE id = ?1",
             [id.to_string()],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
         })?;
-    Ok(disabled == 0 && deleted == 0 && source == crate::models::UserSource::Local.as_str())
+    Ok(disabled == 0
+        && deleted == 0
+        && source == crate::models::UserSource::Local.as_str()
+        && has_federation_link == 0)
 }
 
 /// Same as [`is_active_local_within_tx`], without the `source = local`
@@ -713,6 +727,72 @@ pub fn is_active_within_tx(conn: &rusqlite::Connection, id: UserId) -> StoreResu
             other => StoreError::from(other),
         })?;
     Ok(disabled == 0 && deleted == 0)
+}
+
+/// Every other way `user_id` can sign in, besides the federation link
+/// about to be removed (`0.93.0` O7 §1). The unlink confirm page needs
+/// this to state its consequence truthfully: unlinking a federation-only
+/// user with none of these leaves them unable to sign in at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SignInMethods {
+    /// A `credentials` row — a local password.
+    pub password: bool,
+    /// A `user_webauthn_credentials` row — a passkey, which signs in by
+    /// itself.
+    pub passkeys: bool,
+    /// A `federation_link` to a provider other than the one being
+    /// unlinked.
+    pub other_links: bool,
+    /// `source` is not local (an LDAP user signs in through the
+    /// directory).
+    pub directory: bool,
+}
+
+impl SignInMethods {
+    /// True if at least one of the four holds.
+    pub fn any(&self) -> bool {
+        self.password || self.passkeys || self.other_links || self.directory
+    }
+}
+
+/// Read [`SignInMethods`] for `user_id`, excluding `except_provider` from
+/// the federation-link count — the provider about to be unlinked, which
+/// no longer binds the account once the unlink completes. `NotFound` if
+/// the user does not exist.
+pub async fn other_sign_in_methods(
+    db: &Database,
+    user_id: UserId,
+    except_provider: sui_id_shared::ids::FederationProviderId,
+) -> StoreResult<SignInMethods> {
+    let uid = user_id.to_string();
+    let except = except_provider.to_string();
+    db.with_read(move |conn| {
+        conn.prepare(
+            "SELECT \
+                EXISTS (SELECT 1 FROM credentials WHERE user_id = ?1), \
+                EXISTS (SELECT 1 FROM user_webauthn_credentials WHERE user_id = ?1), \
+                EXISTS (SELECT 1 FROM federation_link WHERE user_id = ?1 AND provider_id != ?2), \
+                (SELECT source FROM users WHERE id = ?1) \
+             FROM users WHERE id = ?1",
+        )?
+        .query_row(rusqlite::params![uid, except], |row| {
+            let password: i64 = row.get(0)?;
+            let passkeys: i64 = row.get(1)?;
+            let other_links: i64 = row.get(2)?;
+            let source: String = row.get(3)?;
+            Ok(SignInMethods {
+                password: password != 0,
+                passkeys: passkeys != 0,
+                other_links: other_links != 0,
+                directory: source != crate::models::UserSource::Local.as_str(),
+            })
+        })
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })
+    })
+    .await
 }
 
 /// Change a user's role (RFC 071), inside a caller-owned transaction
@@ -772,6 +852,14 @@ pub struct RecoveryTarget {
     /// kind and in any state (RFC 115 D11). Read in the same statement as the
     /// rest; with `never_activated` it decides whether a link is provisioning.
     pub has_any_token: bool,
+    /// The account has at least one `federation_link` row (RFC 103 T10,
+    /// `0.93.0` O7 §0). Read in the same statement, never from `source`:
+    /// RFC 096-B1 stage 7's F04 stores a provisioned federated user with
+    /// `source = local` (the legacy path it replaced used `ldap`), so
+    /// `source` alone cannot distinguish a federated account any more --
+    /// the same reason `step_up::first_factor_proof` reads the link
+    /// first.
+    pub has_federation_link: bool,
 }
 
 /// Read the target's role, source and state, including a deleted user (which
@@ -785,7 +873,8 @@ pub fn recovery_target_within_tx(
         "SELECT role, is_admin, source, is_disabled, is_deleted, \
                 (NOT EXISTS (SELECT 1 FROM credentials WHERE credentials.user_id = users.id) \
                  AND last_login_at IS NULL), \
-                EXISTS (SELECT 1 FROM password_reset_tokens WHERE password_reset_tokens.user_id = users.id) \
+                EXISTS (SELECT 1 FROM password_reset_tokens WHERE password_reset_tokens.user_id = users.id), \
+                EXISTS (SELECT 1 FROM federation_link WHERE federation_link.user_id = users.id) \
          FROM users WHERE id = ?1",
         [user_id.to_string()],
         |row| {
@@ -796,6 +885,7 @@ pub fn recovery_target_within_tx(
             let is_deleted: i64 = row.get(4)?;
             let never_activated: i64 = row.get(5)?;
             let has_any_token: i64 = row.get(6)?;
+            let has_federation_link: i64 = row.get(7)?;
             Ok(RecoveryTarget {
                 role: role_str
                     .as_deref()
@@ -812,6 +902,7 @@ pub fn recovery_target_within_tx(
                 is_deleted: is_deleted != 0,
                 never_activated: never_activated != 0,
                 has_any_token: has_any_token != 0,
+                has_federation_link: has_federation_link != 0,
             })
         },
     )
@@ -1034,3 +1125,7 @@ pub fn record_federated_login_within_tx(
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests_rfc005;
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod tests_o7_sign_in_methods;

@@ -898,6 +898,7 @@ pub static STRINGS_EN: Strings = Strings {
     recovery_refused_target_self: "You cannot issue a recovery link for your own account. Change your password on your security page, or use the forgot-password page.",
     recovery_refused_target_admin: "Administrators cannot be recovered from the admin panel. Ask the operator to run sui-id admin issue-recovery-link on the host.",
     recovery_refused_target_non_local: "This account signs in through a directory or an upstream provider, so its password is not managed here.",
+    recovery_refused_target_federated: "This account is linked to a federation provider and signs in through it, not a local password. Unlink it first, or issue a recovery link after it is unlinked.",
     recovery_refused_target_disabled: "This user is disabled. Enable the account first.",
     recovery_refused_target_deleted: "This user has been deleted.",
     recovery_refused_throttled: "You have issued the most recovery links allowed in one hour. Try again later.",
@@ -1060,13 +1061,38 @@ pub static STRINGS_EN: Strings = Strings {
     user_detail_federation_empty: "No federated sign-in methods linked.",
     confirm_unlink_federation_title: "Unlink this federated sign-in",
     confirm_unlink_federation_impact: "{user} will no longer be able to sign in through \
-         {provider}; their account and their other sign-in methods remain. The link cannot \
-         be made again from the admin UI: this release has no way to re-link a user.",
+         {provider}. The link cannot be made again from the admin UI: this release has no \
+         way to re-link a user.",
     confirm_unlink_federation_sessions_note: "Sessions already open, and tokens already \
          issued to applications, stay valid — unlinking does not end them. To end them, \
          disable the account on this user's page.",
     confirm_unlink_federation_sessions_link: "Go to this user's page",
     fed_err_link_not_found: "This link no longer exists; reload the page.",
+    sign_in_method_password: "their password",
+    sign_in_method_passkey: "a passkey",
+    sign_in_method_other_federation: "another federation provider",
+    sign_in_method_directory: "their organization's directory",
+    join_sign_in_methods: |methods| match methods {
+        [] => String::new(),
+        [a] => a.clone(),
+        [a, b] => format!("{a} and {b}"),
+        [init @ .., last] => format!("{}, and {last}", init.join(", ")),
+    },
+    confirm_unlink_federation_methods_remain: |methods| {
+        format!("Their account remains, and they can still sign in with {methods}.")
+    },
+    confirm_unlink_federation_no_methods_remain: "{user} has no other way to sign in. After \
+         this, they cannot sign in at all. To give them access again, issue a recovery link \
+         from their page.",
+    confirm_unlink_federation_offer_heading: "What you can do next",
+    confirm_unlink_federation_offer_disable_link: "Disable this user",
+    confirm_unlink_federation_offer_disable_text: ": ends open sessions and the tokens \
+         already issued to applications.",
+    confirm_unlink_federation_offer_delete_link: "Delete this user",
+    confirm_unlink_federation_offer_delete_text: ": removes the account and its personal data.",
+    confirm_unlink_federation_offer_recovery_link_link: "Issue a recovery link",
+    confirm_unlink_federation_offer_recovery_link_text: ": after unlinking, gives them access \
+         again, with a password they choose. While the link exists, a recovery link is refused.",
 };
 
 // ── Formatters ───────────────────────────────────────────────────────────────

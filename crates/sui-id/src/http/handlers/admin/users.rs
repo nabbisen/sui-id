@@ -536,6 +536,7 @@ async fn recovery_refused_page(
         | RecoveryRefusedKind::TargetIsAdmin
         | RecoveryRefusedKind::NeedsSecondFactor => StatusCode::FORBIDDEN,
         RecoveryRefusedKind::TargetNonLocal
+        | RecoveryRefusedKind::TargetFederated
         | RecoveryRefusedKind::TargetDisabled
         | RecoveryRefusedKind::TargetDeleted => StatusCode::CONFLICT,
         RecoveryRefusedKind::Throttled => StatusCode::TOO_MANY_REQUESTS,
@@ -563,6 +564,7 @@ fn refused_kind(why: sui_id_store::errors::RecoveryRefusal) -> RecoveryRefusedKi
         Why::TargetIsSelf => RecoveryRefusedKind::TargetIsSelf,
         Why::TargetIsAdmin => RecoveryRefusedKind::TargetIsAdmin,
         Why::TargetNonLocal => RecoveryRefusedKind::TargetNonLocal,
+        Why::TargetFederated => RecoveryRefusedKind::TargetFederated,
         Why::TargetDisabled => RecoveryRefusedKind::TargetDisabled,
         Why::TargetDeleted => RecoveryRefusedKind::TargetDeleted,
         Why::Throttled => RecoveryRefusedKind::Throttled,
@@ -886,6 +888,11 @@ pub async fn users_unlink_federation_confirm_get(
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let provider_display_name = provider_display_name_or_default(&app, provider).await;
+    // `0.93.0` O7 §1: every other way this user can sign in, besides the
+    // link about to be removed, decides what the page says.
+    let methods = sui_id_store::repos::users::other_sign_in_methods(&app.db, target, provider)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = crate::csrf::ensure_token(&jar);
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let data = ConfirmUnlinkFederationData {
@@ -896,6 +903,7 @@ pub async fn users_unlink_federation_confirm_get(
         csrf_token: token.clone(),
         flash: None,
         admin_username,
+        methods,
     };
     let resp = Html(render_confirm_unlink_federation(
         data,
@@ -943,6 +951,10 @@ pub async fn users_unlink_federation_post(
                 .await
                 .map_err(|e| HttpError::html(CoreError::from(e)))?;
             let provider_display_name = provider_display_name_or_default(&app, provider).await;
+            let methods =
+                sui_id_store::repos::users::other_sign_in_methods(&app.db, target, provider)
+                    .await
+                    .map_err(|e| HttpError::html(CoreError::from(e)))?;
             let token = crate::csrf::ensure_token(&jar);
             let data = ConfirmUnlinkFederationData {
                 user_id,
@@ -954,6 +966,7 @@ pub async fn users_unlink_federation_post(
                     kind: FlashKind::Error,
                     text: unlink_error_text(e, lang.strings()).into(),
                 }),
+                methods,
                 admin_username,
             };
             let resp = Html(render_confirm_unlink_federation(

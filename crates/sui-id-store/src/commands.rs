@@ -1594,6 +1594,13 @@ fn check_recovery_target(
     if !t.source.is_local() {
         return Err(refuse(Why::TargetNonLocal));
     }
+    // RFC 103 T10 (`0.93.0` O7 §0): a user with a `federation_link` is
+    // federated, whatever `source` says -- F04 stores such a user with
+    // `source = local` (`handlers/federation.rs`), so the check above
+    // alone lets them through. Read the link, never `source`, for this.
+    if t.has_federation_link {
+        return Err(refuse(Why::TargetFederated));
+    }
     Ok(t)
 }
 

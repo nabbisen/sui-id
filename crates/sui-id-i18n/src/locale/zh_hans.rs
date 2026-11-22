@@ -889,6 +889,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     recovery_refused_target_self: "不能为自己的账号签发恢复链接。请在安全页面修改密码，或使用“忘记密码”页面。",
     recovery_refused_target_admin: "无法通过管理面板恢复管理员账号。请让运维人员在主机上运行 sui-id admin issue-recovery-link。",
     recovery_refused_target_non_local: "此账号通过目录服务或上游提供方登录，其密码不在此处管理。",
+    recovery_refused_target_federated: "此账号已关联联合身份提供方，通过该提供方登录，而非本地密码。请先取消关联，再在取消关联后签发恢复链接。",
     recovery_refused_target_disabled: "此用户已被停用。请先启用该账号。",
     recovery_refused_target_deleted: "此用户已被删除。",
     recovery_refused_throttled: "您在一小时内签发的恢复链接已达上限。请稍后再试。",
@@ -1011,10 +1012,31 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     user_detail_federation_unlink_button: "取消关联",
     user_detail_federation_empty: "尚未关联任何联合身份登录方式。",
     confirm_unlink_federation_title: "取消此联合身份登录关联",
-    confirm_unlink_federation_impact: "{user} 将无法再通过 {provider} 登录；其账户及其他登录方式仍会保留。此版本无法重新关联，因此无法在管理界面中恢复此关联。",
+    confirm_unlink_federation_impact: "{user} 将无法再通过 {provider} 登录。此版本无法重新关联，因此无法在管理界面中恢复此关联。",
     confirm_unlink_federation_sessions_note: "已打开的会话和已向应用签发的令牌仍然有效 —— 取消关联不会结束它们。如需结束，请在此用户的页面上停用该账户。",
     confirm_unlink_federation_sessions_link: "前往此用户的页面",
     fed_err_link_not_found: "此关联已不存在，请重新加载页面。",
+    sign_in_method_password: "密码",
+    sign_in_method_passkey: "通行密钥",
+    sign_in_method_other_federation: "另一个联合身份提供方",
+    sign_in_method_directory: "所在组织的目录服务",
+    join_sign_in_methods: |methods| match methods {
+        [] => String::new(),
+        [a] => a.clone(),
+        [a, b] => format!("{a}和{b}"),
+        [init @ .., last] => format!("{}和{last}", init.join("、")),
+    },
+    confirm_unlink_federation_methods_remain: |methods| {
+        format!("其账户仍会保留，仍可使用{methods}登录。")
+    },
+    confirm_unlink_federation_no_methods_remain: "{user} 没有其他登录方式。此操作之后，将完全无法登录。如需恢复访问，请在该用户的页面签发恢复链接。",
+    confirm_unlink_federation_offer_heading: "接下来您可以",
+    confirm_unlink_federation_offer_disable_link: "停用此用户",
+    confirm_unlink_federation_offer_disable_text: "：结束已打开的会话和已向应用签发的令牌。",
+    confirm_unlink_federation_offer_delete_link: "删除此用户",
+    confirm_unlink_federation_offer_delete_text: "：删除账户及其个人数据。",
+    confirm_unlink_federation_offer_recovery_link_link: "签发恢复链接",
+    confirm_unlink_federation_offer_recovery_link_text: "：解除关联后，让对方以自选密码重新获得访问权限。关联存在期间，无法签发恢复链接。",
 };
 
 // ── Formatters ───────────────────────────────────────────────────────────────

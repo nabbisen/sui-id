@@ -95,6 +95,8 @@ pub enum RecoveryRefusedKind {
     TargetIsSelf,
     TargetIsAdmin,
     TargetNonLocal,
+    /// RFC 103 T10 (`0.93.0` O7 §0): the target has a federation link.
+    TargetFederated,
     TargetDisabled,
     TargetDeleted,
     Throttled,
@@ -126,6 +128,7 @@ pub fn render_recovery_link_refused(
             RecoveryRefusedKind::TargetIsSelf => t.recovery_refused_target_self,
             RecoveryRefusedKind::TargetIsAdmin => t.recovery_refused_target_admin,
             RecoveryRefusedKind::TargetNonLocal => t.recovery_refused_target_non_local,
+            RecoveryRefusedKind::TargetFederated => t.recovery_refused_target_federated,
             RecoveryRefusedKind::TargetDisabled => t.recovery_refused_target_disabled,
             RecoveryRefusedKind::TargetDeleted => t.recovery_refused_target_deleted,
             RecoveryRefusedKind::Throttled => t.recovery_refused_throttled,

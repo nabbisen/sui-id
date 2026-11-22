@@ -774,6 +774,10 @@ pub struct Strings {
     pub recovery_refused_target_self: &'static str,
     pub recovery_refused_target_admin: &'static str,
     pub recovery_refused_target_non_local: &'static str,
+    /// RFC 103 T10 (`0.93.0` O7 §0): the target has a federation link,
+    /// distinct from [`Self::recovery_refused_target_non_local`] since
+    /// such an account's own `source` says local.
+    pub recovery_refused_target_federated: &'static str,
     pub recovery_refused_target_disabled: &'static str,
     pub recovery_refused_target_deleted: &'static str,
     pub recovery_refused_throttled: &'static str,
@@ -1250,4 +1254,32 @@ pub struct Strings {
     /// `UnlinkFederationProviderError::NotFound`: the link was already
     /// removed (another request, or a stale page).
     pub fed_err_link_not_found: &'static str,
+
+    // ---- `0.93.0` O7: the unlink page states its consequence truthfully ----
+    /// A noun phrase for "can still sign in with ...", never pluralized
+    /// (each is named once, never counted).
+    pub sign_in_method_password: &'static str,
+    pub sign_in_method_passkey: &'static str,
+    pub sign_in_method_other_federation: &'static str,
+    pub sign_in_method_directory: &'static str,
+    /// Join already-localized method noun phrases into one list, the
+    /// locale's own way (never a fixed comma-and-"and" built in Rust).
+    /// Always at least one element.
+    pub join_sign_in_methods: fn(&[String]) -> String,
+    /// At least one other way in remains: `{methods}` is
+    /// [`Self::join_sign_in_methods`]'s own output.
+    pub confirm_unlink_federation_methods_remain: fn(&str) -> String,
+    /// `{user}` template (the same `.replace` precedent as
+    /// [`Self::confirm_unlink_federation_impact`]): no other way in
+    /// remains at all.
+    pub confirm_unlink_federation_no_methods_remain: &'static str,
+    /// Heading over the three follow-up actions, shown only when no
+    /// other way in remains.
+    pub confirm_unlink_federation_offer_heading: &'static str,
+    pub confirm_unlink_federation_offer_disable_link: &'static str,
+    pub confirm_unlink_federation_offer_disable_text: &'static str,
+    pub confirm_unlink_federation_offer_delete_link: &'static str,
+    pub confirm_unlink_federation_offer_delete_text: &'static str,
+    pub confirm_unlink_federation_offer_recovery_link_link: &'static str,
+    pub confirm_unlink_federation_offer_recovery_link_text: &'static str,
 }

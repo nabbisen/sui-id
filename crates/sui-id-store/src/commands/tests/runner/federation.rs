@@ -2449,3 +2449,64 @@ async fn f03_method_mismatch_is_rejected_without_touching_any_ceremony() {
          the user can still complete the pending assertion afterward"
     );
 }
+
+// ── `0.93.0` O7 §2: a federation-provisioned user, once unlinked, is ───
+// ── eligible for a recovery link (RFC 103 T10's own fix, applied here) ──
+
+/// §2's own "no other way in" sentence promises a recovery link is
+/// available once an unlink leaves no federation link at all. Nothing
+/// else about a federation-**provisioned** user (no credential, no
+/// sign-in, no prior token -- a provisioning target, RFC 115 D11) blocks
+/// that: proven directly against F04's own write path, not assumed.
+#[tokio::test]
+async fn a_federation_provisioned_user_is_eligible_for_a_recovery_link_once_unlinked() {
+    let db = fresh_db();
+    let provider_id = seed_provider(&db).await;
+    let attempt_id = an_exchanging_attempt(&db, provider_id, 99).await;
+    let user = a_federated_user("f04-o7-eligibility", None);
+    let user_id = user.id;
+    let link = a_federated_link(user_id, provider_id, "sub-o7-eligibility");
+    let session = a_fed_session(user_id);
+    provision_federated_user(&db, attempt_id, provider_id, user, link, session)
+        .await
+        .expect("provision succeeds");
+
+    // Still linked: T10 refuses it, same as any other linked account.
+    let still_linked = issue_recovery_link_as_operator(
+        &db,
+        user_id,
+        vec![0u8; 32],
+        "o7 eligibility check".into(),
+        Utc::now() + TimeDelta::minutes(30),
+        Utc::now(),
+    )
+    .await;
+    assert!(
+        matches!(
+            still_linked,
+            Err(StoreError::RecoveryRefused(
+                crate::errors::RecoveryRefusal::TargetFederated
+            ))
+        ),
+        "still linked: refused, same as O7 §0"
+    );
+
+    // What the unlink command itself does to this row (C20): remove the
+    // link, inside its own transaction -- done directly here since the
+    // point of this test is eligibility afterward, not the unlink
+    // command's own transactional behaviour (covered elsewhere).
+    db.with_conn(move |c| repos::federation_link::delete_within_tx(c, user_id, provider_id))
+        .await
+        .expect("remove the link");
+
+    issue_recovery_link_as_operator(
+        &db,
+        user_id,
+        vec![1u8; 32],
+        "o7 eligibility check".into(),
+        Utc::now() + TimeDelta::minutes(30),
+        Utc::now(),
+    )
+    .await
+    .expect("a federation-provisioned user, once unlinked, is eligible");
+}

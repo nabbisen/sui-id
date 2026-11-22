@@ -1116,3 +1116,153 @@ async fn an_expired_token_cannot_complete_and_writes_no_credential() {
     );
     assert_eq!(audit_rows(&db).await, 0);
 }
+
+// ── RFC 103 T10 (`0.93.0` O7 §0): a linked federated account never ─────
+// ── receives a local password, whatever `source` says ──────────────────
+
+async fn seed_federation_provider(db: &Database) -> sui_id_shared::ids::FederationProviderId {
+    use crate::models::{FederationProviderRow, ProvisionMode, ValidationStatus};
+    let now = Utc::now();
+    let row = FederationProviderRow {
+        id: sui_id_shared::ids::FederationProviderId::new(),
+        slug: "t10-provider".into(),
+        display_name: "T10 Provider".into(),
+        issuer: "https://idp.example".into(),
+        client_id: "client".into(),
+        client_secret_enc: None,
+        scopes: "openid email".into(),
+        provision_mode: ProvisionMode::ProvisionOnFirstLogin,
+        enabled: true,
+        allowed_origins: String::new(),
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: ValidationStatus::RequiresReview,
+        evidence_config_version: None,
+        evidence_activation_generation: None,
+        evidence_policy_digest: None,
+        evidence_observed_at: None,
+        evidence_metadata_fingerprint: None,
+        evidence_jwks_fingerprint: None,
+        created_at: now,
+        updated_at: now,
+        id_token_algs: None,
+    };
+    let id = row.id;
+    repos::federation_provider::create_enabled_for_test(db, &row, None)
+        .await
+        .expect("seed provider");
+    id
+}
+
+/// Link `user` to a freshly seeded provider — `source` is left exactly as
+/// the caller set it (RFC 096-B1 stage 7's F04 stores such a user with
+/// `source = local`, which is the entire point of T10: the link, not
+/// `source`, is what must be checked).
+async fn link_to_a_provider(db: &Database, user: UserId) {
+    let provider_id = seed_federation_provider(db).await;
+    repos::federation_link::upsert(
+        db,
+        crate::models::FederationLinkRow {
+            user_id: user,
+            provider_id,
+            upstream_sub: "t10-sub".into(),
+            upstream_email: None,
+            linked_at: Utc::now(),
+            last_seen_at: Utc::now(),
+        },
+    )
+    .await
+    .expect("link");
+}
+
+#[tokio::test]
+async fn u37_web_refuses_a_linked_federated_user() {
+    let db = fresh_db();
+    let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
+    // A live local account by every existing check: a credential, `source
+    // = local`. Only the federation link makes it ineligible.
+    let target = seed_live_user(&db).await;
+    link_to_a_provider(&db, target).await;
+    let before = token_rows(&db).await;
+    let result = issue_web(&db, admin, session, target, REASON, Utc::now()).await;
+    assert_eq!(refused(&result), Some(RecoveryRefusal::TargetFederated));
+    assert_eq!(token_rows(&db).await, before, "no token");
+}
+
+#[tokio::test]
+async fn u37_operator_refuses_a_linked_federated_user() {
+    let db = fresh_db();
+    let target = seed_live_user(&db).await;
+    link_to_a_provider(&db, target).await;
+    let result = issue_cli(&db, target, REASON, Utc::now()).await;
+    assert_eq!(refused(&result), Some(RecoveryRefusal::TargetFederated));
+}
+
+/// Completion (D13) re-reads the target inside its own transaction — a
+/// link added **after** the token was issued still refuses completion,
+/// since the check runs fresh at consume time, not from anything read
+/// at issue.
+#[tokio::test]
+async fn completion_refuses_a_user_linked_after_the_token_was_issued() {
+    let db = fresh_db();
+    let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
+    let target = seed_user(&db, |_| {}).await; // never-activated: a provisioning link is fine to issue
+    let now = Utc::now();
+    let grant = issue_web(&db, admin, session, target, REASON, now)
+        .await
+        .expect("issue before the link exists")
+        .into_inner();
+    link_to_a_provider(&db, target).await;
+
+    let result = consume_and_reset_password(
+        &db,
+        target,
+        grant.token_id,
+        crate::models::CredentialRow {
+            user_id: target,
+            password_hash: "new-hash-placeholder".into(),
+            updated_at: now,
+        },
+        now,
+        false,
+    )
+    .await;
+    assert!(
+        matches!(result, Err(StoreError::NotFound)),
+        "completion refuses a now-linked target"
+    );
+    assert!(
+        repos::credentials::get(&db, target).await.is_err(),
+        "no credential row is written"
+    );
+}
+
+/// The mirror case: an **unlinked** live local user is eligible at issue
+/// and completes normally — the link is what T10 keys on, not source or
+/// liveness, so removing a link must restore eligibility.
+#[tokio::test]
+async fn an_unlinked_user_is_eligible_and_completes() {
+    let db = fresh_db();
+    let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
+    let target = seed_live_user(&db).await;
+    let now = Utc::now();
+    let grant = issue_web(&db, admin, session, target, REASON, now)
+        .await
+        .expect("an unlinked live user is eligible")
+        .into_inner();
+    let result = consume_and_reset_password(
+        &db,
+        target,
+        grant.token_id,
+        crate::models::CredentialRow {
+            user_id: target,
+            password_hash: "new-hash-placeholder".into(),
+            updated_at: now,
+        },
+        now,
+        false,
+    )
+    .await;
+    assert!(result.is_ok(), "an unlinked user completes");
+    assert!(repos::credentials::get(&db, target).await.is_ok());
+}

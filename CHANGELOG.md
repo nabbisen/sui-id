@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   host answers with 16 DNS addresses, and sui-id refused any answer with
   more than 8. The cap is now 32 in total, and every address in an
   answer is still checked before one is used.
+- **Unlinking a federation provider said a user keeps their other
+  sign-in methods, even when they had none.** It now names which remain
+  (password, passkey, another provider, or a directory). If none does,
+  it says so plainly, and offers what to do next: disable or delete the
+  account, or, after unlinking, issue a recovery link.
 
 ### Security
 
@@ -52,6 +57,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data unreadable.
 - **Rotation refuses a symlinked key file, and checks that the filesystem
   supports what it needs before it starts.**
+- **An account still linked to a federation provider could be given a
+  local password, which then worked without the provider.** An
+  administrator could issue a recovery link to such a user; the user (or
+  the administrator, as courier) set a password with it, and could sign
+  in with that password even after the provider stopped vouching for
+  them. RFC 103 forbids this (threat T10), and its check had lapsed:
+  federated accounts are stored as local accounts, and the check looked
+  only at that. A recovery link is now refused for any account with a
+  federation link, both when it is issued and when it is used. Password
+  sign-in refuses such an account too, which also closes any password
+  this already produced. Issuing one needed an administrator with a
+  fresh step-up and a second factor, and was audited; nothing outside
+  that path could reach it. **If you issued a recovery link to a
+  federated user before this release**, that user may hold a local
+  password: the audit log records each issue
+  (`user.recovery_link.issued`).
 
 ## [0.92.0] — 2026-11-18
 

@@ -230,6 +230,11 @@ pub enum RecoveryRefusal {
     TargetIsAdmin,
     /// The target's identity is not local (RFC 103 T10).
     TargetNonLocal,
+    /// The target has a `federation_link` to an upstream, whatever
+    /// `source` says (RFC 103 T10, `0.93.0` O7 §0): a user still linked
+    /// upstream signs in through it, never through a local password
+    /// this link would otherwise let them bypass it with.
+    TargetFederated,
     /// The target is disabled.
     TargetDisabled,
     /// The target is deleted.
@@ -257,6 +262,7 @@ impl std::fmt::Display for RecoveryRefusal {
             Self::TargetIsSelf => "the target is the issuing administrator",
             Self::TargetIsAdmin => "the target is an administrator",
             Self::TargetNonLocal => "the target is not a local account",
+            Self::TargetFederated => "the target is linked to a federation provider",
             Self::TargetDisabled => "the target is disabled",
             Self::TargetDeleted => "the target is deleted",
             Self::Throttled => "the hourly limit of recovery links has been reached",

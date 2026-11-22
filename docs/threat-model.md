@@ -125,6 +125,9 @@ The properties it establishes:
   a fresh step-up from an administrator who holds a second factor.** It
   cannot be issued for another administrator, for the issuer's own account,
   for a directory or federated account, or for a disabled or deleted user.
+  A federated account is recognised by its federation link, not by its
+  source, which says local, and the rule is checked again when the link
+  is used. Password sign-in refuses a federated account too.
   An administrator with no second factor is refused outright; a stale
   step-up rolls back inside the same transaction that would otherwise
   commit, the same re-check RFC 102 B4 uses. At most five links per rolling

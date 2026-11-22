@@ -509,3 +509,79 @@ async fn unlink_through_the_admin_surface_keeps_the_user_and_records_the_audit_r
     assert_eq!(o.location, "/admin/login?fed_error=link_required");
     assert!(o.session_cookie.is_none());
 }
+
+/// `0.93.0` O7 §2/§3: `linked_user` is exactly the shape the owner's own
+/// M4-B record run found -- no password, no passkey -- so the real page
+/// must state the stark "no other way to sign in" consequence and offer
+/// the three follow-up actions, not the old blanket "their other
+/// sign-in methods remain" (which was false for this user). §3's own
+/// refused-POST re-render carries the same sentence as the GET.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unlink_confirm_states_no_other_way_to_sign_in_for_a_federation_only_user() {
+    let mut state = test_app();
+    let (session, _admin_id) = log_in_as_admin_in_english(&state).await;
+    let (issuer, _slot) = {
+        state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
+            super::tls_mock::LoopbackFixtureResolver,
+        )));
+        super::federation_fail_closed::mock_upstream().await
+    };
+    add_federation_provider_config(&mut state, &issuer);
+    let user = super::federation_fail_closed::linked_user(&state, &issuer).await;
+    let provider_id = federation_provider::get_by_slug(&state.db, "up")
+        .await
+        .expect("seeded by linked_user")
+        .id;
+
+    let confirm = get(
+        &state,
+        &format!("/admin/users/{user}/federation/{provider_id}/unlink-confirm"),
+        &session,
+    )
+    .await;
+    assert_eq!(confirm.status(), StatusCode::OK);
+    let csrf = extract_set_cookie(confirm.headers(), "sui_id_csrf").expect("csrf");
+    let get_body = String::from_utf8_lossy(&read_body(confirm.into_body()).await).into_owned();
+    assert!(
+        get_body.contains("has no other way to sign in"),
+        "{get_body}"
+    );
+    assert!(get_body.contains("After this, they cannot sign in at all"));
+    assert!(!get_body.contains("their other sign-in methods remain"));
+    assert!(get_body.contains("/admin/users/") && get_body.contains("/disable-confirm\""));
+    assert!(get_body.contains("/delete-confirm\""));
+    assert!(get_body.contains("/recovery-link-confirm\""));
+
+    // A refused POST (the same pair, unlinked a second time) re-renders
+    // the confirm page -- its own consequence sentence must match the
+    // GET's, not fall back to anything else.
+    let first = post_form(
+        &state,
+        &format!("/admin/users/{user}/federation/{provider_id}/unlink"),
+        &session,
+        &csrf,
+        &format!("_csrf={csrf}&_confirmed=1"),
+    )
+    .await;
+    assert!(first.status().is_redirection());
+
+    let csrf2 = fetch_csrf(&state, &session).await;
+    let second = post_form(
+        &state,
+        &format!("/admin/users/{user}/federation/{provider_id}/unlink"),
+        &session,
+        &csrf2,
+        &format!("_csrf={csrf2}&_confirmed=1"),
+    )
+    .await;
+    assert_eq!(
+        second.status(),
+        StatusCode::OK,
+        "the second unlink is refused and re-renders"
+    );
+    let refused_body = String::from_utf8_lossy(&read_body(second.into_body()).await).into_owned();
+    assert!(
+        refused_body.contains("has no other way to sign in"),
+        "the refused re-render must carry the same sentence as the GET: {refused_body}"
+    );
+}
