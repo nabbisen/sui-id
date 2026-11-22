@@ -49,3 +49,28 @@ claims are inputs, not evidence.
 
 Exact diagram tooling and risk-rating scale remain for detailed design after
 RFC 098 identifies the authoritative document set.
+
+## Refresh, toward acceptance (2026-11-23)
+
+M4-B closed on 2026-11-23, which cycle O named as the trigger for this
+draft. **The entry gate is met at `0.93.0`'s cut**, measured: RFC 096 is
+accepted in every phase, and moves to `done/` then. **The method this RFC
+requires before acceptance is drafted** in
+[`../handoffs/097-threat-model/method-2026-11-23.md`](../handoffs/097-threat-model/method-2026-11-23.md).
+It proposes answers to both open questions above:
+- **risk scale:** 3 × 3, with anchors for who can reach a threat and what
+  it costs;
+- **diagram tooling:** none; text diagrams beside the tables.
+
+It also proposes:
+- a versioned inventory contract, whose gate makes an anonymous residual
+  acceptance impossible;
+- evidence links by symbol rather than line;
+- five stages;
+- a **classification-consistency** check, from the RFC 103 T10 lapse found
+  on 2026-11-22.
+
+**Master-key rotation** is recorded as this RFC requires while RFC 100 is
+part-built: a manual, not-crash-safe procedure, with the stage 1–4
+protections recorded as protected. These are proposals; the RFC stays
+*Proposed* until accepted.

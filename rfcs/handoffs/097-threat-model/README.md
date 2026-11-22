@@ -32,6 +32,7 @@ delivered it.
 | Document | Contents |
 |---|---|
 | [`review-checklist.md`](./review-checklist.md) | Boundary inventory, STRIDE coverage, and the residual-risk contract |
+| [`method-2026-11-23.md`](./method-2026-11-23.md) | **The method, drafted for acceptance (2026-11-23)**: the entry gate measured, the inventory contract and its gate, evidence-link syntax, the STRIDE worksheet, the 3 × 3 rubric, diagrams, and the five stages |
 
 ## Known boundaries the current model omits
 
