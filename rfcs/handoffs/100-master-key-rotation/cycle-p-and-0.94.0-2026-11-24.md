@@ -8,7 +8,23 @@
 > 3. *"Yes, both (Recommended)"*: the owner is M2c's independent closure
 >    reviewer, and the release-binary drill (§3) joins the evidence.
 >
-> ## Whose turn it is: **the architect's**, for P1's dispatch.
+> ## Reordered 2026-11-24, before P1 was dispatched
+> Writing P1, the architect found the accepted order would change the live
+> rotation twice. Stage 5 would join the new preparation to the old
+> finish, where the backup's custody choice has nowhere to be recorded,
+> and stage 6 would rebuild it. `@nabbisen`: *"Reorder: database half first
+> (Recommended)"*. The RFC 100 rows of §2 are now:
+> - **P1**, the database half, built as modules the live rotation does not
+>   use yet: the `master_key_rotation` row; K07 writing it pending, with
+>   the custody choice; K05 completing it; and recovery rows 8–10;
+> - **P2**, the live rotation rewritten **once**, to the whole protocol:
+>   the liveness lock, the custody flags, the journal, publication, K07,
+>   activation and K05;
+> - **P3**, stage 7, unchanged.
+>
+> Every crash point then has its recovery before rotation can reach it.
+>
+> ## Whose turn it is: **the implementation role's**, on P1.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).

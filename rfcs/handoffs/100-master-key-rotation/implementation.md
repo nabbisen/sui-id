@@ -196,6 +196,18 @@ disposition.
 
 ## Stage 6 — K07 extended, activation, K05
 
+**Reordered 2026-11-24, for `0.94.0`.** This stage's database half is built
+**before** stage 5, as cycle P's P1
+([dispatch](0.94.0-p1-the-database-half-2026-11-24.md)): the row's full
+shape (migration 0053, since 0052 created it unused and with a free-text
+disposition), K07 extended, K05, and recovery rows 8–10. All of it is
+built as functions the live rotation does not call yet. Stage 5 then
+rewrites the live rotation once, to the whole protocol including
+activation, as P2. The reason is in the
+[cycle plan](cycle-p-and-0.94.0-2026-11-24.md): built in the old order,
+stage 5 would have joined the new preparation to the old finish, and
+stage 6 would have rebuilt it.
+
 **Recovery first, within this stage:** the crash matrix's rows 8–10 (DB new
 and pending with the active key old; DB new and pending with the active key
 new; DB new and complete), moved here from stage 4, land before K07 writes
