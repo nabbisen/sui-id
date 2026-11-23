@@ -1,7 +1,14 @@
 # Cycle P and `0.94.0` — scoping it carefully
 
-> ## Whose turn it is: **the owner's**, for §4's three questions.
-> Nothing here is dispatched until they are answered.
+> ## Decided 2026-11-24, on §4's three questions
+> `@nabbisen`'s answers, verbatim:
+> 1. *"Two releases, M2c first (Recommended)"*: `0.94.0` closes M2c, and
+>    `0.95.0` is the console, with RFC 101 and RFC 150 on it (cycle Q).
+> 2. *"Accept the order (Recommended)"*: P1–P6, as §2's table gives them.
+> 3. *"Yes, both (Recommended)"*: the owner is M2c's independent closure
+>    reviewer, and the release-binary drill (§3) joins the evidence.
+>
+> ## Whose turn it is: **the architect's**, for P1's dispatch.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).
