@@ -25,11 +25,11 @@ page says truthfully which sign-in methods remain. **Security:** an
 account still linked to a federation provider could be given a local
 password through an administrator-issued recovery link (RFC 103 T10);
 issuing such a link, and signing in with such a password, are now refused.
-Rotation also refuses a symlinked key file, and `url` is updated to 2.5.9
-(RUSTSEC-2026-0592). **This is `0.93.0`'s content**: `0.93.0` was never
-published in full (see its entry below). Two release defects are also
-fixed: the `sui-id` crate packages, and the release check no longer races
-its LDAP server's start.
+Rotation also refuses a symlinked key file, and `url` 2.5.9
+(RUSTSEC-2026-0592) and `cookie` 0.18.3 (RUSTSEC-2026-0594) are taken.
+**This is `0.93.0`'s content**: `0.93.0` was never published in full (see
+its entry below). Two release defects are also fixed: the `sui-id` crate
+packages, and the release check no longer races its LDAP server's start.
 
 ### Added
 
@@ -89,6 +89,10 @@ its LDAP server's start.
 
 ### Security
 
+- **`cookie` 0.18.3 (RUSTSEC-2026-0594)**: in 0.18.2, *private*
+  (encrypted) cookies could repeat a nonce in a process that forks.
+  sui-id is not affected: it enables no private cookies and never forks.
+  It is updated so the release carries no known advisory.
 - **`url` 2.5.9 (RUSTSEC-2026-0592)**: 2.5.8 could overflow its stack in
   `Url::origin()` on nested `blob:` URLs. sui-id calls it on a federation
   provider's endpoints only after requiring `https`, so an upstream
