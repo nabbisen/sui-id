@@ -6,7 +6,7 @@
 > **This document is the dispatch.**
 
 **Dispatched.** 2026-11-11, by the architect.
-**Governing RFC.** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md),
+**Governing RFC.** [RFC 096](../../done/096-upstream-oidc-federation-validation.md),
 **Accepted**, §096-B2 as amended 2026-11-11. Building is permitted.
 **Baseline.** The tip of `main` when you start (`git log -1`; record it).
 **Read first:** the stage plan's §1 (what exists, with `file:line`). RFC 096

@@ -8,7 +8,7 @@
 > **This document is the dispatch.**
 
 **Dispatched.** 2026-11-12, by the architect.
-**Governing RFC.** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md),
+**Governing RFC.** [RFC 096](../../done/096-upstream-oidc-federation-validation.md),
 **Accepted** (re-accepted 2026-11-11 with the C17-seam amendment, `:390` and
 `:440`). RFC 094's C17 text: `rfcs/done/094-transactional-audit-registry.md:506-543`.
 Building is permitted.

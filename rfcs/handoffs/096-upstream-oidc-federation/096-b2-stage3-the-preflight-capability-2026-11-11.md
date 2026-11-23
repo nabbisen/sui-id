@@ -15,7 +15,7 @@
 > once.** If you have already built it on `app.clock`, change only that.
 
 **Dispatched.** 2026-11-11, by the architect.
-**Governing RFC.** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md),
+**Governing RFC.** [RFC 096](../../done/096-upstream-oidc-federation-validation.md),
 **Accepted**, §096-B2. Building is permitted.
 **Baseline.** The tip of `main` when you start (`git log -1`; record it). S2b
 must be in it.

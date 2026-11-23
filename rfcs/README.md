@@ -68,7 +68,7 @@ slot is `104`). One **parallel namespace** also exists:
 | 093 | [Build, Toolchain, and Release-Gate Contract](./done/093-build-toolchain-release-gates.md) | M1a, M1b | the mid-capability model |
 | 094 | [Transactional Audit Completeness and Typed Event Registry](./done/094-transactional-audit-registry.md) | **Implemented (v0.88.0), closed 2026-11-08** — M2a, M2b ([M2b assessment](./handoffs/094-transactional-audit/m2b-adversarial-assessment-2026-11-08.md)) | the mid-capability model (implementation and testing agent) |
 | 095 | [Dynamic Client Registration Transaction and Validation](./done/095-dynamic-client-registration-transaction.md) | **Implemented, M3 closed 2026-10-25** | the mid-capability model (implementation and testing agent) |
-| 096 | [Upstream OIDC Federation Validation](./accepted/096-upstream-oidc-federation-validation.md) | M4-A, M4-B | the mid-capability model (implementation and testing agent) |
+| 096 | [Upstream OIDC Federation Validation](./done/096-upstream-oidc-federation-validation.md) | **Implemented (v0.93.0)**; M4-A closed 2026-10-17, M4-B closed 2026-11-23 | the mid-capability model (implementation and testing agent) |
 | 098 | [Documentation Authority and Reconciliation](./done/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
 | 139 | [Getting Started leaves its warnings in other documents](./accepted/139-getting-started-leaves-its-warnings-elsewhere.md) | cycle C — documentation only | the mid-capability model (implementation and testing agent) |
 | 102 | [Authentication that cannot be audited does not succeed](./done/102-authentication-fails-closed-without-audit.md) | **Implemented, closed 2026-09-22** | mid-capability model |

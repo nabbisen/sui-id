@@ -8,7 +8,7 @@
 > *"096-B2 does not close without it."* **This document is the dispatch.**
 
 **Dispatched.** 2026-11-12, by the architect.
-**Governing RFC.** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md),
+**Governing RFC.** [RFC 096](../../done/096-upstream-oidc-federation-validation.md),
 **Accepted**, `:355` (the issuer row: *"no IP literal; no `localhost`,
 `.localhost`, `.local`, `.internal`, or `.home.arpa`"*) and `:374-377`
 (*"Private, loopback, link-local, or literal-IP issuers are not supported in

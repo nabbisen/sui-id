@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.93.0] — 2026-11-23
+
+**The master key is now checked at every start**: a key that cannot open
+the existing database is refused, and so is a missing key file over
+existing data, instead of a new key being generated over it. The command
+line is grouped by task; every old form still works, and a usage error now
+exits 2, not 1. `sui-id init` writes a starting configuration, and
+`sui-id admin master-key rotate --check` says whether a rotation could
+start, changing nothing. Destructive confirmations state their
+consequence in full, with any count as its own figure, and a refused
+federation-provider check says what failed and what to do. Startup recovery
+for a rotation stopped during preparation is in place; rotation itself
+does not write that preparation yet. **Fixed:** Google can now be enabled as a federation
+provider (its DNS answer was larger than sui-id accepted), and the unlink
+page says truthfully which sign-in methods remain. **Security:** an
+account still linked to a federation provider could be given a local
+password through an administrator-issued recovery link (RFC 103 T10);
+issuing such a link, and signing in with such a password, are now
+refused. Rotation also refuses a symlinked key file.
+
 ### Added
 
 - **`sui-id init` writes a commented configuration to start from**

@@ -8,7 +8,7 @@
 > **This document is the dispatch.**
 
 **Dispatched.** 2026-11-12, by the architect.
-**Governing RFC.** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md),
+**Governing RFC.** [RFC 096](../../done/096-upstream-oidc-federation-validation.md),
 **Accepted**, §096-B2: the admin surface (`:379-391`), and the C17-seam
 amendment (`:390`, `:440`). Plus the UI-security contract, RFCs 088–092 (in
 `rfcs/done/`). Building is permitted.

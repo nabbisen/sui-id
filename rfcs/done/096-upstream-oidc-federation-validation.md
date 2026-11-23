@@ -1,6 +1,9 @@
 # RFC 096 — Upstream OIDC Federation Validation
 
-**Status.** Accepted
+**Status.** Implemented (v0.93.0)
+**Closure reviewed on.** 2026-11-23, when the last phase, 096-B1, was accepted. Each phase was closed on its own assessment: 096-A 2026-10-17, 096-B2 2026-11-12, 096-B1 2026-11-23.
+**Closure approved by.** `@nabbisen`, per phase, in his words: 096-A *"096-A is accepted."* (2026-10-17); 096-B2 *"Accepted."* (2026-11-12); 096-B1 *"Accept 096-B1 (Recommended)"* (2026-11-23). Each assessment is the architect's own and is not independent: the architect wrote this RFC's plans and dispatches.
+**Closure evidence.** The three completion assessments: [096-A](../handoffs/096-upstream-oidc-federation/096-a-completion-assessment-2026-10-09.md), [096-B2](../handoffs/096-upstream-oidc-federation/096-b2-completion-assessment-2026-11-12.md) and [096-B1](../handoffs/096-upstream-oidc-federation/096-b1-completion-assessment-2026-11-22.md). Live integration: the [Duende run](../handoffs/096-upstream-oidc-federation/096-b1-stage14-live-run-record-2026-11-18.md) and the [Google run](../handoffs/096-upstream-oidc-federation/096-b1-m4b-google-run-record-2026-11-22.md).
 **Accepted on.** 2026-11-11 (re-accepted after the C17-seam amendment; re-accepted 2026-10-14 after the F03-seam amendment; first accepted 2026-08-27)
 **Approved by.** `@nabbisen`
 **Independent design review.** [Correction review 2026-08-26](../handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md), by the implementation role

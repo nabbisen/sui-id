@@ -8,7 +8,7 @@
 > **This document is the dispatch.**
 
 **Dispatched.** 2026-11-12, by the architect.
-**Governing RFC.** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md),
+**Governing RFC.** [RFC 096](../../done/096-upstream-oidc-federation-validation.md),
 **Accepted**, §096-B2. That covers amendment A1, under which C19 is
 withdrawn and only C20's unlink remains, and **A3 as narrowed 2026-11-12**
 (`:167-170`). Also RFC 096 `:398-401`, on ids never reused, and `:452-454`,

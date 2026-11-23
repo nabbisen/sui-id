@@ -56,6 +56,67 @@ before upgrading across more than one or two of them.
 
 ## Version-specific notes
 
+### v0.93.x
+
+**One migration runs, `0052_master_key_sentinel`.** Starting takes an
+automatic pre-migration snapshot first, beside the database file (see
+"The pre-migration snapshot" below).
+
+**The master key is now checked at every start.** A key that does not
+open the existing database is refused:
+
+> the master key in `<path>` (fingerprint `<fp>`) does not open this
+> database, whose sentinel was written under fingerprint `<fp>`;
+> restore the matching key file, or set SUI_ID_MASTER_KEY to it.
+
+and so is a missing key file over existing data, instead of a new key
+being generated:
+
+> no master key file at `<path>`, but this database holds data sealed
+> under a master key (fingerprint `<fp>`). Generating a new key would
+> make it unreadable. Restore the key file.
+
+The first start after upgrading writes the sentinel. An operator who
+has kept the right key file notices nothing; one who hasn't is refused
+at start, which is the point.
+
+**The command line is grouped by task** (RFC 148); every earlier form
+still works and prints a one-line notice naming its new form — for
+example `restore` → `backup restore`, `admin unlock-user` → `admin user
+unlock`, `admin issue-recovery-link` → `admin user recovery-link`.
+**A usage error (an unknown option, or a missing required value) now
+exits with status 2, not 1** — a script that tells a usage error from a
+real failure by the exit code must change to test for 2. `sui-id init`
+writes a starting configuration (`--production` for the production
+template).
+
+**No configuration change.**
+
+**Federation.** A federation provider whose DNS answer carries more
+than 8 addresses, up to 32, now passes *Check and enable*. Google's
+signing-key host answers with 16.
+**A recovery link is now refused for a user linked to a federation
+provider, and password sign-in refuses such a user** (RFC 103 T10). If
+you issued a recovery link to a federated user before this release,
+check the audit log for `user.recovery_link.issued`: that user may hold
+a local password.
+
+For anyone building against the crates:
+
+- `sui-id-i18n`: `Strings::confirm_delete_federation_provider_impact`
+  is replaced by `confirm_delete_federation_provider_impact_zero` and
+  `_suffix`; many fields were added (a federation refusal's own
+  sentence, and the unlink page's sign-in-method and follow-up text).
+- `sui-id-store`: `RecoveryTarget` gained `has_federation_link`;
+  `RecoveryRefusal` gained `TargetFederated`.
+- `sui-id-web`: `ConfirmScreenData` gained `impact_count` and
+  `impact_link` (new `CountedImpact`/`ImpactLink` types).
+- `sui-id`: `PreflightError` and `CheckAndEnableError` are no longer
+  `Copy`, `Clone`, `PartialEq` or `Eq` (their new variants carry
+  non-comparable payloads); `KeyFileOps` gained `create_dir`,
+  `list_dir` and `remove_dir`; `KeyFileMetadata` is no longer `Copy`
+  (it gained `is_dir` and `symlink_target`).
+
 ### v0.92.x
 
 **No migration and no configuration change.** Upgrading from `0.91.x`
