@@ -118,10 +118,7 @@ max_lockout = {max_lockout:?}
 /// *keys* by RFC 147 §4's own test. Embedded so an installed binary (no
 /// source checkout) can still print and write it.
 pub(crate) fn production_toml() -> &'static str {
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../sui-id.example.toml"
-    ))
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/sui-id.example.toml"))
 }
 
 #[cfg(test)]

@@ -7,7 +7,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.93.1] — 2026-11-23
+
+**The master key is now checked at every start**: a key that cannot open
+the existing database is refused, and so is a missing key file over
+existing data, instead of a new key being generated over it. The command
+line is grouped by task; every old form still works, and a usage error now
+exits 2, not 1. `sui-id init` writes a starting configuration, and `sui-id
+admin master-key rotate --check` says whether a rotation could start,
+changing nothing. Destructive confirmations state their consequence in
+full, with any count as its own figure, and a refused federation-provider
+check says what failed and what to do. Startup recovery for a rotation
+stopped during preparation is in place; rotation itself does not write
+that preparation yet. **Fixed:** Google can now be enabled as a federation
+provider (its DNS answer was larger than sui-id accepted), and the unlink
+page says truthfully which sign-in methods remain. **Security:** an
+account still linked to a federation provider could be given a local
+password through an administrator-issued recovery link (RFC 103 T10);
+issuing such a link, and signing in with such a password, are now refused.
+Rotation also refuses a symlinked key file, and `url` is updated to 2.5.9
+(RUSTSEC-2026-0592). **This is `0.93.0`'s content**: `0.93.0` was never
+published in full (see its entry below). Two release defects are also
+fixed: the `sui-id` crate packages, and the release check no longer races
+its LDAP server's start.
+
+### Added
+
+- **`sui-id init` writes a commented configuration to start from**
+  (`--production` for the production template), and never overwrites a
+  file; `sui-id` run in a terminal with no configuration offers to create
+  one.
+- **`sui-id admin master-key rotate --check` reports whether a rotation
+  could start, and changes nothing.**
+- **Startup now recovers a key rotation that stopped during
+  preparation**: it cleans the leftover workspace and continues on the
+  active key, or refuses before starting and changes nothing. Nothing
+  writes such a workspace yet, so no operator sees this until rotation
+  itself uses the journal.
+
+### Changed
+
+- **The GitHub Release is titled with its version alone**, `0.93.1`, the
+  same as its tag, not `sui-id 0.93.1`. GitHub already shows the
+  repository's name beside it.
+- **The command line is grouped by task** (`sui-id help` lists it on one
+  screen); every earlier form still works, prints a one-line notice naming
+  its new form, and keeps working until 1.0. **A usage error** (an unknown
+  option, or a missing required value) **now exits with status 2**, the
+  common convention, instead of 1; a script that tests for exactly 1 after a
+  usage error should test for non-zero. The help overview now fits an
+  80-column terminal, one line per command.
+- **A destructive confirmation states its consequence in full, not a
+  muted aside, with any count shown as its own prominent figure** (how
+  many users lose a federation provider, how many signing keys retire);
+  **a refused federation-provider check says what failed and what to
+  do next**, instead of a generic "check the server log".
+
+### Fixed
+
+- **The `sui-id` crate could not be packaged**, so `0.93.0` never reached
+  crates.io. `sui-id init --production` and `config sample --production`
+  embed `sui-id.example.toml`, which lived at the repository root, outside
+  the crate. The packaged crate could not compile. The file now lives in
+  the crate (`crates/sui-id/sui-id.example.toml`), with a symlink at the
+  repository root, and `cargo package -p sui-id` verifies.
+- **The release check's LDAP server could be seeded before it had really
+  started.** The OpenLDAP image bootstraps with a temporary server that
+  it starts and then stops. The readiness probe could pass against that
+  server, and the seed then hit the gap: this is what stopped `0.93.0`'s
+  first publish attempt. The probe now waits for the image's own
+  end-of-startup marker, then for the real server.
+- **Federation with Google failed at Check and enable**: its signing-key
+  host answers with 16 DNS addresses, and sui-id refused any answer with
+  more than 8. The cap is now 32 in total, and every address in an
+  answer is still checked before one is used.
+- **Unlinking a federation provider said a user keeps their other
+  sign-in methods, even when they had none.** It now names which remain
+  (password, passkey, another provider, or a directory). If none does,
+  it says so plainly, and offers what to do next: disable or delete the
+  account, or, after unlinking, issue a recovery link.
+
+### Security
+
+- **`url` 2.5.9 (RUSTSEC-2026-0592)**: 2.5.8 could overflow its stack in
+  `Url::origin()` on nested `blob:` URLs. sui-id calls it on a federation
+  provider's endpoints only after requiring `https`, so an upstream
+  could not reach it. Its other calls take the operator's own
+  configuration.
+- **sui-id now checks the master key at every start, and refuses a key
+  that does not open the database instead of failing later at
+  sign-in**; a missing key file over existing data is refused instead
+  of being silently replaced by a new key, which would have made that
+  data unreadable.
+- **Rotation refuses a symlinked key file, and checks that the filesystem
+  supports what it needs before it starts.**
+- **An account still linked to a federation provider could be given a
+  local password, which then worked without the provider.** An
+  administrator could issue a recovery link to such a user; the user (or
+  the administrator, as courier) set a password with it, and could sign
+  in with that password even after the provider stopped vouching for
+  them. RFC 103 forbids this (threat T10), and its check had lapsed:
+  federated accounts are stored as local accounts, and the check looked
+  only at that. A recovery link is now refused for any account with a
+  federation link, both when it is issued and when it is used. Password
+  sign-in refuses such an account too, which also closes any password
+  this already produced. Issuing one needed an administrator with a
+  fresh step-up and a second factor, and was audited; nothing outside
+  that path could reach it. **If you issued a recovery link to a
+  federated user before this release**, that user may hold a local
+  password: the audit log records each issue
+  (`user.recovery_link.issued`).
+
 ## [0.93.0] — 2026-11-23
+
+> **Never published in full; superseded by 0.93.1.** Tagged 2026-11-23 at
+> `c2dd902`. Its publish (run 45104786378) published `sui-id-shared`,
+> `sui-id-i18n`, `sui-id-store`, `sui-id-core` and `sui-id-web` at 0.93.0.
+> Then `sui-id` itself failed to package: it embedded a file from outside
+> the crate. `sui-id` 0.93.0 and the GitHub Release were never published.
+> The same changes ship as `0.93.1`, with that fixed.
 
 **The master key is now checked at every start**: a key that cannot open
 the existing database is refused, and so is a missing key file over

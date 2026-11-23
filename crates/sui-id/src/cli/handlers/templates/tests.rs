@@ -67,9 +67,8 @@ fn production_toml_is_the_example_file_and_parses() {
     // keys; this only confirms the embedded copy is the same file, not a
     // stale build-time snapshot.
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let on_disk = std::fs::read_to_string(
-        std::path::Path::new(manifest_dir).join("../../sui-id.example.toml"),
-    )
-    .expect("read sui-id.example.toml");
+    let on_disk =
+        std::fs::read_to_string(std::path::Path::new(manifest_dir).join("sui-id.example.toml"))
+            .expect("read sui-id.example.toml");
     assert_eq!(text, on_disk);
 }

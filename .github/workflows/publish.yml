@@ -314,7 +314,7 @@ jobs:
           # can never create one; --notes-file, never --generate-notes,
           # since the notes are already rendered (RFC 143 stage 3 A/B).
           gh release create "$TAG" --repo "${{ github.repository }}" --verify-tag \
-            --title "sui-id $TAG" --notes-file dist/release-notes.md \
+            --title "$TAG" --notes-file dist/release-notes.md \
             dist/sui-id-x86_64-unknown-linux-musl \
             dist/sui-id-aarch64-unknown-linux-musl \
             dist/SHA256SUMS
@@ -408,5 +408,5 @@ jobs:
           echo "::error::All six crates are published. The GitHub Release was not created." >&2
           echo "Recovery: re-run only this job (\"Re-run failed jobs\", or re-run this specific job) -- GitHub's own docs say a re-run of a job with nothing depending on it re-runs only that job, and reuses the other jobs' outputs from this attempt, including the artifact this job downloads." >&2
           echo "If that does not work, create the Release by hand:" >&2
-          echo "  gh release create $TAG --repo $REPO --verify-tag --title \"sui-id $TAG\" --notes-file release-notes.md sui-id-x86_64-unknown-linux-musl sui-id-aarch64-unknown-linux-musl SHA256SUMS" >&2
+          echo "  gh release create $TAG --repo $REPO --verify-tag --title \"$TAG\" --notes-file release-notes.md sui-id-x86_64-unknown-linux-musl sui-id-aarch64-unknown-linux-musl SHA256SUMS" >&2
           echo "(after downloading the release-artifacts workflow artifact from this run, with gh run download)." >&2

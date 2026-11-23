@@ -277,9 +277,13 @@ main`) and read its result, as step 5 does.
 Level B covers compilation, tests and lints; it does not cover packaging.
 Before tagging, in addition to Level B on the commit being tagged:
 
-1. `cargo package -p sui-id-shared --allow-dirty` produces a package and the
-   verify build succeeds (the others can only be verified end-to-end after
-   `sui-id-shared` is on the index).
+1. **Every publishable crate packages and verifies**:
+   `cargo package --workspace --exclude xtask --allow-dirty`. Cargo packages
+   the workspace's members against each other through a temporary local
+   registry, so this works before any of them is on the index. Packaging
+   only `sui-id-shared` is not enough: `0.93.0` passed that check, and its
+   `sui-id` crate then failed to package mid-publish, because it embedded a
+   file from outside the crate.
 2. The version field in the workspace `[workspace.package]` has been bumped
    and `Cargo.lock` has been refreshed. Internal workspace crate dependencies
    are centralized in root `[workspace.dependencies]`. **The Quick Start's

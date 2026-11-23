@@ -427,7 +427,7 @@ fn the_example_template_names_every_key_the_sample_serializes() {
 
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     // The workspace root, two levels up from this crate's own manifest.
-    let template_path = std::path::Path::new(manifest_dir).join("../../sui-id.example.toml");
+    let template_path = std::path::Path::new(manifest_dir).join("sui-id.example.toml");
     let template = std::fs::read_to_string(&template_path)
         .with_context(|| template_path.display().to_string())
         .expect("read sui-id.example.toml");

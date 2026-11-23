@@ -131,7 +131,7 @@ class SemverAndExcused(unittest.TestCase):
         self.assertIn("0.80.0", found)
         self.assertNotIn("0.81.0", found)
 
-    def test_the_real_changelog_marks_exactly_the_six_known_gaps(self) -> None:
+    def test_the_real_changelog_marks_exactly_the_seven_known_gaps(self) -> None:
         """0.76.10-12 and 0.78.0 were missed and are abandoned; 0.80.0 is
         superseded by 0.81.0 for a security reason (it carries the High
         flaw stage 12a fixed four days after its tag). 0.91.0 is
@@ -140,14 +140,19 @@ class SemverAndExcused(unittest.TestCase):
         workflow. 0.79.0 must stay out -- it is only *named* in 0.78.0's
         note as where that content shipped, and an earlier, looser scan
         did match it. 0.91.1 must stay out too: its summary mentions
-        0.91.0's partial publish, and that must not excuse 0.91.1 itself."""
+        0.91.0's partial publish, and that must not excuse 0.91.1 itself.
+        0.93.0 is superseded by 0.93.1: five of six crates reached
+        crates.io, then `sui-id` failed to package. 0.93.1 must stay out,
+        for 0.91.1's reason."""
         found = cpv.excused_versions(REPO_ROOT / "CHANGELOG.md")
         self.assertEqual(
-            found, {"0.78.0", "0.76.10", "0.76.11", "0.76.12", "0.80.0", "0.91.0"}
+            found,
+            {"0.78.0", "0.76.10", "0.76.11", "0.76.12", "0.80.0", "0.91.0", "0.93.0"},
         )
         self.assertNotIn("0.79.0", found)
         self.assertNotIn("0.81.0", found)
         self.assertNotIn("0.91.1", found)
+        self.assertNotIn("0.93.1", found)
 
 
 class NewestTag(unittest.TestCase):

@@ -20,6 +20,10 @@ include = [
     "tests/**/*",
     "static/**/*",
     "Cargo.toml",
+    # Embedded by `sui-id init --production` / `config sample --production`
+    # (`cli/handlers/templates.rs`). It lives in the crate so the packaged
+    # crate compiles; the repository root keeps a symlink to it.
+    "sui-id.example.toml",
 ]
 
 [features]

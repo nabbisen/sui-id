@@ -469,13 +469,24 @@ jobs:
             -v "$PWD/certs":/certs:ro \
             axllent/mailpit@sha256:c95e8356f55b65520e8b7fd4d74d3e2d06e4a83513f639e316b1e592fbd52646
 
+          # The image bootstraps with a temporary slapd, which it starts
+          # and then stops ("Start OpenLDAP... Stop OpenLDAP..."), before
+          # its supervisor starts the real one. An ldapwhoami against the
+          # temporary server succeeds and proves nothing: 0.93.0's first
+          # publish (run 45104786378, attempt 1) seeded into the gap and
+          # failed. So wait for the image's own end-of-startup marker
+          # first (measured locally on this exact digest: it is written
+          # after "First start is done", before the real slapd starts),
+          # then for the real server to answer.
           ready=""
-          for _ in $(seq 1 30); do
-            docker exec sui-id-release-ldap ldapwhoami -x -H ldap://localhost -D "" >/dev/null 2>&1 && { ready=1; break; }
+          for _ in $(seq 1 60); do
+            docker exec sui-id-release-ldap test -e /container/run/state/startup-done \
+              && docker exec sui-id-release-ldap ldapwhoami -x -H ldap://localhost -D "" >/dev/null 2>&1 \
+              && { ready=1; break; }
             sleep 1
           done
           if [ -z "$ready" ]; then
-            echo "::error::OpenLDAP never answered ldapwhoami within 30s" >&2
+            echo "::error::OpenLDAP did not finish starting within 60s" >&2
             docker logs sui-id-release-ldap || true
             exit 1
           fi
