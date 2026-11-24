@@ -225,13 +225,16 @@ fn skipped_no_file() {
     assert!(h.snapshot_file().is_none());
     // A fresh start creates the database file *and* generates the key file
     // (neither existed yet) -- just no pre-migration snapshot beside them.
+    // RFC 100 `0.94.0` P2 §1: `open_checked`'s own recovery pass also
+    // creates the permanent, empty liveness lock file, every start.
     let mut expected = before.clone();
     expected.insert("t.sqlite".to_string());
     expected.insert("t.key".to_string());
+    expected.insert("t.key.rotation-lock".to_string());
     assert_eq!(
         h.listing(),
         expected,
-        "only the new database and key files appear"
+        "only the new database, key and lock files appear"
     );
 }
 
@@ -246,7 +249,12 @@ fn skipped_fresh_empty_file() {
     assert!(h.snapshot_file().is_none());
     let mut expected = before.clone();
     expected.insert("t.key".to_string());
-    assert_eq!(h.listing(), expected, "only the new key file appears");
+    expected.insert("t.key.rotation-lock".to_string());
+    assert_eq!(
+        h.listing(),
+        expected,
+        "only the new key and lock files appear"
+    );
 }
 
 // ───────────────────────── §8.3: --no-backup ──────────────────────────────

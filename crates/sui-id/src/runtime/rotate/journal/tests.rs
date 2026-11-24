@@ -525,6 +525,14 @@ impl KeyFileOps for RespellingReads {
     }
     fn db_committed(&self, _label: &str) {}
     fn db_durable(&self, _label: &str) {}
+    fn lock_exclusive(
+        &self,
+        p: &str,
+        path: &Path,
+        blocking: bool,
+    ) -> std::io::Result<Box<dyn crate::key_adapter::LockGuard + '_>> {
+        Real.lock_exclusive(p, path, blocking)
+    }
 }
 
 #[test]

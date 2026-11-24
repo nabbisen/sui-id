@@ -219,33 +219,22 @@ anywhere in `crates/`.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `admin.master_key.resealed` | Re-seal every column-encrypted value under a new master key, one transaction (command `K07`, RFC 094 cycle J stage 4). `K08` (RFC 100 `0.94.0` P1 §2, built as a function the live rotation does not call yet) reuses this same descriptor for its own reseal-plus-row-write transaction, with one extra optional note field | — | — | `signing_keys=N`, `refresh_tokens=N`, `user_totp_secrets=N`, `user_totp_recovery_codes=N`, `user_webauthn_credentials=N`, `smtp_config=N`, `email_outbox_rows=N`, and for `K08` only: `rotation_id` (optional; absent from `K07`'s own events) | A |
-| `admin.master_key.rotated` | Two writers. `K05` (RFC 100 `0.94.0` P1 §3, sealed, built as a function the live rotation does not call yet) marks a `master_key_rotation` row complete and appends this, idempotently (a second completion of the same `rotation_id` appends nothing), note field `rotation_id`, Class A. Today's live rotation sequence still appends it instead, best effort (CLI operator): old key archived, new key written; note fields key path, archive path *(see note)*, Class B | — *(`K05`, system actor)* / — *(best effort)* | — | `rotation_id` (`K05`) / key path, archive path (best effort, see note) | **A** (`K05`) / B (best effort) |
+| `admin.master_key.resealed` | Re-seal every column-encrypted value under a new master key, one transaction, plus the pending `master_key_rotation` row (command `K08`, RFC 100 `0.94.0` P1 §2, wired into the live rotation by P2). First written by `K07` (RFC 094 cycle J stage 4), which P2 retired once K08 became the only caller — one writer again | — | — | `signing_keys=N`, `refresh_tokens=N`, `user_totp_secrets=N`, `user_totp_recovery_codes=N`, `user_webauthn_credentials=N`, `smtp_config=N`, `email_outbox_rows=N`, `rotation_id` (optional; absent from an older `K07`-written event) | A |
+| `admin.master_key.rotated` | Mark a `master_key_rotation` row complete and append this, idempotently (a second completion of the same `rotation_id` appends nothing) — command `K05` (RFC 100 `0.94.0` P1 §3, wired into the live rotation by P2, its only writer since). The live rotation's own best-effort append (`cli/handlers.rs`, outside any transaction) is removed by P2 | — *(system actor)* | — | `rotation_id` | A |
 | `admin.user.unlock` | Clear account lockout (CLI operator) | — *(see note)* | target user id | — | A |
 
-> **`admin.master_key.rotated`'s best-effort writer is `B` by design,
-> not `B` pending conversion.** Decided 2026-11-04 (RFC 094 cycle J
-> stage 5), dropping the `(A required)` annotation this row carried
-> since 2026-09-24. That annotation was correct when written: this
-> event was then the only record of the whole rotation, and the
-> re-seal it covered *was* atomicizable. Stage 4 (2026-11-03) moved the
-> re-seal and its atomicity to its own event, `admin.master_key.resealed`
-> above. What is left in the best-effort path is two filesystem renames
-> — the old key file to `.bak.<stamp>`, the staged new key to the
-> configured path — and a rename is not a SQL statement; there is no
-> transaction for this event to be atomic with. Requiring it would be
-> requiring something incoherent, not something merely unfinished.
-> Best-effort is permanent for *that* path, and its failure is reported
-> on stderr rather than silently discarded (`cli/handlers.rs:529`'s
-> `rotated_append` handling) — not escalated to a command failure,
-> since the rotation is already done and committed by the time this
-> event could fail to write. RFC 100 `0.94.0` P1 §3 (2026-11-24) gives
-> the *name* a second, sealed writer, `K05`: once the live rotation
-> calls it (P2), that call sits inside an already-open database and can
-> be Class A on its own terms, with the exactly-once idempotence a
-> filesystem rename never had. `K05` does not replace `cli/handlers.rs`'s
-> append — P2 does, not this stage — so both writers coexist here, the
-> same shape as `auth.login.failure`'s row above.
+> **`admin.master_key.rotated` is Class A again, RFC 100 `0.94.0` P2
+> (2026-11-24) — one writer, `K05`.** From 2026-09-24 to 2026-11-24 this
+> row carried a best-effort writer (two filesystem renames outside any
+> transaction, which cannot be atomic with a SQL append — the `(A
+> required)` annotation dropped 2026-11-04 said exactly that), and, for
+> one stage in between (P1), *two* writers while `K05` existed built but
+> unwired. P2 wires `K05` into the live rotation and removes the
+> best-effort append (`cli/handlers.rs`) it replaces: the rotation's own
+> completion now sits inside an already-open database, under the new
+> key, and commits with `K05`'s own transaction — the same
+> exactly-once idempotence a filesystem rename never had, and nothing
+> left outside it to be best-effort about.
 
 > **`admin.user.unlock` has no user actor, and that is correct.** Decided
 > 2026-09-09. This row previously required `admin user id`. There is no HTTP admin

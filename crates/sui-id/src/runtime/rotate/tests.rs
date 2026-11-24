@@ -1,18 +1,30 @@
-//! RFC 100 stage 0, §D: the harness's prototype, reproduced against the
-//! real code. Each test drives the real [`rotate_key_files`] (or, for
-//! the variants that must never exist in production, a test-only copy
-//! of its sequence) through [`key_adapter::simulated::Simulated`], then
-//! checks the design's two properties over every enumerated crash state,
-//! against two genuine `VACUUM INTO` snapshots of a real database —
-//! "does this key decrypt the active signing key" is a real decrypt
-//! attempt, not a byte comparison.
+//! RFC 100 `0.94.0` P2 §4: `crash-matrix.md`'s preparation and
+//! activation points (1-10), enumerated against the real [`rotate`]
+//! through [`Simulated`] -- the same harness shape stage 0's own
+//! (now-removed) D1-D4 used for the sequence this module replaces, with
+//! three differences the new protocol needs: three database snapshots
+//! instead of two (before K08, after K08, after K05 -- the row's own
+//! state, not just the key, now matters), the required outcome is
+//! "recovery reaches `OldReady` or `Complete`," not "M2 holds," and the
+//! oracle runs the **real** [`recovery::recover`] against a
+//! materialized disk, not a key-file byte scan.
+//!
+//! **Short write, termination, power loss** (`crash-matrix.md`'s three
+//! failure modes): [`RecordedPoint::power_loss_states`] already
+//! enumerates every torn-write prefix as one of its candidates (a short
+//! write is one of the states a power loss can leave), and
+//! [`RecordedPoint::kill_state`] is strictly less lossy than any
+//! power-loss state at the same point -- the same equivalence D1's own
+//! design relied on. Two computational models, three required modes.
 
 use super::*;
-use crate::key_adapter::KeyFileOps;
-use crate::key_adapter::simulated::{Disk, RecordedPoint, Simulated};
+use crate::key_adapter::Real;
+use crate::key_adapter::simulated::{Disk, RecordedPoint, Simulated, materialize};
+use crate::rotate::recovery::{self, Recovered};
 use std::path::{Path, PathBuf};
 use sui_id_store::Database;
 use sui_id_store::crypto::MasterKey;
+use sui_id_store::master_key_rotation::{RotationDisposition, RotationRecord};
 use zeroize::Zeroize;
 
 fn dup_key(key: &MasterKey) -> MasterKey {
@@ -22,14 +34,19 @@ fn dup_key(key: &MasterKey) -> MasterKey {
     copy
 }
 
-/// A fresh on-disk database with one active signing key, so there is
-/// something real to unseal. Returns the directory (kept alive for the
-/// database file and its snapshots) and the database, keyed under a
-/// fresh `old_key`.
-async fn fresh_db() -> (tempfile::TempDir, Database, MasterKey) {
+fn disposition() -> RotationDisposition {
+    RotationDisposition::RemoveAfterVerified {
+        verification_reference: "test-only".to_owned(),
+    }
+}
+
+/// A fresh on-disk database with one active signing key and its
+/// sentinel written, keyed under a fresh `old_key`.
+async fn fresh_db() -> (tempfile::TempDir, Database, MasterKey, PathBuf) {
     let dir = tempfile::tempdir().expect("tempdir");
     let old_key = MasterKey::generate();
-    let db = Database::open(&dir.path().join("t.sqlite"), dup_key(&old_key)).expect("open");
+    let db_path = dir.path().join("t.sqlite");
+    let db = Database::open(&db_path, dup_key(&old_key)).expect("open");
     sui_id_store::repos::signing_keys::insert_with_plaintext(
         &db,
         sui_id_shared::ids::SigningKeyId::new(),
@@ -40,10 +57,12 @@ async fn fresh_db() -> (tempfile::TempDir, Database, MasterKey) {
     )
     .await
     .expect("seed a signing key");
-    (dir, db, old_key)
+    sui_id_store::master_key_check::ensure_sentinel_written(&db, db.key())
+        .await
+        .expect("sentinel");
+    (dir, db, old_key, db_path)
 }
 
-/// `VACUUM INTO` a real snapshot of `db` at `dest`.
 fn snapshot(db: &Database, dest: &Path) {
     let dest = dest.to_owned();
     db.with_conn_sync(move |conn| {
@@ -53,498 +72,257 @@ fn snapshot(db: &Database, dest: &Path) {
     .expect("vacuum into");
 }
 
-/// Does `key_bytes` (a base64 key file's content, with or without a
-/// trailing newline) decrypt the active signing key in the database at
-/// `db_snapshot`? A real decrypt attempt, per the dispatch's §C.
-async fn opens(key_bytes: &[u8], db_snapshot: &Path) -> bool {
-    let Ok(s) = std::str::from_utf8(key_bytes) else {
-        return false;
-    };
-    let Ok(key) = MasterKey::from_base64(s.trim()) else {
-        return false;
-    };
-    let Ok(db) = Database::open(db_snapshot, dup_key(&key)) else {
-        return false;
-    };
-    match sui_id_store::repos::signing_keys::active(&db).await {
-        Ok(row) => sui_id_store::crypto::open(
-            &key,
-            &row.private_key_enc,
-            sui_id_store::repos::signing_keys::SIGNING_KEY_AAD,
-        )
-        .is_ok(),
-        Err(_) => false,
-    }
-}
-
-/// M2: some file in `disk` holds the key `db_snapshot` is actually
-/// sealed under.
-async fn m2_holds(disk: &Disk, db_snapshot: &Path) -> bool {
-    for path in disk.paths() {
-        if let Some(bytes) = disk.read(path)
-            && opens(bytes, db_snapshot).await
-        {
-            return true;
-        }
-    }
-    false
-}
-
-/// The stronger property startup needs today, with no recovery: the
-/// active path itself holds the key `db_snapshot` is sealed under.
-async fn active_holds(disk: &Disk, old_path: &Path, db_snapshot: &Path) -> bool {
-    match disk.read(old_path) {
-        Some(bytes) => opens(bytes, db_snapshot).await,
-        None => false,
-    }
-}
-
-struct ModelCounts {
-    crash_points: usize,
-    states: usize,
-    m2_violated: usize,
-    wrong_after_success: usize,
-}
-
-/// Reproduces the prototype's `run`: every crash point's enumerated
-/// states (power-loss: every subset of the pending directory ops and
-/// writes; kill: the one state a kill leaves), checked against whichever
-/// of the two snapshots this state's own `rotate.reseal` marker selects.
-async fn count_violations(
-    points: &[RecordedPoint],
-    old_path: &Path,
-    db_before: &Path,
-    db_after: &Path,
-    power_loss: bool,
-) -> ModelCounts {
-    let mut states = 0;
-    let mut m2_violated = 0;
-    let mut wrong_after_success = 0;
-    let last = points.len().saturating_sub(1);
-    for (i, p) in points.iter().enumerate() {
-        let disks: Vec<Disk> = if power_loss {
-            p.power_loss_states()
-        } else {
-            vec![p.kill_state()]
-        };
-        for d in disks {
-            states += 1;
-            let db_snap = if d.has_marker("rotate.reseal") {
-                db_after
-            } else {
-                db_before
-            };
-            if !m2_holds(&d, db_snap).await {
-                m2_violated += 1;
-            }
-            if i == last
-                && (!active_holds(&d, old_path, db_snap).await || !d.has_marker("rotate.reseal"))
-            {
-                wrong_after_success += 1;
-            }
-        }
-    }
-    ModelCounts {
-        crash_points: points.len(),
-        states,
-        m2_violated,
-        wrong_after_success,
-    }
-}
-
-/// Which of today's syncs (or the checkpoint) a test-only run skips —
-/// `None` reproduces today's order exactly; every other variant is a
-/// sequence that must never exist in production.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Skip {
-    StageSyncFile,
-    StageSyncDir,
-    SyncDirAfterRename1,
-    SyncDirAfterRename2,
-    DbDurable,
-    /// The `0.90.0` order: every sync and the checkpoint, all at once.
-    All,
-}
-
-/// A **test-only copy** of [`rotate_key_files`]'s sequence (never in
-/// production code — dispatch §D2), with one step optionally skipped, so
-/// D2–D4 can show the harness catches dropping each one.
-#[allow(clippy::too_many_arguments)]
-async fn test_only_rotation_sequence(
-    adapter: &dyn KeyFileOps,
-    db: &Database,
-    new_key: &MasterKey,
-    old_path: &Path,
-    staged_path: &Path,
-    bak_path: &Path,
-    new_key_b64: &str,
-    skip: Skip,
-) {
-    let skip_all = skip == Skip::All;
-    adapter
-        .create_new("rotate.stage.create_new", staged_path)
-        .expect("create_new");
-    let mut data = new_key_b64.as_bytes().to_vec();
-    data.push(b'\n');
-    adapter
-        .write_all("rotate.stage.write", staged_path, &data)
-        .expect("write_all");
-    if skip != Skip::StageSyncFile && !skip_all {
-        adapter
-            .sync_file("rotate.stage.sync_file", staged_path)
-            .expect("sync_file");
-    }
-    if skip != Skip::StageSyncDir && !skip_all {
-        adapter
-            .sync_dir(
-                "rotate.stage.sync_dir",
-                staged_path.parent().unwrap_or(Path::new(".")),
-            )
-            .expect("sync_dir stage");
-    }
-
-    sui_id_store::commands::reseal_master_key(db, new_key)
+async fn audit_rotated_count(db_path: &Path, new_key: &MasterKey) -> usize {
+    let db = Database::open(db_path, dup_key(new_key)).expect("open under new key");
+    sui_id_store::repos::audit::recent(&db, 1000)
         .await
-        .expect("reseal");
-    adapter.db_committed("rotate.reseal");
-    if skip != Skip::DbDurable && !skip_all {
-        adapter.db_durable("rotate.reseal");
-    }
-
-    adapter
-        .rename("rotate.rename.1", old_path, bak_path)
-        .expect("rename 1");
-    if skip != Skip::SyncDirAfterRename1 && !skip_all {
-        adapter
-            .sync_dir(
-                "rotate.sync_dir.after_rename.1",
-                old_path.parent().unwrap_or(Path::new(".")),
-            )
-            .expect("sync_dir after rename 1");
-    }
-    adapter
-        .rename("rotate.rename.2", staged_path, old_path)
-        .expect("rename 2");
-    if skip != Skip::SyncDirAfterRename2 && !skip_all {
-        adapter
-            .sync_dir(
-                "rotate.sync_dir.after_rename.2",
-                old_path.parent().unwrap_or(Path::new(".")),
-            )
-            .expect("sync_dir after rename 2");
-    }
+        .expect("audit tail")
+        .into_iter()
+        .filter(|r| r.action == "admin.master_key.rotated")
+        .count()
 }
 
-fn paths() -> (PathBuf, PathBuf, PathBuf) {
-    (
-        PathBuf::from("/virtual/t.key"),
-        PathBuf::from("/virtual/t.key.new"),
-        PathBuf::from("/virtual/t.key.bak.0"),
-    )
+fn key_opens_fingerprint(path: &Path, expected: &MasterKey) -> bool {
+    let Ok(body) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(key) = MasterKey::from_base64(body.trim()) else {
+        return false;
+    };
+    sui_id_store::crypto::fingerprint(&key) == sui_id_store::crypto::fingerprint(expected)
 }
 
-/// D1 — today's order (stage 1 with A2), through the real
-/// [`rotate_key_files`]: M2 holds in every state, in both models, and
-/// the kill model's "after the last op" state is never wrong (the
-/// power-loss model's isn't either — the properties this dispatch asks
-/// for, not the prototype's exact counts, which the real code's finer
-/// operations do not reproduce bit-for-bit).
-#[tokio::test]
-async fn todays_order_holds_m2_in_every_power_loss_and_kill_state() {
-    let (_dir, db, old_key) = fresh_db().await;
-    let (old_path, staged_path, bak_path) = paths();
-    let new_key = MasterKey::generate();
-    let new_key_b64 = new_key.to_base64();
-
-    let old_body = format!("{}\n", old_key.to_base64());
-    let sim = Simulated::new(&[(old_path.clone(), old_body.into_bytes())]);
-
-    let before_dir = tempfile::tempdir().expect("tempdir");
-    let db_before = before_dir.path().join("before.sqlite");
-    let db_after = before_dir.path().join("after.sqlite");
-    snapshot(&db, &db_before);
-
-    rotate_key_files(
-        &sim,
-        &db,
-        &new_key,
-        &old_path,
-        &staged_path,
-        &bak_path,
-        &new_key_b64,
-    )
-    .await
-    .expect("rotate");
-    snapshot(&db, &db_after);
-    sim.finish();
-
-    let points = sim.points();
-    let power = count_violations(&points, &old_path, &db_before, &db_after, true).await;
-    let kill = count_violations(&points, &old_path, &db_before, &db_after, false).await;
-
-    eprintln!(
-        "D1 today's order: power-loss {} crash points, {} states, M2 violated {}, wrong after success {}",
-        power.crash_points, power.states, power.m2_violated, power.wrong_after_success
-    );
-    eprintln!(
-        "D1 today's order: kill {} crash points, {} states, M2 violated {}, wrong after success {}",
-        kill.crash_points, kill.states, kill.m2_violated, kill.wrong_after_success
-    );
-
-    assert_eq!(
-        power.m2_violated, 0,
-        "M2 must hold in every power-loss state"
-    );
-    assert_eq!(
-        power.wrong_after_success, 0,
-        "once success is reported, the active path must hold the key the database is sealed under"
-    );
-    assert_eq!(
-        kill.m2_violated, 0,
-        "a kill is strictly less lossy than a power loss"
-    );
-    assert_eq!(kill.wrong_after_success, 0);
+/// Drives the real [`rotate`] once through [`Simulated`], producing:
+/// every recorded crash point, and the three database snapshots a
+/// crash prefix selects between (`db_before`: nothing committed yet;
+/// `db_after_k08`: the reseal committed, row pending; `db_after_k05`:
+/// the row complete). `db_after_k08` is produced by replaying K08
+/// directly on a byte-identical copy of `db_before`, with the exact
+/// `rotation_id` [`rotate`] minted -- deterministic given identical
+/// inputs, so this reproduces the in-band commit without needing a hook
+/// into `rotate` itself.
+struct Harness {
+    _dir: tempfile::TempDir,
+    _mid_dir: tempfile::TempDir,
+    /// The one real directory every materialized crash state is
+    /// written into, cleared between states (see [`materialize_state`]).
+    /// **Not** a fresh `tempfile::tempdir()` per state: the journal
+    /// [`rotate`] sealed binds `key_file`'s exact path string
+    /// (`check_bound_paths`), so the real path `recovery::recover` is
+    /// asked to check must be the *same* path [`rotate`] itself ran
+    /// against -- a fresh, differently-named tempdir per state would
+    /// make every single state refuse on a bound-path mismatch that
+    /// has nothing to do with what is actually being tested.
+    work_dir: tempfile::TempDir,
+    key_file: PathBuf,
+    old_key: MasterKey,
+    new_key: MasterKey,
+    points: Vec<RecordedPoint>,
+    db_before: PathBuf,
+    db_after_k08: PathBuf,
+    db_after_k05: PathBuf,
 }
 
-/// D2 — remove each sync, one at a time (checkpoint kept): the
-/// power-loss model must find at least one M2 or wrong-after-success
-/// violation for each, except the directory sync after the first
-/// rename, which the design's §2 already found not load-bearing.
-#[tokio::test]
-async fn dropping_any_sync_except_after_the_first_rename_is_caught() {
-    for skip in [
-        Skip::StageSyncFile,
-        Skip::StageSyncDir,
-        Skip::SyncDirAfterRename1,
-        Skip::SyncDirAfterRename2,
-    ] {
-        let (_dir, db, old_key) = fresh_db().await;
-        let (old_path, staged_path, bak_path) = paths();
-        let new_key = MasterKey::generate();
-        let new_key_b64 = new_key.to_base64();
-        let old_body = format!("{}\n", old_key.to_base64());
-        let sim = Simulated::new(&[(old_path.clone(), old_body.into_bytes())]);
-
-        let dir = tempfile::tempdir().expect("tempdir");
+impl Harness {
+    async fn build() -> Self {
+        let (dir, db, old_key, db_path) = fresh_db().await;
         let db_before = dir.path().join("before.sqlite");
-        let db_after = dir.path().join("after.sqlite");
         snapshot(&db, &db_before);
 
-        test_only_rotation_sequence(
+        let new_key = MasterKey::generate();
+        let new_key_b64 = new_key.to_base64();
+        let work_dir = tempfile::tempdir().expect("tempdir");
+        let key_file = work_dir.path().join("t.key");
+        let sim = Simulated::new(&[(
+            key_file.clone(),
+            format!("{}\n", old_key.to_base64()).into_bytes(),
+        )]);
+
+        let outcome = rotate(
             &sim,
             &db,
+            &db_path,
+            &key_file,
+            &old_key,
             &new_key,
-            &old_path,
-            &staged_path,
-            &bak_path,
             &new_key_b64,
-            skip,
+            disposition(),
+            crate::database::PreMigrationBackup::Declined,
         )
-        .await;
-        snapshot(&db, &db_after);
+        .await
+        .map_err(|e| match e {
+            RotateError::NotDurable { phase, source } => format!("{phase}: {source}"),
+            RotateError::Other(e) => format!("{e:#}"),
+        })
+        .expect("rotate");
         sim.finish();
 
-        let points = sim.points();
-        let power = count_violations(&points, &old_path, &db_before, &db_after, true).await;
-        eprintln!(
-            "D2 drop {skip:?}: {} crash points, {} states, M2 violated {}, wrong after success {}",
-            power.crash_points, power.states, power.m2_violated, power.wrong_after_success
-        );
+        let db_after_k05 = dir.path().join("after_k05.sqlite");
+        snapshot(&db, &db_after_k05);
 
-        let found_a_violation = power.m2_violated > 0 || power.wrong_after_success > 0;
-        if skip == Skip::SyncDirAfterRename1 {
-            // The design's §2 measured this one as not load-bearing for
-            // any property this checks. Record what is actually found,
-            // per the dispatch -- if it also finds a violation, that is
-            // new evidence, stated here rather than asserted around.
-            eprintln!(
-                "D2 drop {skip:?}: {}",
-                if found_a_violation {
-                    "NEW EVIDENCE -- this one found a violation too, contradicting the design's §2 measurement"
-                } else {
-                    "confirms the design's §2: not load-bearing for M2 or wrong-after-success"
-                }
-            );
+        let mid_dir = tempfile::tempdir().expect("tempdir");
+        let mid_path = mid_dir.path().join("mid.sqlite");
+        std::fs::copy(&db_before, &mid_path).expect("copy db_before for the K08 replica");
+        let db_mid = Database::open(&mid_path, dup_key(&old_key)).expect("open mid");
+        sui_id_store::commands::reseal_master_key_for_rotation(
+            &db_mid,
+            &new_key,
+            RotationRecord {
+                rotation_id: outcome.rotation_id.clone(),
+                old_fingerprint: sui_id_store::crypto::fingerprint(&old_key),
+                backup_filename: "t.key.pre-rotation".to_owned(),
+                disposition: disposition(),
+            },
+        )
+        .await
+        .expect("K08 replica for the after-K08 snapshot");
+        let db_after_k08 = mid_dir.path().join("after_k08.sqlite");
+        snapshot(&db_mid, &db_after_k08);
+
+        Harness {
+            _dir: dir,
+            _mid_dir: mid_dir,
+            work_dir,
+            key_file,
+            old_key,
+            new_key,
+            points: sim.points(),
+            db_before,
+            db_after_k08,
+            db_after_k05,
+        }
+    }
+
+    fn db_snapshot_for(&self, d: &Disk) -> &Path {
+        if d.has_marker("rotate.rotated") {
+            &self.db_after_k05
+        } else if d.has_marker("rotate.reseal") {
+            &self.db_after_k08
         } else {
-            assert!(
-                found_a_violation,
-                "dropping {skip:?} must be caught (M2 violated {}, wrong after success {})",
-                power.m2_violated, power.wrong_after_success
-            );
+            &self.db_before
+        }
+    }
+
+    /// Clears [`Self::work_dir`] and materializes `d` into it, alongside
+    /// a copy of `db_snapshot` -- reusing one fixed real directory
+    /// across every state (see [`Self::work_dir`]'s own doc for why).
+    fn materialize_state(&self, d: &Disk, db_snapshot: &Path) -> PathBuf {
+        clear_dir(self.work_dir.path());
+        materialize(d, self.work_dir.path()).expect("materialize");
+        let db_path = self.work_dir.path().join("t.sqlite");
+        std::fs::copy(db_snapshot, &db_path).expect("copy db snapshot");
+        db_path
+    }
+}
+
+fn clear_dir(dir: &Path) {
+    for entry in std::fs::read_dir(dir).expect("read dir") {
+        let path = entry.expect("dir entry").path();
+        if path.is_dir() {
+            std::fs::remove_dir_all(&path).expect("remove dir");
+        } else {
+            std::fs::remove_file(&path).expect("remove file");
         }
     }
 }
 
-/// D3 — remove the `db_durable` step (A2's checkpoint): the power-loss
-/// model must find the state where the reseal rolled back under the new
-/// key, i.e. the active path holds the new key file but the database
-/// snapshot a crash there would actually boot from is the un-resealed
-/// one.
-#[tokio::test]
-async fn dropping_the_checkpoint_finds_the_rolled_back_reseal() {
-    let (_dir, db, old_key) = fresh_db().await;
-    let (old_path, staged_path, bak_path) = paths();
-    let new_key = MasterKey::generate();
-    let new_key_b64 = new_key.to_base64();
-    let old_body = format!("{}\n", old_key.to_base64());
-    let sim = Simulated::new(&[(old_path.clone(), old_body.into_bytes())]);
+/// The required outcome for one materialized state, run against the
+/// real [`recovery::recover`] -- then, for the two rows that need it,
+/// exactly the completion `database::open_checked` itself performs
+/// (K05, then the clean), before the final checks.
+async fn assert_required_outcome(
+    h: &Harness,
+    label: &str,
+    key_file: &Path,
+    db_path: &Path,
+    reseal_durable: bool,
+) {
+    let result = recovery::recover(&Real, key_file, db_path);
+    let recovered = result.unwrap_or_else(|e| {
+        panic!("{label}: recovery must never error on a state the rotation itself left: {e:#}")
+    });
 
-    let dir = tempfile::tempdir().expect("tempdir");
-    let db_before = dir.path().join("before.sqlite");
-    let db_after = dir.path().join("after.sqlite");
-    snapshot(&db, &db_before);
+    if !reseal_durable {
+        assert!(
+            matches!(recovered, Recovered::Nothing | Recovered::Cleaned { .. }),
+            "{label}: a pre-K08-durable prefix must reach OldReady, got {recovered:?}"
+        );
+        let paths = crate::rotate::preconditions::RotationPaths::for_key_file(key_file);
+        assert!(
+            !paths.workspace.exists(),
+            "{label}: the workspace must be gone"
+        );
+        if key_file.exists() {
+            assert!(
+                key_opens_fingerprint(key_file, &h.old_key),
+                "{label}: the active key file must still be the old key"
+            );
+        }
+        return;
+    }
 
-    test_only_rotation_sequence(
-        &sim,
-        &db,
-        &new_key,
-        &old_path,
-        &staged_path,
-        &bak_path,
-        &new_key_b64,
-        Skip::DbDurable,
-    )
-    .await;
-    snapshot(&db, &db_after);
-    sim.finish();
+    match recovered {
+        Recovered::NeedsCompletion { rotation_id, .. } => {
+            let db_new = Database::open(db_path, dup_key(&h.new_key)).expect("open under new key");
+            sui_id_store::commands::complete_master_key_rotation(&db_new, rotation_id)
+                .await
+                .expect("K05");
+            drop(db_new);
+            let paths = crate::rotate::preconditions::RotationPaths::for_key_file(key_file);
+            recovery::clean_workspace(&Real, &paths, false).expect("clean after completion");
+        }
+        // `Cleaned` (the workspace still existed, and is now gone) and
+        // `Nothing` (the workspace was already gone in this exact
+        // state -- a crash point inside the clean's own last step can
+        // leave that) are both fine: either way nothing is left to
+        // complete.
+        Recovered::Cleaned { .. } | Recovered::Nothing => {}
+    }
 
-    let points = sim.points();
-    let power = count_violations(&points, &old_path, &db_before, &db_after, true).await;
-    eprintln!(
-        "D3 drop db_durable: {} crash points, {} states, M2 violated {}, wrong after success {}",
-        power.crash_points, power.states, power.m2_violated, power.wrong_after_success
-    );
-
+    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(key_file);
     assert!(
-        power.wrong_after_success > 0,
-        "without the checkpoint, there must be a state where the active path holds the new key \
-         but the reseal rolled back"
+        !paths.workspace.exists(),
+        "{label}: the workspace must be gone once the rotation is complete"
     );
-}
-
-/// D4 — the `0.90.0` order (no syncs, no checkpoint), as a test-only
-/// sequence: the power-loss model must find violations, and the
-/// kill-only model must find none — the blindness this harness exists
-/// to close, reproduced against the real code, not the prototype's
-/// abstract model.
-#[tokio::test]
-async fn the_0_90_0_order_is_safe_under_a_kill_and_unsafe_under_a_power_loss() {
-    let (_dir, db, old_key) = fresh_db().await;
-    let (old_path, staged_path, bak_path) = paths();
-    let new_key = MasterKey::generate();
-    let new_key_b64 = new_key.to_base64();
-    let old_body = format!("{}\n", old_key.to_base64());
-    let sim = Simulated::new(&[(old_path.clone(), old_body.into_bytes())]);
-
-    let dir = tempfile::tempdir().expect("tempdir");
-    let db_before = dir.path().join("before.sqlite");
-    let db_after = dir.path().join("after.sqlite");
-    snapshot(&db, &db_before);
-
-    test_only_rotation_sequence(
-        &sim,
-        &db,
-        &new_key,
-        &old_path,
-        &staged_path,
-        &bak_path,
-        &new_key_b64,
-        Skip::All,
-    )
-    .await;
-    snapshot(&db, &db_after);
-    sim.finish();
-
-    let points = sim.points();
-    let power = count_violations(&points, &old_path, &db_before, &db_after, true).await;
-    let kill = count_violations(&points, &old_path, &db_before, &db_after, false).await;
-    eprintln!(
-        "D4 (0.90.0 order) power-loss: {} crash points, {} states, M2 violated {}, wrong after success {}",
-        power.crash_points, power.states, power.m2_violated, power.wrong_after_success
-    );
-    eprintln!(
-        "D4 (0.90.0 order) kill: {} crash points, {} states, M2 violated {}, wrong after success {}",
-        kill.crash_points, kill.states, kill.m2_violated, kill.wrong_after_success
-    );
-
     assert!(
-        power.m2_violated > 0 || power.wrong_after_success > 0,
-        "the 0.90.0 order (no syncs at all) must be unsafe under a power loss"
+        key_opens_fingerprint(key_file, &h.new_key),
+        "{label}: the active key file must be the new key once the rotation is complete"
     );
     assert_eq!(
-        kill.m2_violated, 0,
-        "a kill-only test must pass this order -- that is the blindness this harness exists to close"
+        audit_rotated_count(db_path, &h.new_key).await,
+        1,
+        "{label}: admin.master_key.rotated must be recorded exactly once"
     );
-    assert_eq!(kill.wrong_after_success, 0);
 }
 
-/// F1's own test: under the `0.90.0` order, at least one violating
-/// state must hold a **torn** key file at a path the oracle tried — not
-/// merely "no file holds the right key" (which an untorn wrong key
-/// already shows), but a file whose bytes are a non-empty, strict
-/// prefix of the key that was being written, at a path [`m2_holds`] or
-/// [`active_holds`] actually read. A write that persisted only
-/// partially is exactly what [`RecordedPoint::power_loss_states`] adds
-/// over the prototype's own model.
 #[tokio::test]
-async fn the_0_90_0_order_can_leave_a_torn_key_file_in_a_violating_state() {
-    let (_dir, db, old_key) = fresh_db().await;
-    let (old_path, staged_path, bak_path) = paths();
-    let new_key = MasterKey::generate();
-    let new_key_b64 = new_key.to_base64();
-    let new_full = format!("{new_key_b64}\n").into_bytes();
-    let old_body = format!("{}\n", old_key.to_base64());
-    let sim = Simulated::new(&[(old_path.clone(), old_body.into_bytes())]);
+async fn every_crash_matrix_point_reaches_the_required_outcome() {
+    let h = Harness::build().await;
+    let mut power_loss_states = 0usize;
+    let mut kill_states = 0usize;
 
-    let dir = tempfile::tempdir().expect("tempdir");
-    let db_before = dir.path().join("before.sqlite");
-    let db_after = dir.path().join("after.sqlite");
-    snapshot(&db, &db_before);
-
-    test_only_rotation_sequence(
-        &sim,
-        &db,
-        &new_key,
-        &old_path,
-        &staged_path,
-        &bak_path,
-        &new_key_b64,
-        Skip::All,
-    )
-    .await;
-    snapshot(&db, &db_after);
-    sim.finish();
-
-    let points = sim.points();
-    let last = points.len().saturating_sub(1);
-    let mut found_torn_violation = false;
-    for (i, p) in points.iter().enumerate() {
-        for d in p.power_loss_states() {
-            let db_snap = if d.has_marker("rotate.reseal") {
-                &db_after
-            } else {
-                &db_before
-            };
-            let m2 = m2_holds(&d, db_snap).await;
-            let wrong_after_success = i == last
-                && (!active_holds(&d, &old_path, db_snap).await || !d.has_marker("rotate.reseal"));
-            if m2 && !wrong_after_success {
-                continue;
-            }
-            for path in d.paths() {
-                if let Some(bytes) = d.read(path)
-                    && !bytes.is_empty()
-                    && bytes.len() < new_full.len()
-                    && new_full.starts_with(bytes)
-                {
-                    found_torn_violation = true;
-                }
-            }
+    for (i, p) in h.points.iter().enumerate() {
+        for (j, d) in p.power_loss_states().into_iter().enumerate() {
+            power_loss_states += 1;
+            let db_snapshot = h.db_snapshot_for(&d).to_path_buf();
+            let reseal_durable = d.has_marker("rotate.reseal");
+            let db_path = h.materialize_state(&d, &db_snapshot);
+            let label = format!("power-loss point {i} ({}) state {j}", p.label);
+            assert_required_outcome(&h, &label, &h.key_file, &db_path, reseal_durable).await;
         }
+
+        kill_states += 1;
+        let d = p.kill_state();
+        let db_snapshot = h.db_snapshot_for(&d).to_path_buf();
+        let reseal_durable = d.has_marker("rotate.reseal");
+        let db_path = h.materialize_state(&d, &db_snapshot);
+        let label = format!("kill point {i} ({})", p.label);
+        assert_required_outcome(&h, &label, &h.key_file, &db_path, reseal_durable).await;
     }
 
-    assert!(
-        found_torn_violation,
-        "the 0.90.0 order must be able to leave a torn key file in a violating state"
+    eprintln!(
+        "crash-matrix: {} crash point(s), {power_loss_states} power-loss state(s), \
+         {kill_states} kill state(s), every one reaching its required outcome",
+        h.points.len()
     );
 }

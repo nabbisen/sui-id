@@ -465,10 +465,17 @@ async fn open_checked_completes_a_pending_rotation_and_cleans_the_workspace_befo
     );
     assert!(row.completed_at.is_some());
 
-    // And the leftover workspace was cleaned, the same run.
+    // And the leftover workspace was cleaned, the same run -- but RFC
+    // 100 `0.94.0` P2 §3 point 11: a *completed* rotation's backup
+    // stays, under its bound disposition, until P3. (Rows 2-7's own
+    // cleanup, for an *abandoned* rotation, still removes it --
+    // `rotate::recovery::tests` covers that side.)
     assert!(!paths.workspace.exists());
     assert!(!paths.next.exists());
-    assert!(!paths.backup.exists());
+    assert!(
+        paths.backup.exists(),
+        "a completed rotation's backup must survive cleanup, under its disposition"
+    );
 
     // The returned database is the real thing: it opens with the new
     // key, which is what `open_checked`'s own caller gets to use.

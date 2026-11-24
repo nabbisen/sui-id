@@ -1,7 +1,6 @@
-//! RFC 100 stage 3: the rotation journal, as its own module. **Built,
-//! not wired in** -- `rotate_key_files` does not call anything here yet
-//! (stage 4 builds the recovery this would need before a live rotation
-//! can leave a workspace behind; stage 5 wires it in).
+//! RFC 100 stage 3: the rotation journal, as its own module. Built in
+//! stage 3 unwired, until stage 4's recovery existed to need it; wired
+//! into the live rotation itself (`rotate::rotate`) by `0.94.0` P2.
 //!
 //! The workspace `<active>.rotation-work`'s existence is the rotation
 //! lock ([`lock_workspace`]). Inside it, [`write_intent`] publishes the
@@ -35,21 +34,6 @@ pub enum JournalState {
     Prepared,
 }
 
-/// The operator's bound choice for the pre-rotation backup of the old
-/// key (RFC 100, Old-key custody). A required field on [`JournalBody`]
-/// -- stage 5 cannot forget it, the same way the dispatch requires.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum BackupDisposition {
-    RetainUntil {
-        review_at: String,
-        custody_reference: String,
-    },
-    RemoveAfterVerified {
-        verification_reference: String,
-    },
-}
-
 /// Everything the journal binds. A fixed field order, no maps, no
 /// floats -- `serde_json::to_vec` of a given value is deterministic, and
 /// [`canonical_body_bytes`] is the one place that fact is relied on.
@@ -76,7 +60,12 @@ pub struct JournalBody {
     pub backup_temp_path: String,
     pub expected_uid: u32,
     pub expected_mode: u32,
-    pub backup_disposition: BackupDisposition,
+    /// RFC 100 `0.94.0` P2 §3 point 4: `0.94.0` P1's own typed
+    /// disposition ([`sui_id_store::master_key_rotation::RotationDisposition`]),
+    /// not this module's own, since-removed `BackupDisposition` copy --
+    /// `review_at` is a real `DateTime<Utc>`, never a free-text `String`
+    /// a caller could hand this unparsed.
+    pub backup_disposition: sui_id_store::master_key_rotation::RotationDisposition,
     pub state: JournalState,
 }
 
@@ -139,11 +128,9 @@ fn verify_both(envelope: &JournalEnvelope, old_key: &MasterKey, new_key: &Master
     old_role == Some(KeyRole::Old) && new_role == Some(KeyRole::New)
 }
 
-/// `pub(crate)` production code, exercised only by [`sample_body`] until
-/// stage 5 builds the real call site that constructs a [`JournalBody`]
-/// from actual paths.
-#[cfg_attr(not(test), allow(dead_code))]
-fn path_to_string(path: &Path) -> anyhow::Result<String> {
+/// Used by [`sample_body`] and, since RFC 100 `0.94.0` P2, the live
+/// rotation's own `rotate::build_journal_body`.
+pub(crate) fn path_to_string(path: &Path) -> anyhow::Result<String> {
     path.to_str()
         .map(str::to_owned)
         .with_context(|| format!("{} is not valid UTF-8", path.display()))
@@ -371,9 +358,10 @@ pub(crate) fn sample_body(
         backup_temp_path: path_to_string(&paths.backup_temp).expect("utf8"),
         expected_uid: rustix::process::geteuid().as_raw(),
         expected_mode: 0o600,
-        backup_disposition: BackupDisposition::RemoveAfterVerified {
-            verification_reference: "test-only".to_owned(),
-        },
+        backup_disposition:
+            sui_id_store::master_key_rotation::RotationDisposition::RemoveAfterVerified {
+                verification_reference: "test-only".to_owned(),
+            },
         state: JournalState::Intent,
     }
 }

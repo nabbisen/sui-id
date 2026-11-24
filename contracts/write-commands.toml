@@ -1254,20 +1254,7 @@ owner = "Sealed-key insert/reseal primitives"
 rationale = "corrected 2026-11-03 (cycle J stage 1): the previous text read \"subordinate to S10 or K01 only\" and was false -- `sui_id_core::oidc::key_rotation::rotate_master_key` was a **third, independent, top-level caller** of the same `reseal_all` primitives, resealing six tables inside one `db.with_tx_sync` (`signing_keys`, `refresh_tokens`, `user_totp` twice, `user_webauthn_credentials`, `smtp_config`, `email_outbox`). **That wrong rationale is why master-key rotation had no command row at all**: an inventory stating a primitive is only ever subordinate tells the next reader there is no top-level command to look for, so a wrong rationale does not merely mislead, it suppresses the search. Sealed cycle J stage 4 (2026-11-03): the orchestration moved to `sui-id-store::commands::reseal_master_key`, K07 below, `admin.master_key.resealed`."
 mutation_surface = "`signing_keys::insert_sealed_on_conn`, all `reseal_all` functions"
 files = ["crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-store/src/repos/smtp_config.rs", "crates/sui-id-store/src/repos/email_outbox.rs"]
-test_id = "`k01_rotates_key_and_appends_audit_row`, `k07_reseals_every_one_of_the_six_tables`"
-
-[[command]]
-id = "K07"
-class = "A"
-status = "implemented"  # implemented | target-absent | target-legacy
-sealed = true
-owner = "Re-seal all column-encrypted values under a new master key"
-rationale = "`admin.master_key.resealed`, not attribute-free -- carries the per-table re-seal counts as attributes. CLI-only (`sui-id admin rotate-key`); the operator's authority is possession of the master key and filesystem access, not an authenticated user, so `system_principal: permitted`, actor none -- the shape U08, C22 and S05 use. RFC 094 cycle J stage 4, closing M2b criterion 2: moved from the bare, downstream `sui_id_core::oidc::key_rotation::rotate_master_key`, which could not be sealed in place (`declare_write_command!` is defined in this crate, not `sui-id-core`). Distinct from `admin.master_key.rotated`, unchanged by this stage -- that event fires after the key file is replaced, best-effort, outside any transaction, and is not this row."
-mutation_surface = "`signing_keys::reseal_all`, `refresh_tokens::reseal_all`, `user_totp::reseal_all`, `user_webauthn_credentials::reseal_all`, `smtp_config::reseal_all`, `email_outbox::reseal_all`, `master_key_check::reseal_sentinel_within_tx` (via `commands::reseal_master_key`; the sentinel moves with the data, RFC 100 stage 1)"
-files = ["crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-store/src/repos/smtp_config.rs", "crates/sui-id-store/src/repos/email_outbox.rs"]
-test_id = "`k07_reseal_master_key_appends_exactly_one_audit_row`, `k07_reseals_the_sentinel_with_the_data_in_one_transaction`, `k07_refuses_and_changes_nothing_when_the_sentinel_is_not_the_old_keys`"
-event = ["admin.master_key.resealed"]
-descriptor = ["K07_RESEALED"]
+test_id = "`k01_rotates_key_and_appends_audit_row`, `k08_reseals_every_one_of_the_six_tables`"
 
 [[command]]
 id = "K08"
@@ -1275,12 +1262,12 @@ class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = true
 owner = "Re-seal under the new key and commit the master-key-rotation row, one transaction"
-rationale = "RFC 100 `0.94.0` P1 §2: the database half of master-key rotation, built as a function the live rotation does not call yet (P2 wires it in). Reseals every column-encrypted table and the sentinel exactly as K07 does, then writes the `master_key_rotation` row `db_committed_pending_activation` in the same transaction, then checkpoints before returning -- the same durability contract as K07's own `0.91.0` A2. Refuses before writing anything if a row is already pending, or if the caller's claimed old fingerprint does not match the database's current key. Reuses K07's own `admin.master_key.resealed` descriptor rather than declaring a second one with the same name (the registry's one-descriptor-per-name rule is about declaring, not referencing); its one new attribute, `rotation_id`, is optional and absent from K07's own events. M4: this event's note asserts only that the database phase is done and activation is pending, never completion."
-mutation_surface = "the same six `*::reseal_all` repo calls and `master_key_check::reseal_sentinel_within_tx` as K07, plus `master_key_rotation::insert_pending_within_tx`"
-files = ["crates/sui-id-store/src/master_key_rotation.rs"]
-test_id = "`k08_reseal_for_rotation_appends_exactly_one_audit_row_and_writes_the_row`, `k08_refuses_while_a_row_is_already_pending_and_changes_nothing`, `k08_refuses_on_old_fingerprint_mismatch_and_changes_nothing`, `k08_a_failure_between_the_reseal_and_the_row_insert_rolls_back_the_reseal_too`, `k08_a_failure_between_the_insert_and_the_commit_rolls_back_everything`, `k08_leaves_the_wal_checkpointed_to_zero_bytes_on_return`"
+rationale = "RFC 100 `0.94.0` P1 §2, wired into the live rotation by P2. The database half of master-key rotation: reseals every column-encrypted table and the sentinel, then writes the `master_key_rotation` row `db_committed_pending_activation` in the same transaction, then checkpoints before returning. Refuses before writing anything if a row is already pending, or if the caller's claimed old fingerprint does not match the database's current key. K07, which did the same six-table-plus-sentinel re-seal without the rotation row, was this event's first writer; P2 retired it once K08 became the live rotation's own call and nothing else named it (measured: no remaining caller of `reseal_master_key` anywhere in the workspace) -- the descriptor (renamed `RESEALED_EVENT`, no longer `K07_RESEALED`) and the event name both outlive K07 itself, now with one writer again. Its one attribute beyond K07's own shape, `rotation_id`, is optional, absent from an older K07-written event. M4: this event's note asserts only that the database phase is done and activation is pending, never completion."
+mutation_surface = "`signing_keys::reseal_all`, `refresh_tokens::reseal_all`, `user_totp::reseal_all`, `user_webauthn_credentials::reseal_all`, `smtp_config::reseal_all`, `email_outbox::reseal_all`, `master_key_check::reseal_sentinel_within_tx`, `master_key_rotation::insert_pending_within_tx`"
+files = ["crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-store/src/repos/smtp_config.rs", "crates/sui-id-store/src/repos/email_outbox.rs", "crates/sui-id-store/src/master_key_rotation.rs"]
+test_id = "`k08_reseal_for_rotation_appends_exactly_one_audit_row_and_writes_the_row`, `k08_refuses_while_a_row_is_already_pending_and_changes_nothing`, `k08_refuses_on_old_fingerprint_mismatch_and_changes_nothing`, `k08_a_failure_between_the_reseal_and_the_row_insert_rolls_back_the_reseal_too`, `k08_a_failure_between_the_insert_and_the_commit_rolls_back_everything`, `k08_leaves_the_wal_checkpointed_to_zero_bytes_on_return`, `k08_reseals_every_one_of_the_six_tables`, `k08_refuses_as_not_durable_when_another_connection_holds_the_wal_open`, `k08_reseals_the_sentinel_with_the_data_in_one_transaction`, `k08_writes_a_sentinel_under_the_new_key_when_none_exists`, `k08_refuses_and_changes_nothing_when_the_sentinel_is_not_the_old_keys`"
 event = ["admin.master_key.resealed"]
-descriptor = ["K07_RESEALED"]
+descriptor = ["RESEALED_EVENT"]
 
 [[command]]
 id = "K05"

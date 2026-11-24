@@ -16,7 +16,7 @@
 //! temporary directory for the real-code oracle in
 //! [`super::tests`]/[`super::tests::stage0`].
 
-use super::{KeyFileMetadata, KeyFileOps};
+use super::{KeyFileMetadata, KeyFileOps, LockGuard};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
@@ -170,6 +170,12 @@ struct Inner {
     /// that is not currently live" from "an ordinary top-level path,"
     /// which is never in this set.
     managed_dirs: BTreeSet<PathBuf>,
+    /// RFC 100 `0.94.0` P2 §1: paths this run currently holds
+    /// [`KeyFileOps::lock_exclusive`] on. Not a crash-point concern (the
+    /// lock is never part of the enumerated preparation/activation
+    /// points) -- only a liveness one: a second [`lock_exclusive`] call
+    /// on the same path, before the first guard drops, must see it held.
+    locked: BTreeSet<PathBuf>,
 }
 
 /// Records every key-file operation issued through it during one real
@@ -208,6 +214,7 @@ impl Simulated {
                 next_ino: next,
                 points: vec![],
                 managed_dirs: BTreeSet::new(),
+                locked: BTreeSet::new(),
             }),
         }
     }
@@ -598,6 +605,52 @@ impl KeyFileOps for Simulated {
         for m in markers {
             inner.durable.apply(&m);
         }
+    }
+
+    fn lock_exclusive(
+        &self,
+        point: &str,
+        path: &Path,
+        blocking: bool,
+    ) -> io::Result<Box<dyn LockGuard + '_>> {
+        self.point(&format!("before {point}"));
+        let mut inner = self.inner.borrow_mut();
+        if inner.locked.contains(path) {
+            if blocking {
+                // A real `flock(2)` would block until the other holder
+                // releases it; `Simulated` drives one deterministic,
+                // single-threaded run, so a blocking call that would
+                // actually have to wait here is a test harness bug, not
+                // a state to model -- refuse rather than hang.
+                return Err(io::Error::other(
+                    "Simulated cannot block on a lock already held in this run",
+                ));
+            }
+            return Err(io::Error::from(io::ErrorKind::WouldBlock));
+        }
+        inner.locked.insert(path.to_path_buf());
+        Ok(Box::new(SimulatedLockGuard {
+            sim: self,
+            path: path.to_path_buf(),
+        }))
+    }
+}
+
+/// Releases its path from [`Inner::locked`] on drop -- modeling exactly
+/// what a real `flock` does when the holding process exits, including
+/// via an `Err` propagating out of the real rotation/recovery code this
+/// adapter drives (normal Rust unwinding through a local guard, no
+/// actual process exit needed to reproduce the effect).
+struct SimulatedLockGuard<'a> {
+    sim: &'a Simulated,
+    path: PathBuf,
+}
+
+impl LockGuard for SimulatedLockGuard<'_> {}
+
+impl Drop for SimulatedLockGuard<'_> {
+    fn drop(&mut self) {
+        self.sim.inner.borrow_mut().locked.remove(&self.path);
     }
 }
 

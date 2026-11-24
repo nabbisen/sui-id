@@ -384,6 +384,89 @@ pub(crate) async fn run_admin_issue_recovery_link(
 /// nothing, and creates, removes or renames no file. A real rotation
 /// runs the identical check after the confirmation prompt, then P5's
 /// filesystem probe, before anything today's sequence does.
+/// The four raw `--retain-backup-until`/`--custody-reference`/
+/// `--remove-backup-after-verified`/`--verification-reference` flags,
+/// bundled so `cli.rs`'s two call sites (the noun-first command and the
+/// pre-148 `rotate-key` alias) pass them identically. [`Self::into_disposition`]
+/// is the one place they become a typed
+/// [`sui_id_store::master_key_rotation::RotationDisposition`].
+pub(crate) struct CustodyChoiceArgs {
+    pub(crate) retain_backup_until: Option<String>,
+    pub(crate) custody_reference: Option<String>,
+    pub(crate) remove_backup_after_verified: bool,
+    pub(crate) verification_reference: Option<String>,
+}
+
+impl CustodyChoiceArgs {
+    /// RFC 100 `0.94.0` P2 §2: exactly one of the two forms is
+    /// required. `clap`'s own `conflicts_with_all`/`requires` already
+    /// make a *mixed* choice (both forms, or a reference without its
+    /// own flag) a usage error before this ever runs; this catches the
+    /// one shape clap cannot: *missing* (neither flag at all), and
+    /// `--retain-backup-until`'s own instant being malformed or not in
+    /// the future. Prints the problem and exits **2**, the same code
+    /// clap itself uses for a usage error -- never returned as an
+    /// ordinary `Result::Err` (exit 1).
+    fn into_disposition(self) -> sui_id_store::master_key_rotation::RotationDisposition {
+        use sui_id_store::master_key_rotation::RotationDisposition;
+        let usage_error = |line: String| -> ! {
+            eprintln!(
+                "refusing to rotate: {line}\n\nThe operator must choose exactly one of:\n  \
+                 --retain-backup-until <RFC3339_INSTANT> --custody-reference <TEXT>\n  \
+                 --remove-backup-after-verified --verification-reference <TEXT>"
+            );
+            std::process::exit(2);
+        };
+        match (self.retain_backup_until, self.remove_backup_after_verified) {
+            (None, false) => usage_error(
+                "no old-key custody choice was given (RFC 100's Old-key custody requires one)"
+                    .to_owned(),
+            ),
+            (Some(review_at), false) => {
+                let review_at = chrono::DateTime::parse_from_rfc3339(&review_at)
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(|e| {
+                        usage_error(format!(
+                            "--retain-backup-until {review_at:?} is not a valid RFC 3339 instant: {e}"
+                        ))
+                    });
+                if review_at <= chrono::Utc::now() {
+                    usage_error(format!(
+                        "--retain-backup-until {} is not in the future",
+                        review_at.to_rfc3339()
+                    ));
+                }
+                #[allow(clippy::expect_used)] // `requires = "retain_backup_until"` in cli.rs
+                let custody_reference = self
+                    .custody_reference
+                    .expect("clap requires --custody-reference with --retain-backup-until");
+                RotationDisposition::RetainUntil {
+                    review_at,
+                    custody_reference,
+                }
+            }
+            (None, true) => {
+                #[allow(clippy::expect_used)]
+                // `requires = "remove_backup_after_verified"` in cli.rs
+                let verification_reference = self.verification_reference.expect(
+                    "clap requires --verification-reference with --remove-backup-after-verified",
+                );
+                RotationDisposition::RemoveAfterVerified {
+                    verification_reference,
+                }
+            }
+            (Some(_), true) => {
+                // `conflicts_with_all` in cli.rs already refuses this
+                // combination before this function is ever reached.
+                unreachable!(
+                    "clap refuses --retain-backup-until with --remove-backup-after-verified"
+                )
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_admin_rotate_key(
     config_path: &Path,
     policy: PreMigrationBackup,
@@ -391,6 +474,7 @@ pub(crate) async fn run_admin_rotate_key(
     new_key: Option<PathBuf>,
     yes: bool,
     check: bool,
+    custody: CustodyChoiceArgs,
 ) -> Result<()> {
     let _ = generate_new_key; // the default when neither flag is given; no separate branch needed
     let cfg = Config::load(config_path)
@@ -400,12 +484,20 @@ pub(crate) async fn run_admin_rotate_key(
     if check {
         return run_rotate_check(&cfg.storage.key_file, &cfg.storage.db_path);
     }
+    // RFC 100 `0.94.0` P2 §2: resolved before anything else is touched,
+    // so a missing or mixed custody choice refuses (exit 2) before the
+    // pre-flight recovery pass below, let alone the lock or the
+    // confirmation prompt.
+    let disposition = custody.into_disposition();
 
     // RFC 100 stage 4: this command resolves its key through
     // `keyring::resolve_checked` directly, not `database::open_checked`,
     // so it calls recovery explicitly -- before anything else, including
     // the summary below, since it is the command most likely to meet
-    // its own leftover.
+    // its own leftover. This is a separate, prior lock acquisition and
+    // release (RFC 100 `0.94.0` P2 §1's own lock, taken non-blocking
+    // inside `recover` itself) -- the rotation attempt below takes its
+    // own, only once this pass has returned.
     let adapter = crate::key_adapter::default_adapter();
     crate::rotate::recovery::recover_and_report(
         adapter.as_ref(),
@@ -428,8 +520,8 @@ pub(crate) async fn run_admin_rotate_key(
         eprintln!("New key:      generated by this command");
     }
     eprintln!(
-        "After completion the old key file will be renamed to \
-        \"<path>.bak.<timestamp>\" and kept in place."
+        "RFC 100: this runs the full journalled rotation protocol. A crash part-way is \
+         completed or undone automatically, at the next start or rotation attempt."
     );
     eprintln!(
         "Make sure the server is stopped and that you have a fresh \
@@ -452,7 +544,14 @@ pub(crate) async fn run_admin_rotate_key(
     }
 
     let old_path = cfg.storage.key_file.clone();
-    let staged_path = crate::rotate::preconditions::staged_path(&old_path);
+    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(&old_path);
+
+    // RFC 100 `0.94.0` P2 §1: the liveness lock, before preconditions
+    // or the workspace -- taken non-blocking, so a second rotation
+    // while one is already running is refused immediately, not left to
+    // wait.
+    let _lock =
+        crate::rotate::preconditions::take_rotation_lock(adapter.as_ref(), &paths, "rotate.lock")?;
 
     // RFC 100 stage 2: P1-P4, gathered -- every failing precondition
     // named, not only the first. Nothing is created, removed or renamed
@@ -473,7 +572,8 @@ pub(crate) async fn run_admin_rotate_key(
     // before anything else -- a temporary probe file, removed either way.
     crate::rotate::preconditions::probe_filesystem(adapter.as_ref(), &old_path).await?;
 
-    let db = crate::database::open(&cfg.storage.db_path, resolved_old.key, policy)?;
+    let old_key = resolved_old.key;
+    let db = crate::database::open(&cfg.storage.db_path, dup_key(&old_key), policy)?;
     sui_id_store::master_key_check::ensure_sentinel_written(&db, db.key())
         .await
         .context("writing the master key sentinel")?;
@@ -491,55 +591,45 @@ pub(crate) async fn run_admin_rotate_key(
         (key, b64)
     };
 
-    let now = chrono::Utc::now();
-    let stamp = now.format("%Y-%m-%dT%H-%M-%SZ").to_string();
-    let bak_path =
-        crate::rotate::preconditions::sibling_with_suffix(&old_path, &format!(".bak.{stamp}"));
-
-    let report = match crate::rotate::rotate_key_files(
+    let outcome = match crate::rotate::rotate(
         adapter.as_ref(),
         &db,
-        &new_key,
+        &cfg.storage.db_path,
         &old_path,
-        &staged_path,
-        &bak_path,
+        &old_key,
+        &new_key,
         &new_key_b64,
+        disposition,
+        policy,
     )
     .await
     {
-        Err(crate::rotate::RotateKeyFilesError::NotDurable(e)) => {
-            return Err(anyhow::Error::new(e).context(format!(
-                "the database is now sealed under the NEW key, which is at {staged}; {active} \
-                 still holds the old key. Something else has the database open: stop sui-id \
-                 (rotation runs offline), then move {staged} to {active} by hand before \
-                 starting anything. Do not delete {staged}, and do not run the rotation again",
-                staged = staged_path.display(),
-                active = old_path.display(),
+        Err(crate::rotate::RotateError::NotDurable { phase, source }) => {
+            return Err(anyhow::Error::new(source).context(format!(
+                "{phase} committed, but could not be made durable (checkpoint busy) -- \
+                 something else has the database open. Stop sui-id (rotation runs offline), \
+                 free up whatever holds {} open, then either start sui-id or run this command \
+                 again: recovery will finish the rotation automatically. Do not touch {}, {} or \
+                 {} by hand",
+                cfg.storage.db_path.display(),
+                paths.workspace.display(),
+                paths.next.display(),
+                old_path.display(),
             )));
         }
-        Err(crate::rotate::RotateKeyFilesError::Other(e)) => return Err(e),
-        Ok(report) => report,
+        Err(crate::rotate::RotateError::Other(e)) => return Err(e),
+        Ok(outcome) => outcome,
     };
+    let report = outcome.report;
 
-    let rotated_append = sui_id_store::repos::audit::append(
-        &db,
-        &sui_id_store::models::AuditLogRow {
-            at: now,
-            actor: None,
-            action: "admin.master_key.rotated".into(),
-            target: None,
-            result: "ok".into(),
-            note: Some(format!(
-                "new key in place at {}; old key archived at {}",
-                old_path.display(),
-                bak_path.display()
-            )),
-        },
-    )
-    .await;
+    // RFC 100 `0.94.0` P2 §1/§3 point 12: release the lock, THEN print
+    // success -- success must never be printed while another process
+    // could still observe the lock held for a rotation that, from its
+    // own point of view, has not finished yet.
+    drop(_lock);
 
     eprintln!();
-    eprintln!("Rotation complete.");
+    eprintln!("Rotation complete (rotation {}).", outcome.rotation_id);
     eprintln!("  signing_keys:               {}", report.signing_keys);
     eprintln!("  refresh_tokens:             {}", report.refresh_tokens);
     eprintln!("  user_totp (secrets):        {}", report.user_totp_secrets);
@@ -554,18 +644,22 @@ pub(crate) async fn run_admin_rotate_key(
     eprintln!("  smtp_config:                {}", report.smtp_config);
     eprintln!("  total:                      {}", report.total());
     eprintln!();
-    eprintln!("Old key file archived at {}", bak_path.display());
-    eprintln!("New key file written to  {}", old_path.display());
+    eprintln!(
+        "The pre-rotation backup of the old key is at {}, kept under the bound disposition.",
+        paths.backup.display()
+    );
+    eprintln!("New key file written to {}", old_path.display());
     eprintln!();
     eprintln!("Restart the server. The new key is in place.");
-    if let Err(err) = rotated_append {
-        eprintln!();
-        eprintln!("Warning: the rotation completed, but the admin.master_key.rotated");
-        eprintln!("audit record could not be written: {err}");
-        eprintln!("The key is rotated and in place regardless -- note this by hand if");
-        eprintln!("your audit trail needs to be complete.");
-    }
     Ok(())
+}
+
+fn dup_key(key: &sui_id_store::crypto::MasterKey) -> sui_id_store::crypto::MasterKey {
+    use zeroize::Zeroize;
+    let mut bytes = *key.as_bytes();
+    let copy = sui_id_store::crypto::MasterKey::from_bytes(bytes);
+    bytes.zeroize();
+    copy
 }
 
 /// `sui-id admin master-key rotate --check`. RFC 100 stage 2 §2: P1-P4

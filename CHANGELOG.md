@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`admin master-key rotate` now requires an old-key custody choice**:
+  `--retain-backup-until <RFC3339_INSTANT> --custody-reference <TEXT>`,
+  or `--remove-backup-after-verified --verification-reference <TEXT>`.
+  `--check` needs neither. Rotation is now journaled end to end: every
+  step is recorded before it runs, and a crash part-way is completed or
+  undone automatically, at the next start or rotation attempt. **This
+  is not yet documented as crash-safe in every case** — that statement,
+  and the operator warning that goes with it, are still to come.
+
+### Removed
+
+- The old `.bak.<timestamp>` naming for the archived key file, visible
+  to an operator watching the directory during a rotation, is gone —
+  the pre-rotation backup now has one fixed name,
+  `<key_file>.pre-rotation`, kept under the operator's own custody
+  choice above.
+
 ## [0.93.1] — 2026-11-23
 
 **The master key is now checked at every start**: a key that cannot open

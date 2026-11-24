@@ -191,7 +191,53 @@ async fn row1_no_workspace_recovers_to_nothing_and_simulated_records_no_operatio
     )]);
     let result = recover(&sim, &f.key_path, &f.db_path).expect("recover");
     assert_eq!(result, Recovered::Nothing);
-    assert!(sim.points().is_empty(), "no operation recorded");
+    // RFC 100 `0.94.0` P2 §1: the one operation every `recover` call
+    // now performs first, even on the trivial row-1 path -- taking (and,
+    // by the time this returns, releasing) the liveness lock.
+    let points = sim.points();
+    assert_eq!(
+        points.len(),
+        1,
+        "the only operation is the lock itself: {:?}",
+        points.iter().map(|p| &p.label).collect::<Vec<_>>()
+    );
+    assert!(
+        points[0].label.contains("recovery.lock"),
+        "{}",
+        points[0].label
+    );
+}
+
+/// RFC 100 `0.94.0` P2 §1/§4: recovery fails closed, unconditionally,
+/// while another process (modeled here by a second, independent `open`
+/// of the same lock file -- see `key_adapter::tests` for why that is
+/// the right single-process model of "another process") holds the
+/// liveness lock, and changes nothing -- even on the otherwise-trivial
+/// row-1 path.
+#[tokio::test]
+async fn recovery_refuses_while_the_lock_is_held_by_another_process_and_changes_nothing() {
+    let f = Fixture::bare().await;
+    let paths = RotationPaths::for_key_file(&f.key_path);
+    let held = Real
+        .lock_exclusive("test.holder", &paths.lock, false)
+        .expect("take the lock as if another process held it");
+
+    let before = f.remaining_artifacts();
+    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    assert!(
+        format!("{err:#}").contains("running in another process"),
+        "{err:#}"
+    );
+    assert_eq!(f.remaining_artifacts(), before, "nothing changed");
+    assert!(
+        Database::open(&f.db_path, dup_key(&f.old_key)).is_ok(),
+        "the old key must still open the database"
+    );
+
+    drop(held);
+    // Released: an ordinary recovery now proceeds (row 1, nothing to do).
+    let result = recover(&Real, &f.key_path, &f.db_path).expect("recover after release");
+    assert_eq!(result, Recovered::Nothing);
 }
 
 // ---------- Row 2: no intent.json yet ----------
@@ -371,6 +417,14 @@ impl KeyFileOps for WrongOwner<'_> {
     }
     fn db_durable(&self, label: &str) {
         self.inner.db_durable(label)
+    }
+    fn lock_exclusive(
+        &self,
+        p: &str,
+        path: &std::path::Path,
+        blocking: bool,
+    ) -> std::io::Result<Box<dyn crate::key_adapter::LockGuard + '_>> {
+        self.inner.lock_exclusive(p, path, blocking)
     }
 }
 
@@ -1017,10 +1071,13 @@ async fn row10_only_cleans_the_stale_workspace() {
         }
         other => panic!("expected Cleaned, got {other:?}"),
     }
-    assert!(
-        f.remaining_artifacts().is_empty(),
-        "everything cleaned: {:?}",
-        f.remaining_artifacts()
+    // RFC 100 `0.94.0` P2 §3 point 11: the workspace and `next` are
+    // gone, but a *completed* rotation's backup stays, under its bound
+    // disposition, until P3.
+    assert_eq!(
+        f.remaining_artifacts(),
+        vec![f.paths.backup.clone()],
+        "only the backup survives cleanup"
     );
     // The service starts normally, against the new key, afterward.
     let db = Database::open(&f.db_path, dup_key(&f.new_key)).expect("the new key opens it");

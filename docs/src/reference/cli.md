@@ -218,7 +218,7 @@ Environment:
 Example:
 
 ```sh
-sui-id admin master-key rotate --generate-new-key --yes
+sui-id admin master-key rotate --generate-new-key --yes --remove-backup-after-verified --verification-reference "checked 2026-11-24"
 ```
 
 ### `sui-id admin metrics-token rotate` {#admin-metrics-token-rotate}

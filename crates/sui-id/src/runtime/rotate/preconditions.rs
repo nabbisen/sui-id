@@ -2,8 +2,8 @@
 //! anything** (P1-P4; P5, the filesystem probe, needs a write and so is
 //! not a precondition in this sense — see [`probe_filesystem`]). One
 //! function, [`check`], used by both `--check` (which stops here) and a
-//! real rotation (which also runs [`probe_filesystem`], then today's
-//! sequence, reusing the key [`check`] already resolved).
+//! real rotation (which also runs [`probe_filesystem`], then
+//! `rotate::rotate`, reusing the key [`check`] already resolved).
 
 use crate::key_adapter::KeyFileOps;
 use crate::keyring::{KeyOrigin, ResolvedKey};
@@ -12,10 +12,9 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 /// `<key_file>` with its file name's extension replaced by appending
-/// `suffix` — the one place every rotation-adjacent sibling path (staged
-/// key, workspace, probe file) is built, so they cannot drift apart from
-/// each other or from `cli::handlers::run_admin_rotate_key`'s own
-/// `bak_path` (still computed there, since it carries a timestamp).
+/// `suffix` — the one place every rotation-adjacent sibling path (the
+/// pre-`0.94.0` staged key, the workspace, the probe file) is built,
+/// so they cannot drift apart from each other.
 pub fn sibling_with_suffix(key_file: &Path, suffix: &str) -> PathBuf {
     let mut p = key_file.to_path_buf();
     let mut name = p
@@ -27,10 +26,12 @@ pub fn sibling_with_suffix(key_file: &Path, suffix: &str) -> PathBuf {
     p
 }
 
-/// `<key_file>.new` — the staged new key, during a rotation in progress.
-/// The *live*, non-journal rotation sequence's own name (`rotate.rs`),
-/// unrelated to [`RotationPaths::next`] below, which the journal binds
-/// once stage 5 wires it in.
+/// `<key_file>.new` — the pre-`0.94.0` rotation sequence's own staged
+/// new key. That sequence is retired (RFC 100 `0.94.0` P2); this name
+/// lives on only as what P3's own leftover check (below) still looks
+/// for, since a crash of a pre-`0.94.0` rotation can leave one.
+/// Unrelated to [`RotationPaths::next`], the journalled sequence's own
+/// name for the same role.
 pub fn staged_path(key_file: &Path) -> PathBuf {
     sibling_with_suffix(key_file, ".new")
 }
@@ -51,6 +52,13 @@ pub struct RotationPaths {
     pub update_temp: PathBuf,
     pub next_temp: PathBuf,
     pub backup_temp: PathBuf,
+    /// RFC 100 `0.94.0` P2 §1: the liveness lock -- permanent, empty,
+    /// mode `0600`, never deleted. Unlike every other path here, it is
+    /// never bound into a [`crate::rotate::journal::JournalBody`]: it
+    /// exists before any rotation and outlives every one of them, so
+    /// there is nothing a particular rotation's journal could usefully
+    /// say about it.
+    pub lock: PathBuf,
 }
 
 impl RotationPaths {
@@ -64,6 +72,7 @@ impl RotationPaths {
             active: key_file.to_path_buf(),
             next: sibling_with_suffix(key_file, ".next"),
             backup: sibling_with_suffix(key_file, ".pre-rotation"),
+            lock: sibling_with_suffix(key_file, ".rotation-lock"),
             workspace,
             intent_temp,
             update_temp,
@@ -71,6 +80,36 @@ impl RotationPaths {
             backup_temp,
         }
     }
+}
+
+/// RFC 100 `0.94.0` P2 §1: take [`RotationPaths::lock`] non-blocking, for
+/// both sides that must never run concurrently -- a live rotation
+/// (`point` = `"rotate.lock"`) and recovery (`"recovery.lock"`). On
+/// [`std::io::ErrorKind::WouldBlock`], names the file and changes
+/// nothing; any other failure (the file could not be created at all) is
+/// reported as such instead of being confused with contention.
+pub fn take_rotation_lock<'a>(
+    adapter: &'a dyn crate::key_adapter::KeyFileOps,
+    paths: &RotationPaths,
+    point: &str,
+) -> anyhow::Result<Box<dyn crate::key_adapter::LockGuard + 'a>> {
+    adapter
+        .lock_exclusive(point, &paths.lock, false)
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::WouldBlock {
+                anyhow::anyhow!(
+                    "refusing: a key rotation is running in another process (the lock at {} is \
+                     held). Nothing was changed; wait for it to finish, or investigate if \
+                     nothing is actually running.",
+                    paths.lock.display()
+                )
+            } else {
+                anyhow::Error::new(e).context(format!(
+                    "taking the rotation lock at {}",
+                    paths.lock.display()
+                ))
+            }
+        })
 }
 
 /// `<key_file>.rotation-work` — stage 3's workspace, now one call into
@@ -174,9 +213,26 @@ pub fn check(
     {
         p3_failures.push(leftover_workspace_text(&workspace));
     }
+    // `0.94.0` P2 review: rotation publishes `next` and the backup with
+    // no-replace. One already there makes the rotation fail part-way,
+    // and recovery then finds a file the new journal does not bind, so
+    // every start refuses. Refused here, before anything is created.
+    let rotation_paths = RotationPaths::for_key_file(key_file);
+    if adapter
+        .metadata("rotate.check.backup", &rotation_paths.backup)
+        .is_ok()
+    {
+        p3_failures.push(retained_backup_text(&rotation_paths.backup));
+    }
+    if adapter
+        .metadata("rotate.check.next", &rotation_paths.next)
+        .is_ok()
+    {
+        p3_failures.push(leftover_next_text(&rotation_paths.next));
+    }
     results.push(PreconditionResult {
         id: "P3",
-        label: "no leftover staged key or rotation workspace",
+        label: "no leftover staged key, rotation workspace, next key, or pre-rotation backup",
         failure: (!p3_failures.is_empty()).then(|| p3_failures.join("\n")),
     });
 
@@ -242,6 +298,27 @@ fn leftover_workspace_text(workspace_path: &Path) -> String {
         `sui-id admin master-key rotate` again, lets recovery check it and either \
         clean it or refuse and say why -- do not remove it by hand.",
         workspace_path.display()
+    )
+}
+
+fn retained_backup_text(backup_path: &Path) -> String {
+    format!(
+        "refusing to rotate: the last rotation's pre-rotation backup is still at {}. \
+        It may be the only key that opens a database backup taken before that \
+        rotation, so a new rotation never replaces it. Deal with it under the \
+        custody choice you made then: move it to its custody location, or remove \
+        it once you have verified that nothing needs it. Then rotate again.",
+        backup_path.display()
+    )
+}
+
+fn leftover_next_text(next_path: &Path) -> String {
+    format!(
+        "refusing to rotate: {} already exists, with no rotation in progress. \
+        Starting sui-id lets recovery check it if a rotation stopped part-way; \
+        otherwise it is not this rotation's file. Check what it is before \
+        removing it, since it may be a key.",
+        next_path.display()
     )
 }
 

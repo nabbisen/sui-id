@@ -6,6 +6,52 @@ fn real_metadata_refuses_a_missing_path() {
     assert!(Real.metadata("x", Path::new("/does/not/exist")).is_err());
 }
 
+// ── RFC 100 `0.94.0` P2 §1: the liveness lock ───────────────────────────────
+
+#[test]
+fn real_lock_exclusive_non_blocking_refuses_while_another_open_holds_it() {
+    // Two separate `open`s of the same path, even in one process, are two
+    // distinct holders for `flock(2)` -- the same fact that lets the
+    // kernel release the lock when a process exits without this guard's
+    // own `Drop` ever running (e.g. `abort()`). This is what makes a
+    // single-process test of contention meaningful at all.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let lock_path = dir.path().join("t.key.rotation-lock");
+
+    let first = Real
+        .lock_exclusive("first", &lock_path, false)
+        .expect("the first holder takes it");
+    let second_err = Real
+        .lock_exclusive("second", &lock_path, false)
+        .err()
+        .expect("a second non-blocking attempt must refuse");
+    assert_eq!(second_err.kind(), std::io::ErrorKind::WouldBlock);
+
+    drop(first);
+    Real.lock_exclusive("third", &lock_path, false)
+        .expect("released: a later attempt succeeds");
+}
+
+#[test]
+fn simulated_lock_exclusive_models_the_same_contention() {
+    use simulated::Simulated;
+    let path = std::path::PathBuf::from("/virtual/t.key.rotation-lock");
+    let sim = Simulated::new(&[]);
+
+    let first = sim
+        .lock_exclusive("first", &path, false)
+        .expect("the first holder takes it");
+    let second_err = sim
+        .lock_exclusive("second", &path, false)
+        .err()
+        .expect("a second non-blocking attempt must refuse");
+    assert_eq!(second_err.kind(), std::io::ErrorKind::WouldBlock);
+
+    drop(first);
+    sim.lock_exclusive("third", &path, false)
+        .expect("released: a later attempt succeeds");
+}
+
 // ── RFC 100 stage 3: `create_dir`/`remove_dir`, the workspace's own lock ────
 
 #[test]

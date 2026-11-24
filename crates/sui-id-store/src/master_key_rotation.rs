@@ -1,8 +1,8 @@
 //! RFC 100 `0.94.0` P1 (database half): the `master_key_rotation` row's
 //! full shape (migration 0053), read and write primitives used by K08
 //! (`commands::reseal_master_key_for_rotation`) and K05
-//! (`commands::complete_master_key_rotation`). Both are built here as
-//! functions the live rotation does not call yet (P2 wires them in).
+//! (`commands::complete_master_key_rotation`). Built here as functions
+//! the live rotation did not call yet; wired in by P2.
 //!
 //! `review_at` (RFC 100's *Old-key custody*) is typed here, not free
 //! text: [`RotationDisposition::RetainUntil`]'s field is
@@ -17,10 +17,16 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, Row};
 
 /// The operator's bound choice for the pre-rotation backup of the old
-/// key (RFC 100, *Old-key custody*) — matches `rotate::journal::
-/// BackupDisposition` field for field, except `review_at` is typed
-/// here rather than carried as the journal's own `String`.
-#[derive(Debug, Clone, PartialEq)]
+/// key (RFC 100, *Old-key custody*). RFC 100 `0.94.0` P2 §3 point 4
+/// takes this type into the journal body itself (`rotate::journal::
+/// JournalBody::backup_disposition`), replacing that module's own,
+/// `review_at: String` copy — one typed disposition, not two shapes of
+/// the same fact. `Serialize`/`Deserialize` (`deny_unknown_fields`,
+/// tagged on `kind`) make it `journal::canonical_body_bytes`-safe:
+/// `DateTime<Utc>`'s own `serde` support (chrono's `serde` feature,
+/// enabled workspace-wide) writes an RFC 3339 string, deterministically.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
 pub enum RotationDisposition {
     RetainUntil {
         review_at: DateTime<Utc>,

@@ -69,7 +69,32 @@ pub trait KeyFileOps {
     /// Rotation calls this right after K07's commit is made durable (its
     /// checkpoint). A no-op outside [`Simulated`].
     fn db_durable(&self, label: &str);
+    /// RFC 100 `0.94.0` P2 §1: the liveness lock. `path` is
+    /// `RotationPaths::lock`, a permanent, empty, mode-`0600` file never
+    /// deleted -- creating it if absent is harmless. `blocking` chooses
+    /// `flock(2)`'s own blocking or `LOCK_NB` form; every call site in
+    /// this crate passes `false` (rotation and recovery both refuse
+    /// immediately rather than wait), but the primitive itself does not
+    /// assume that. On success, the lock is held for exactly as long as
+    /// the returned guard lives -- dropping it (including by an `Err`
+    /// propagating out of the caller's own function, the normal-Rust
+    /// analogue of "the process that held it exited") releases it. A
+    /// non-blocking call that cannot take the lock returns
+    /// [`io::ErrorKind::WouldBlock`], distinguishable from every other
+    /// failure a caller must still handle (the file could not be
+    /// created at all, say).
+    fn lock_exclusive(
+        &self,
+        point: &str,
+        path: &Path,
+        blocking: bool,
+    ) -> io::Result<Box<dyn LockGuard + '_>>;
 }
+
+/// What [`KeyFileOps::lock_exclusive`] returns: nothing to call, only to
+/// hold and eventually drop. Every implementation's own guard releases
+/// the lock on [`Drop`].
+pub trait LockGuard {}
 
 /// Production. The only implementation a release build links.
 pub struct Real;
@@ -156,7 +181,38 @@ impl KeyFileOps for Real {
 
     fn db_committed(&self, _label: &str) {}
     fn db_durable(&self, _label: &str) {}
+
+    fn lock_exclusive(
+        &self,
+        _point: &str,
+        path: &Path,
+        blocking: bool,
+    ) -> io::Result<Box<dyn LockGuard + '_>> {
+        use rustix::fs::FlockOperation;
+        use std::fs::OpenOptions;
+        use std::os::unix::fs::OpenOptionsExt;
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .mode(0o600)
+            .open(path)?;
+        let op = if blocking {
+            FlockOperation::LockExclusive
+        } else {
+            FlockOperation::NonBlockingLockExclusive
+        };
+        rustix::fs::flock(&file, op).map_err(io::Error::from)?;
+        Ok(Box::new(RealLockGuard(file)))
+    }
 }
+
+/// Held only so its `Drop` closes the file descriptor, which is what
+/// releases the `flock` -- never read again once acquired.
+#[allow(dead_code)]
+struct RealLockGuard(std::fs::File);
+
+impl LockGuard for RealLockGuard {}
 
 /// The adapter every production call site uses: [`Real`], unless the
 /// `test-support` feature is compiled in **and** `SUI_ID_FAILPOINT` names
@@ -177,7 +233,7 @@ pub mod failpoint {
     //! Process termination and short writes, driven through the real
     //! binary (`SUI_ID_FAILPOINT=<point>:<action>`, read once per
     //! process). Never active unless `test-support` is compiled in.
-    use super::{KeyFileMetadata, KeyFileOps, Real};
+    use super::{KeyFileMetadata, KeyFileOps, LockGuard, Real};
     use std::io;
     use std::path::Path;
 
@@ -327,6 +383,19 @@ pub mod failpoint {
 
         fn db_committed(&self, _label: &str) {}
         fn db_durable(&self, _label: &str) {}
+
+        fn lock_exclusive(
+            &self,
+            point: &str,
+            path: &Path,
+            blocking: bool,
+        ) -> io::Result<Box<dyn LockGuard + '_>> {
+            match self.fire(point) {
+                Some(Action::Abort) => std::process::abort(),
+                Some(_) => Err(denied(point)),
+                None => Real.lock_exclusive(point, path, blocking),
+            }
+        }
     }
 }
 

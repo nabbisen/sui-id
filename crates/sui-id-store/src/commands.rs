@@ -6592,32 +6592,27 @@ pub async fn delete_signing_key(
     .await
 }
 
-// ── K07 — master-key re-seal ──────────────────────────────────────────────
+// ── the database re-seal's own event ──────────────────────────────────────
 //
-// RFC 094 cycle J stage 4. Closes M2b criterion 2: the re-seal
-// orchestration moves here from `sui-id-core::oidc::key_rotation`, which
-// is downstream of this crate and so could never reach
-// `declare_write_command!` (`registry.rs`, defined only in this crate).
-// CLI-only, no authenticated actor -- the operator's authority is
+// RFC 094 cycle J stage 4 built this as K07, "CLI operator re-seals every
+// column-encrypted value under a new master key" -- its own command,
+// CLI-only, no authenticated actor (the operator's authority is
 // possession of the master key and filesystem access, the same
-// non-human-caller shape U08, C22 and S05 use (`for_system_actor`,
-// `ActorRequirement::None`, `system_principal: permitted`). Moving the
-// orchestration also fixes, incidentally, a standing contradiction: the
-// old `rotate_master_key` called `Database::with_tx_sync`, documented
-// (`db.rs:141`, inheriting `:123`'s) as "use only in the migration
-// runner and in blocking test helpers outside an async runtime" -- but
-// it was an `async fn` called from the CLI's `#[tokio::main]` runtime.
-// `class_a`'s own path is `Database::with_tx`, the async primitive; the
-// contradiction is gone, not papered over.
+// non-human-caller shape U08, C22 and S05 use: `for_system_actor`,
+// `ActorRequirement::None`, `system_principal: permitted`).
 //
-// Distinct from `admin.master_key.rotated`, which is unchanged by this
-// stage: it still fires after the key file is renamed into place,
-// best-effort, outside any transaction. That is a second, genuinely
-// unsealable fact (a filesystem rename cannot join a SQL transaction),
-// not an oversight this command fixes -- see the dispatch and stage 2's
-// measurement for why two records, not one, is the right shape.
+// RFC 100 `0.94.0` P2 §3: K07 lost its last production caller (the old,
+// pre-journal `rotate_key_files`, removed with the sequence it staged)
+// once the live rotation moved onto K08 -- the newer command, built
+// beside K07 in P1 §2, that does everything K07 did and more. Measured:
+// no production call site named `reseal_master_key` remains anywhere in
+// this workspace. K07 itself (the command, its event enum, and the
+// orchestration function) is retired here; this static, the event
+// K08 (and K07 before it) both wrote, is not -- K08 still needs it,
+// `admin.master_key.resealed` being the one fact both ever asserted
+// (M4: "the database phase committed", never completion).
 
-static K07_RESEALED: EventDescriptor = EventDescriptor {
+static RESEALED_EVENT: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::AdminMasterKeyResealed,
     name: "admin.master_key.resealed",
     class: AuditClass::Atomic,
@@ -6659,82 +6654,23 @@ static K07_RESEALED: EventDescriptor = EventDescriptor {
             description: "rows re-sealed in `email_outbox`",
             required: false,
         },
-        // RFC 100 `0.94.0` P1 §2: K08 (`reseal_master_key_for_rotation`)
-        // shares this exact event name with K07 above -- both assert
-        // only "the database phase committed", M4's own boundary,
-        // whichever command produced it. Optional and absent from
-        // every K07-produced event (K07's own call site, below,
-        // constructs `K07Event::Resealed` with no such field to set):
-        // present only when K08 wrote this row, naming the rotation
-        // it belongs to and that activation is still pending.
+        // RFC 100 `0.94.0` P1 §2, retired P2: named for K08
+        // (`reseal_master_key_for_rotation`), the event's only writer
+        // since K07's own retirement -- optional because an older,
+        // already-written K07 event never set it.
         AttributeSpec {
             name: "rotation_id",
-            description: "the pending rotation this re-seal belongs to (K08 only; absent from a K07-written event)",
+            description: "the pending rotation this re-seal belongs to (absent from an event a retired K07 wrote)",
             required: false,
         },
     ],
 };
 
-crate::declare_write_command! {
-    /// K07 — CLI operator re-seals every column-encrypted value under a
-    /// new master key.
-    command K07 = "K07" {
-        system_principal: permitted;
-        enum K07Event {
-            Resealed {
-                signing_keys: u64,
-                refresh_tokens: u64,
-                user_totp_secrets: u64,
-                user_totp_recovery_codes: u64,
-                user_webauthn_credentials: u64,
-                smtp_config: u64,
-                email_outbox_rows: u64,
-            } => &K07_RESEALED,
-        }
-    }
-}
-
-impl SealedCommandEvent<K07> for K07Event {
-    fn target(&self) -> Option<AuditTarget> {
-        None
-    }
-
-    fn result(&self) -> AuditResult {
-        AuditResult::Ok
-    }
-
-    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        let Self::Resealed {
-            signing_keys,
-            refresh_tokens,
-            user_totp_secrets,
-            user_totp_recovery_codes,
-            user_webauthn_credentials,
-            smtp_config,
-            email_outbox_rows,
-        } = self;
-        AuditAttributes::builder()
-            .attribute("signing_keys", signing_keys.to_string())
-            .attribute("refresh_tokens", refresh_tokens.to_string())
-            .attribute("user_totp_secrets", user_totp_secrets.to_string())
-            .attribute(
-                "user_totp_recovery_codes",
-                user_totp_recovery_codes.to_string(),
-            )
-            .attribute(
-                "user_webauthn_credentials",
-                user_webauthn_credentials.to_string(),
-            )
-            .attribute("smtp_config", smtp_config.to_string())
-            .attribute("email_outbox_rows", email_outbox_rows.to_string())
-            .build()
-    }
-}
-
-/// Counts of rows re-sealed in each table by [`reseal_master_key`].
-/// Moved from `sui-id-core::oidc::key_rotation` with the orchestration
-/// itself (RFC 094 cycle J stage 4) -- useful for the CLI to print and
-/// for tests to assert on.
+/// Counts of rows re-sealed in each table by the master-key re-seal (K07,
+/// retired RFC 100 `0.94.0` P2; K08 now). Moved from
+/// `sui-id-core::oidc::key_rotation` with the orchestration itself (RFC
+/// 094 cycle J stage 4) -- useful for the CLI to print and for tests to
+/// assert on.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct RotationReport {
     pub signing_keys: u64,
@@ -6759,127 +6695,23 @@ impl RotationReport {
     }
 }
 
-/// Run K07 (master-key re-seal) through the Class-A runner: the
-/// six-table re-seal and the `admin.master_key.resealed` audit append
-/// now commit in one transaction, replacing `rotate_master_key`'s
-/// `with_tx_sync` call and the best-effort append `cli.rs` made outside
-/// it.
-///
-/// `old_key` (from `db.key()`) and `new_key` are each reconstructed
-/// into an owned copy -- `MasterKey` derives no `Clone` -- because the
-/// Class-A closure is `'static` and cannot hold a borrow of either
-/// `db` or the caller's `new_key`. `MasterKey::generate`/`from_base64`
-/// use the identical copy-then-`zeroize` idiom for the same reason:
-/// the stack copy exists only long enough to move into a fresh
-/// `SecretBox`.
-pub async fn reseal_master_key(
-    db: &crate::Database,
-    new_key: &crate::crypto::MasterKey,
-) -> StoreResult<crate::registry::Audited<RotationReport>> {
-    use zeroize::Zeroize;
-    let mut old_key_bytes = *db.key().as_bytes();
-    let old_key = crate::crypto::MasterKey::from_bytes(old_key_bytes);
-    old_key_bytes.zeroize();
-    let mut new_key_bytes = *new_key.as_bytes();
-    let new_key = crate::crypto::MasterKey::from_bytes(new_key_bytes);
-    new_key_bytes.zeroize();
-
-    let context = AuthorizedCommandContext::<K07>::for_system_actor(None);
-    let audited = db
-        .class_a(
-            context,
-            move |tx: &mut ClassATx<'_, K07>| -> StoreResult<(RotationReport, K07Event)> {
-                let signing_keys =
-                    crate::repos::signing_keys::reseal_all(tx.tx(), &old_key, &new_key)?;
-                let refresh_tokens =
-                    crate::repos::refresh_tokens::reseal_all(tx.tx(), &old_key, &new_key)?;
-                let (user_totp_secrets, user_totp_recovery_codes) =
-                    crate::repos::user_totp::reseal_all(tx.tx(), &old_key, &new_key)?;
-                let user_webauthn_credentials =
-                    crate::repos::user_webauthn_credentials::reseal_all(
-                        tx.tx(),
-                        &old_key,
-                        &new_key,
-                    )?;
-                let smtp_config =
-                    crate::repos::smtp_config::reseal_all(tx.tx(), &old_key, &new_key)?;
-                let email_outbox_rows =
-                    crate::repos::email_outbox::reseal_all(tx.tx(), &old_key, &new_key)? as u64;
-                // RFC 100 stage 1 (0.93.0): the sentinel moves with the data,
-                // in this same transaction, so it always names the key the
-                // data is sealed under.
-                crate::master_key_check::reseal_sentinel_within_tx(tx.tx(), &old_key, &new_key)?;
-                let report = RotationReport {
-                    signing_keys,
-                    refresh_tokens,
-                    user_totp_secrets,
-                    user_totp_recovery_codes,
-                    user_webauthn_credentials,
-                    smtp_config,
-                    email_outbox_rows,
-                };
-                let event = K07Event::Resealed {
-                    signing_keys: report.signing_keys,
-                    refresh_tokens: report.refresh_tokens,
-                    user_totp_secrets: report.user_totp_secrets,
-                    user_totp_recovery_codes: report.user_totp_recovery_codes,
-                    user_webauthn_credentials: report.user_webauthn_credentials,
-                    smtp_config: report.smtp_config,
-                    email_outbox_rows: report.email_outbox_rows,
-                };
-                Ok((report, event))
-            },
-        )
-        .await?;
-
-    // `0.91.0` stage 1, addendum A2: the transaction above has committed,
-    // but WAL with `synchronous=NORMAL` (`db.rs:43-44`) only guarantees a
-    // commit survives a killed process, not a power loss, until the next
-    // checkpoint -- so run one here, before this function returns, which
-    // is this command's own durability contract: "committed and durable
-    // when this returns." `cli.rs`'s only production caller renames the
-    // key files immediately after, and must never be able to run ahead
-    // of this.
-    //
-    // `TRUNCATE`, not `FULL`: it leaves the `-wal` file at zero bytes on
-    // success, which a test can observe directly, and still syncs the
-    // WAL before it and the database file after it -- the property this
-    // call exists for.
-    db.with_conn(|conn| {
-        let (busy, _log, _checkpointed): (i64, i64, i64) =
-            conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-            })?;
-        // An in-memory database (every test here) is not in WAL mode;
-        // the pragma returns `(0, -1, -1)` there, which this treats as
-        // success -- there is no WAL to checkpoint.
-        if busy != 0 {
-            return Err(StoreError::RotationNotDurable);
-        }
-        Ok(())
-    })
-    .await?;
-
-    Ok(audited)
-}
-
 // ── K08 — master-key re-seal, for a journalled rotation ─────────────────
 //
-// RFC 100 `0.94.0` P1 §2. A **new** command beside K07, not an edit to
-// it: `reseal_master_key` (K07) is today's live rotation's own call,
-// untouched by this stage. This one is built as a function the live
-// rotation does not call yet -- P2 wires it in, once the journal and
-// activation it depends on are themselves live. In one Class-A
-// transaction it does everything K07 does, plus writes the
-// `master_key_rotation` row pending activation -- RFC 100's own `K04`,
-// under a fresh inventory id (`K04`'s own stays retired, per the RFC's
-// refresh: "Extend K07's transaction... K04's inventory id stays
-// retired").
+// RFC 100 `0.94.0` P1 §2. Built beside the then-still-live K07 (today's
+// re-seal command at the time), as a function the live rotation did not
+// call yet -- P2 wired it in, once the journal and activation it
+// depends on were themselves live, and retired K07 in the same stage
+// (K08 does everything K07 did, plus writes the `master_key_rotation`
+// row pending activation -- RFC 100's own `K04`, under a fresh
+// inventory id; `K04`'s own stays retired, per the RFC's refresh:
+// "Extend K07's transaction... K04's inventory id stays retired").
 
 crate::declare_write_command! {
     /// K08 — re-seal every column-encrypted value under a new master
-    /// key, for a journalled rotation: the same work K07 does, plus the
-    /// pending `master_key_rotation` row, in one transaction.
+    /// key, for a journalled rotation, plus the pending
+    /// `master_key_rotation` row, in one transaction. The database half
+    /// of RFC 100's rotation protocol; `admin master-key rotate`'s own
+    /// call, since P2.
     command K08 = "K08" {
         system_principal: permitted;
         enum K08Event {
@@ -6892,7 +6724,7 @@ crate::declare_write_command! {
                 user_webauthn_credentials: u64,
                 smtp_config: u64,
                 email_outbox_rows: u64,
-            } => &K07_RESEALED,
+            } => &RESEALED_EVENT,
         }
     }
 }
@@ -7035,14 +6867,10 @@ pub async fn reseal_master_key_for_rotation(
 
 // ── K05 — master-key rotation completion ─────────────────────────────────
 //
-// RFC 100 `0.94.0` P1 §3. Built as a function the live rotation does
-// not call yet (P2 wires it in). Today's completion record,
-// `admin.master_key.rotated`, is a best-effort append outside any
-// transaction (`sui-id/src/cli/handlers.rs:529`) -- unchanged here, and
-// not removed by this stage. This command gives the same event name a
-// second, sealed writer: once P2 calls this after activation, that
-// best-effort append becomes dead code for the path this command
-// covers, but nothing about it is touched in this stage.
+// RFC 100 `0.94.0` P1 §3, wired into the live rotation by P2. Before P2,
+// completion was a best-effort append outside any transaction
+// (`sui-id/src/cli/handlers.rs`); P2 calls this after activation instead
+// and removes that append -- this event's only writer since.
 
 static K05_ROTATED: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::AdminMasterKeyRotated,

@@ -1,14 +1,17 @@
 use super::*;
 
-// ── K07 — master-key re-seal ──────────────────────────────────────────────
+// ── K07 (retired RFC 100 `0.94.0` P2) and K08 — master-key re-seal ────────
 //
-// RFC 094 cycle J stage 4. `reseal_master_key` moved here from the bare,
-// downstream `sui_id_core::oidc::key_rotation::rotate_master_key`; these
-// tests replace that module's own (now-removed) rotation coverage, which
-// lived in `crates/sui-id/tests/e2e/key_rotation.rs` and asserted the
-// re-seal in-process without a sealed command to go through. Those two
-// e2e tests still run, rewritten against this command — see the review
-// package for what each asserts before and after.
+// RFC 094 cycle J stage 4. `reseal_master_key` (K07) moved here from the
+// bare, downstream `sui_id_core::oidc::key_rotation::rotate_master_key`.
+// RFC 100 `0.94.0` P2 retired K07 once the live rotation moved onto K08
+// (built beside it in P1 §2, the same work plus the pending
+// `master_key_rotation` row): every test below that was K07's own, and
+// is not already covered by a dedicated K08 test, is ported onto K08
+// rather than dropped, so the coverage it existed for (all six tables
+// actually re-sealed, the sentinel moving with the data, the busy-WAL
+// refusal's exact wording) does not disappear with the command it used
+// to go through.
 
 async fn seed_a_signing_key(db: &Database) -> SigningKeyId {
     let id = SigningKeyId::new();
@@ -23,50 +26,6 @@ async fn seed_a_signing_key(db: &Database) -> SigningKeyId {
     .await
     .expect("seed signing key");
     id
-}
-
-#[tokio::test]
-async fn k07_reseal_master_key_appends_exactly_one_audit_row() {
-    let db = fresh_db();
-    seed_a_signing_key(&db).await;
-    let before = audit_rows(&db).await;
-
-    let new_key = MasterKey::generate();
-    let audited = crate::commands::reseal_master_key(&db, &new_key)
-        .await
-        .expect("reseal");
-    let report = audited.into_inner();
-
-    assert_eq!(report.signing_keys, 1, "the seeded signing key re-sealed");
-    assert_eq!(report.total(), 1);
-
-    assert_eq!(
-        latest_audit_action(&db).await.as_deref(),
-        Some("admin.master_key.resealed")
-    );
-    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
-    record_exactly_once_coverage("K07");
-}
-
-#[tokio::test]
-async fn k07_injected_failure_before_append_rolls_back_the_reseal() {
-    let db = fresh_db();
-    seed_a_signing_key(&db).await;
-    let before_row = repos::signing_keys::active(&db).await.expect("active");
-    let before_audit = latest_audit_action(&db).await;
-
-    db.fault_injector().fail_before_next_append();
-    let new_key = MasterKey::generate();
-    let result = crate::commands::reseal_master_key(&db, &new_key).await;
-    assert!(result.is_err(), "injected failure must surface as Err");
-
-    let after_row = repos::signing_keys::active(&db).await.expect("active");
-    assert_eq!(
-        after_row.private_key_enc, before_row.private_key_enc,
-        "the signing key must not have been re-sealed"
-    );
-    assert_eq!(latest_audit_action(&db).await, before_audit);
-    record_rollback_coverage("K07");
 }
 
 /// Moved from `sui-id-core::oidc::key_rotation::tests` with
@@ -87,14 +46,18 @@ fn rotation_report_total_sums_columns() {
 }
 
 /// **Added at review, cycle J stage 4, 2026-11-04, by the architect.**
+/// **Ported from K07 to K08, RFC 100 `0.94.0` P2, when K07 was
+/// retired** -- the regression this guards against is exactly as live
+/// on K08's own re-seal, the only one left.
 ///
-/// K07 re-seals **six** tables. Every other test in this file and in
-/// `crates/sui-id/tests/e2e/key_rotation.rs` seeds at most two of them —
-/// `signing_keys`, and `smtp_config` in the e2e case — so the other four
-/// re-sealed zero rows in every test that existed, and nothing noticed
-/// when a `reseal_all` call was missing.
+/// K08 re-seals **six** tables (the same six K07 always did). Every
+/// other test in this file and in `crates/sui-id/tests/e2e/
+/// key_rotation.rs` seeds at most two of them — `signing_keys`, and
+/// `smtp_config` in the e2e case — so the other four re-sealed zero
+/// rows in every test that existed, and nothing noticed when a
+/// `reseal_all` call was missing.
 ///
-/// Measured, not assumed: replacing
+/// Measured, not assumed, against K07 when this was written: replacing
 /// `repos::refresh_tokens::reseal_all(...)` with `0` in
 /// `commands::reseal_master_key` left **2212 tests passing, 0 failing**,
 /// `cargo test --workspace` exit 0, and the local gate matrix 48/48. The
@@ -107,7 +70,7 @@ fn rotation_report_total_sums_columns() {
 /// separately) and pins every count. Delete any one `reseal_all` call and
 /// it fails on that count by name.
 #[tokio::test]
-async fn k07_reseals_every_one_of_the_six_tables() {
+async fn k08_reseals_every_one_of_the_six_tables() {
     let db = fresh_db();
 
     // 1 — signing_keys
@@ -224,10 +187,19 @@ async fn k07_reseals_every_one_of_the_six_tables() {
     .expect("seed outbox row");
 
     let new_key = MasterKey::generate();
-    let report = crate::commands::reseal_master_key(&db, &new_key)
-        .await
-        .expect("reseal")
-        .into_inner();
+    let report = crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &new_key,
+        RotationRecord {
+            rotation_id: "r-k08-six-tables".into(),
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await
+    .expect("reseal")
+    .into_inner();
 
     // Every count pinned by name, so a missing `reseal_all` names itself.
     assert_eq!(report.signing_keys, 1, "signing_keys not re-sealed");
@@ -263,35 +235,16 @@ fn wal_path_for(db_path: &std::path::Path) -> std::path::PathBuf {
     std::path::PathBuf::from(name)
 }
 
-#[tokio::test]
-async fn k07_leaves_the_wal_checkpointed_to_zero_bytes_on_return() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("a2-reseal.db");
-    let db = Database::open(&path, MasterKey::generate()).expect("open file db");
-    seed_a_signing_key(&db).await;
-
-    let new_key = MasterKey::generate();
-    crate::commands::reseal_master_key(&db, &new_key)
-        .await
-        .expect("reseal");
-
-    let wal_len = std::fs::metadata(wal_path_for(&path))
-        .map(|m| m.len())
-        .unwrap_or(0);
-    assert_eq!(
-        wal_len, 0,
-        "the -wal file must be checkpointed to zero bytes (or absent) once \
-         reseal_master_key has returned Ok"
-    );
-}
-
 /// The `busy` branch: a second, independent connection holds a read
 /// transaction open on the same file across the call, so SQLite cannot
 /// complete `wal_checkpoint(TRUNCATE)` -- measured directly, not assumed:
 /// without the held transaction this same body observes `busy = 0` and
 /// the call succeeds (every other test in this file proves that side).
+/// Ported from K07 to K08 at its retirement (RFC 100 `0.94.0` P2):
+/// `StoreError::RotationNotDurable`'s own wording, asserted here, is
+/// shared by both commands and untouched by the retirement.
 #[tokio::test]
-async fn k07_refuses_as_not_durable_when_another_connection_holds_the_wal_open() {
+async fn k08_refuses_as_not_durable_when_another_connection_holds_the_wal_open() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("a2-busy.db");
     let db = Database::open(&path, MasterKey::generate()).expect("open file db");
@@ -307,7 +260,17 @@ async fn k07_refuses_as_not_durable_when_another_connection_holds_the_wal_open()
         .expect("open a read transaction on the second connection");
 
     let new_key = MasterKey::generate();
-    let result = crate::commands::reseal_master_key(&db, &new_key).await;
+    let result = crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &new_key,
+        RotationRecord {
+            rotation_id: "r-k08-busy".into(),
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await;
     let Err(err) = result else {
         panic!("busy checkpoint must surface as an error");
     };
@@ -335,11 +298,12 @@ async fn k07_refuses_as_not_durable_when_another_connection_holds_the_wal_open()
     );
 }
 
-// ── K07 and the master-key sentinel (RFC 100 stage 1, 0.93.0) ─────────────
+// ── K08 and the master-key sentinel (RFC 100 stage 1, 0.93.0; ported from
+// K07 at its retirement, RFC 100 `0.94.0` P2) ─────────────────────────────
 //
-// The sentinel moves with the data, in K07's one transaction, so it always
+// The sentinel moves with the data, in K08's one transaction, so it always
 // names the key the data is sealed under. A rewrite after the rotation
-// (the stage-1 return's first approach) let a crash between K07's commit and
+// (the stage-1 return's first approach) let a crash between the commit and
 // the key-file swap leave the sentinel under the old key over data sealed
 // under the new: the startup check would then pass, over data it could not
 // read.
@@ -352,7 +316,7 @@ async fn sentinel_of(db: &Database) -> crate::master_key_check::SentinelRow {
 }
 
 #[tokio::test]
-async fn k07_reseals_the_sentinel_with_the_data_in_one_transaction() {
+async fn k08_reseals_the_sentinel_with_the_data_in_one_transaction() {
     let db = fresh_db();
     seed_a_signing_key(&db).await;
     crate::master_key_check::ensure_sentinel_written(&db, db.key())
@@ -362,9 +326,18 @@ async fn k07_reseals_the_sentinel_with_the_data_in_one_transaction() {
     assert_eq!(sentinel_of(&db).await.key_fingerprint, old_fingerprint);
 
     let new_key = MasterKey::generate();
-    crate::commands::reseal_master_key(&db, &new_key)
-        .await
-        .expect("reseal");
+    crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &new_key,
+        RotationRecord {
+            rotation_id: "r-k08-sentinel-1".into(),
+            old_fingerprint: old_fingerprint.clone(),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await
+    .expect("reseal");
 
     let after = sentinel_of(&db).await;
     assert_eq!(after.key_fingerprint, crate::crypto::fingerprint(&new_key));
@@ -379,13 +352,22 @@ async fn k07_reseals_the_sentinel_with_the_data_in_one_transaction() {
 }
 
 #[tokio::test]
-async fn k07_writes_a_sentinel_under_the_new_key_when_none_exists() {
+async fn k08_writes_a_sentinel_under_the_new_key_when_none_exists() {
     let db = fresh_db();
     seed_a_signing_key(&db).await;
     let new_key = MasterKey::generate();
-    crate::commands::reseal_master_key(&db, &new_key)
-        .await
-        .expect("reseal");
+    crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &new_key,
+        RotationRecord {
+            rotation_id: "r-k08-sentinel-2".into(),
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await
+    .expect("reseal");
     let after = sentinel_of(&db).await;
     assert!(crate::master_key_check::sentinel_opens(
         &new_key,
@@ -394,7 +376,7 @@ async fn k07_writes_a_sentinel_under_the_new_key_when_none_exists() {
 }
 
 #[tokio::test]
-async fn k07_refuses_and_changes_nothing_when_the_sentinel_is_not_the_old_keys() {
+async fn k08_refuses_and_changes_nothing_when_the_sentinel_is_not_the_old_keys() {
     let db = fresh_db();
     seed_a_signing_key(&db).await;
     // A sentinel sealed under a third key: the key being rotated from is
@@ -407,10 +389,23 @@ async fn k07_refuses_and_changes_nothing_when_the_sentinel_is_not_the_old_keys()
     let signing_before = repos::signing_keys::active(&db).await.expect("active");
     let audit_before = audit_rows(&db).await;
 
-    let result = crate::commands::reseal_master_key(&db, &MasterKey::generate()).await;
+    let result = crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &MasterKey::generate(),
+        RotationRecord {
+            rotation_id: "r-k08-sentinel-3".into(),
+            // The record's own fingerprint still matches `db.key()` --
+            // K08's pre-check passes; the sentinel's own content is what
+            // disagrees, and that is what must abort it.
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await;
     assert!(
         result.is_err(),
-        "a sentinel the old key cannot open aborts K07"
+        "a sentinel the old key cannot open aborts K08"
     );
 
     let sentinel_after = sentinel_of(&db).await;

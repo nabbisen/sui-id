@@ -87,7 +87,8 @@ pub(super) const COMMAND_NOTES: &[(&str, &[&str], &str)] = &[
     (
         "admin master-key rotate",
         &["SUI_ID_MASTER_KEY"],
-        "sui-id admin master-key rotate --generate-new-key --yes",
+        "sui-id admin master-key rotate --generate-new-key --yes \
+         --remove-backup-after-verified --verification-reference \"checked 2026-11-24\"",
     ),
     (
         "admin metrics-token rotate",

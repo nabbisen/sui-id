@@ -243,7 +243,7 @@ pub async fn open_checked(
             }
         }
         let paths = crate::rotate::preconditions::RotationPaths::for_key_file(key_file);
-        let removed = crate::rotate::recovery::clean_workspace(adapter.as_ref(), &paths)
+        let removed = crate::rotate::recovery::clean_workspace(adapter.as_ref(), &paths, false)
             .context("cleaning the rotation workspace after completing it at start")?;
         for line in crate::rotate::recovery::report(&crate::rotate::recovery::Recovered::Cleaned {
             removed,

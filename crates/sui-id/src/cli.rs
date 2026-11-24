@@ -307,6 +307,14 @@ enum AdminCommand {
         yes: bool,
         #[arg(long)]
         check: bool,
+        #[arg(long, value_name = "RFC3339_INSTANT", conflicts_with_all = ["remove_backup_after_verified", "verification_reference"])]
+        retain_backup_until: Option<String>,
+        #[arg(long, value_name = "TEXT", requires = "retain_backup_until")]
+        custody_reference: Option<String>,
+        #[arg(long, conflicts_with_all = ["retain_backup_until", "custody_reference"])]
+        remove_backup_after_verified: bool,
+        #[arg(long, value_name = "TEXT", requires = "remove_backup_after_verified")]
+        verification_reference: Option<String>,
     },
     #[command(hide = true)]
     RotateMetricsToken,
@@ -391,6 +399,27 @@ enum AdminMasterKeyCommand {
         /// Check whether a rotation could start, and change nothing.
         #[arg(long)]
         check: bool,
+        /// RFC 100 old-key custody: keep the pre-rotation backup of the
+        /// old key until this RFC 3339 instant (must be in the future),
+        /// under --custody-reference. Exactly one of this or
+        /// --remove-backup-after-verified is required (--check needs
+        /// neither).
+        #[arg(long, value_name = "RFC3339_INSTANT", conflicts_with_all = ["remove_backup_after_verified", "verification_reference"])]
+        retain_backup_until: Option<String>,
+        /// Who is accountable for reviewing the retained backup (RFC
+        /// 100 old-key custody) -- required with --retain-backup-until.
+        #[arg(long, value_name = "TEXT", requires = "retain_backup_until")]
+        custody_reference: Option<String>,
+        /// RFC 100 old-key custody: remove the pre-rotation backup of
+        /// the old key once verified, citing --verification-reference.
+        /// Exactly one of this or --retain-backup-until is required
+        /// (--check needs neither).
+        #[arg(long, conflicts_with_all = ["retain_backup_until", "custody_reference"])]
+        remove_backup_after_verified: bool,
+        /// How the backup was verified (RFC 100 old-key custody) --
+        /// required with --remove-backup-after-verified.
+        #[arg(long, value_name = "TEXT", requires = "remove_backup_after_verified")]
+        verification_reference: Option<String>,
     },
 }
 
@@ -690,10 +719,27 @@ async fn dispatch_admin(
                     new_key,
                     yes,
                     check,
+                    retain_backup_until,
+                    custody_reference,
+                    remove_backup_after_verified,
+                    verification_reference,
                 },
         }) => {
-            handlers::run_admin_rotate_key(cfg_path, policy, generate_new_key, new_key, yes, check)
-                .await
+            handlers::run_admin_rotate_key(
+                cfg_path,
+                policy,
+                generate_new_key,
+                new_key,
+                yes,
+                check,
+                handlers::CustodyChoiceArgs {
+                    retain_backup_until,
+                    custody_reference,
+                    remove_backup_after_verified,
+                    verification_reference,
+                },
+            )
+            .await
         }
         AdminCommand::MetricsToken(AdminMetricsTokenArgs {
             command: AdminMetricsTokenCommand::Rotate,
@@ -735,10 +781,27 @@ async fn dispatch_admin(
             new_key,
             yes,
             check,
+            retain_backup_until,
+            custody_reference,
+            remove_backup_after_verified,
+            verification_reference,
         } => {
             alias_notice("admin rotate-key", "admin master-key rotate");
-            handlers::run_admin_rotate_key(cfg_path, policy, generate_new_key, new_key, yes, check)
-                .await
+            handlers::run_admin_rotate_key(
+                cfg_path,
+                policy,
+                generate_new_key,
+                new_key,
+                yes,
+                check,
+                handlers::CustodyChoiceArgs {
+                    retain_backup_until,
+                    custody_reference,
+                    remove_backup_after_verified,
+                    verification_reference,
+                },
+            )
+            .await
         }
         AdminCommand::RotateMetricsToken => {
             alias_notice("admin rotate-metrics-token", "admin metrics-token rotate");

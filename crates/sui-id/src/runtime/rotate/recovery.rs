@@ -96,6 +96,14 @@ pub fn recover(
 ) -> anyhow::Result<Recovered> {
     let paths = RotationPaths::for_key_file(key_file);
 
+    // RFC 100 `0.94.0` P2 §1: the liveness lock, taken non-blocking
+    // before anything else is even looked at -- a rotation running in
+    // another process holds it, and recovery must not clean (or
+    // otherwise touch) a workspace that process still owns. Held only
+    // for the span of this function; released on return by the guard's
+    // own `Drop`.
+    let _lock = crate::rotate::preconditions::take_rotation_lock(adapter, &paths, "recovery.lock")?;
+
     // Row 1: no workspace at all.
     let workspace_meta = match adapter.metadata("recovery.workspace", &paths.workspace) {
         Ok(m) => m,
@@ -279,29 +287,100 @@ pub fn recover(
             }
         }
         // No journal binds a published artifact yet, so none may exist
-        // (M3): a `next` or `backup` here is not this rotation's, and is
-        // never removed unverified.
-        for (artifact, label) in [
-            (&paths.next, "next key"),
-            (&paths.backup, "pre-rotation backup"),
-        ] {
-            match adapter.metadata("recovery.row2.artifact", artifact) {
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Ok(_) => {
+        // (M3): a `next` here is never this rotation's, and is never
+        // removed unverified.
+        match adapter.metadata("recovery.row2.artifact", &paths.next) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Ok(_) => {
+                return Err(fail_closed(
+                    &paths,
+                    &format!(
+                        "A next key exists at {}, but no rotation journal was ever published to \
+                         bind it.",
+                        paths.next.display()
+                    ),
+                ));
+            }
+            Err(e) => {
+                return Err(
+                    anyhow::Error::new(e).context(format!("checking {}", paths.next.display()))
+                );
+            }
+        }
+        // RFC 100 `0.94.0` P2 §3 point 11: a backup is different, since
+        // this stage keeps one past a *completed* rotation's own
+        // cleanup, under its disposition -- a crash exactly between
+        // that cleanup's own `intent.json` removal and the workspace
+        // directory's own removal lands here (no `intent.json`, the
+        // workspace not yet gone) with the backup still legitimately
+        // present. Allowed only when the database itself explains it:
+        // the active key already opens the sentinel as itself (this is
+        // not row 8, where `next` -- not the active key -- would be the
+        // candidate), and the `master_key_rotation` row is `Complete`
+        // and names a `backup_filename` whose on-disk fingerprint is
+        // the row's own `old_fingerprint`. Anything else about the
+        // backup still fails closed (M6): a stray with no such row, or
+        // one that does not match, is not explained and is never kept
+        // unverified.
+        match adapter.metadata("recovery.row2.artifact", &paths.backup) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Ok(_) if candidate_is_active => {
+                let explained = (|| -> anyhow::Result<bool> {
+                    let Some(row) = sui_id_store::master_key_rotation::read_within_tx(&conn)?
+                    else {
+                        return Ok(false);
+                    };
+                    if row.state != sui_id_store::master_key_rotation::RotationState::Complete {
+                        return Ok(false);
+                    }
+                    let expected_name = paths
+                        .backup
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or_default();
+                    if row.backup_filename != expected_name {
+                        return Ok(false);
+                    }
+                    let backup_key = read_key_file(adapter, &paths.backup)?;
+                    Ok(crypto::fingerprint(&backup_key) == row.old_fingerprint)
+                })()
+                .map_err(|e| fail_closed(&paths, &format!("{e:#}.")))?;
+                if !explained {
                     return Err(fail_closed(
                         &paths,
                         &format!(
-                            "A {label} exists at {}, but no rotation journal was ever published to \
-                             bind it.",
-                            artifact.display()
+                            "A pre-rotation backup exists at {}, but no rotation journal was \
+                             ever published to bind it, and no completed rotation's own row \
+                             explains it.",
+                            paths.backup.display()
                         ),
                     ));
                 }
-                Err(e) => {
-                    return Err(
-                        anyhow::Error::new(e).context(format!("checking {}", artifact.display()))
-                    );
-                }
+                // Explained: finish this stale cleanup remnant exactly
+                // as the completed rotation's own would have, keeping
+                // the backup, and return directly -- the shared ending
+                // below is for rows 2-7's own abandoned-rotation case,
+                // which always removes it.
+                let removed = clean_workspace(adapter, &paths, false)?;
+                return Ok(Recovered::Cleaned {
+                    removed,
+                    active_fingerprint: candidate_fingerprint,
+                });
+            }
+            Ok(_) => {
+                return Err(fail_closed(
+                    &paths,
+                    &format!(
+                        "A pre-rotation backup exists at {}, but no rotation journal was ever \
+                         published to bind it.",
+                        paths.backup.display()
+                    ),
+                ));
+            }
+            Err(e) => {
+                return Err(
+                    anyhow::Error::new(e).context(format!("checking {}", paths.backup.display()))
+                );
             }
         }
         None
@@ -414,8 +493,9 @@ pub fn recover(
         .map_err(|e| fail_closed(&paths, &format!("{e:#}.")))?;
     }
 
-    // Step 7: clean (rows 2-7 only -- rows 8-10 returned above).
-    let removed = clean_workspace(adapter, &paths)?;
+    // Step 7: clean (rows 2-7 only -- rows 8-10 returned above). An
+    // abandoned rotation's backup is removed too (see `clean_workspace`).
+    let removed = clean_workspace(adapter, &paths, true)?;
 
     Ok(Recovered::Cleaned {
         removed,
@@ -430,12 +510,23 @@ pub fn recover(
 /// calls this itself, after K05, so the workspace is removed only once
 /// the completion it depends on describing has actually been recorded.
 ///
+/// `remove_backup`: rows 2-7 (an *abandoned* rotation, never resealed)
+/// pass `true` -- the active key is still the backup's own key, so a
+/// second copy is pointless, and M5 ("the old key is retained only by
+/// an explicit reviewable disposition") does not apply to an attempt
+/// that never committed. Rows 8-10, and the live rotation's own step 11
+/// (RFC 100 `0.94.0` P2 §3), pass `false`: a *completed* rotation's
+/// backup is exactly what the operator's bound disposition governs, and
+/// P3 -- not this cleanup -- is where it is finally removed or flagged
+/// overdue.
+///
 /// Every removal tolerates `NotFound`, so a re-run after a crash
 /// mid-cleanup finishes the job instead of failing on what an earlier
 /// run already removed. The dispatch's own exact order.
 pub(crate) fn clean_workspace(
     adapter: &dyn KeyFileOps,
     paths: &RotationPaths,
+    remove_backup: bool,
 ) -> anyhow::Result<Vec<PathBuf>> {
     let published = paths.workspace.join("intent.json");
     let mut removed = Vec::new();
@@ -452,7 +543,9 @@ pub(crate) fn clean_workspace(
 
     // (a) Published artifacts first, while the journal that binds them
     // still exists.
-    remove(adapter, "recovery.clean.backup", &paths.backup)?;
+    if remove_backup {
+        remove(adapter, "recovery.clean.backup", &paths.backup)?;
+    }
     remove(adapter, "recovery.clean.next", &paths.next)?;
     crate::keyring::sync_parent_dir_impl(adapter, "recovery.clean.sync_active_dir", &paths.active)
         .context("syncing the key file's directory after cleanup")?;
@@ -486,6 +579,39 @@ pub(crate) fn clean_workspace(
         .context("syncing the workspace's parent directory after removing it")?;
 
     Ok(removed)
+}
+
+/// RFC 100 `0.94.0` P2 §3 point 9: atomically replace the active key
+/// path with the already-verified `next` -- `rename`, never
+/// remove-then-rename -- then fsync the key file's directory. **Shared**
+/// by the live rotation's own step 9 and recovery's row 8, so the two
+/// can never drift apart (the dispatch's own requirement). `point_prefix`
+/// keeps each caller's crash points distinctly named:
+/// `"{point_prefix}.activate"` and `"{point_prefix}.sync_active_dir"`.
+pub(crate) fn activate(
+    adapter: &dyn KeyFileOps,
+    paths: &RotationPaths,
+    point_prefix: &str,
+) -> anyhow::Result<()> {
+    adapter
+        .rename(
+            &format!("{point_prefix}.activate"),
+            &paths.next,
+            &paths.active,
+        )
+        .with_context(|| {
+            format!(
+                "activating {} -> {}",
+                paths.next.display(),
+                paths.active.display()
+            )
+        })?;
+    crate::keyring::sync_parent_dir_impl(
+        adapter,
+        &format!("{point_prefix}.sync_active_dir"),
+        &paths.active,
+    )
+    .context("syncing the key file's directory after activation")
 }
 
 /// RFC 100 `0.94.0` P1 §4, rows 8-10: the database is already resealed
@@ -527,22 +653,8 @@ fn recover_rows_8_to_10(
         // remove-then-rename -- then fsync the directory. From here
         // the state is identical to row 9: K05 is owed.
         (RotationState::DbCommittedPendingActivation, false) => {
-            adapter
-                .rename("recovery.row8.activate", &paths.next, &paths.active)
-                .with_context(|| {
-                    format!(
-                        "activating {} -> {}",
-                        paths.next.display(),
-                        paths.active.display()
-                    )
-                })
+            activate(adapter, paths, "recovery.row8")
                 .map_err(|e| fail_closed(paths, &format!("{e:#}.")))?;
-            crate::keyring::sync_parent_dir_impl(
-                adapter,
-                "recovery.row8.sync_active_dir",
-                &paths.active,
-            )
-            .context("syncing the key file's directory after activation")?;
             Ok(Recovered::NeedsCompletion {
                 rotation_id: row.rotation_id,
                 active_fingerprint: body.new_fingerprint.clone(),
@@ -556,9 +668,9 @@ fn recover_rows_8_to_10(
             activated: false,
         }),
         // Row 10: K05 already ran too. Only the stale workspace is
-        // left to clean.
+        // left to clean -- the backup stays, under its disposition.
         (RotationState::Complete, true) => {
-            let removed = clean_workspace(adapter, paths)?;
+            let removed = clean_workspace(adapter, paths, false)?;
             Ok(Recovered::Cleaned {
                 removed,
                 active_fingerprint: body.new_fingerprint.clone(),

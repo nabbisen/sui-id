@@ -264,7 +264,19 @@ fn both_refusal_variants_and_every_opener_share_exit_code_65() {
                 "r",
                 "--config",
             ][..],
-            &["admin", "master-key", "rotate", "--config"][..],
+            // RFC 100 `0.94.0` P2 §2: a custody choice is required now,
+            // even for a command that will refuse before using it --
+            // the usage error (exit 2) would otherwise pre-empt the
+            // database refusal (exit 65) this test means to exercise.
+            &[
+                "admin",
+                "master-key",
+                "rotate",
+                "--remove-backup-after-verified",
+                "--verification-reference",
+                "r112-test",
+                "--config",
+            ][..],
             &["admin", "registration-token", "issue", "--config"][..],
             &["setup", "--admin-username", "root", "--config"][..],
         ] {
