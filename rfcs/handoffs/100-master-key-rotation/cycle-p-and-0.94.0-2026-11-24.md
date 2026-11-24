@@ -26,11 +26,16 @@
 >
 > ## Progress
 > - **P1 landed 2026-11-24** (`c3b8920`): [dispatch](0.94.0-p1-the-database-half-2026-11-24.md).
-> - **P2 dispatched 2026-11-24**: [dispatch](0.94.0-p2-the-rotation-rewritten-once-2026-11-24.md).
->   The live rotation, rewritten once, with a liveness lock on a permanent
->   `<key>.rotation-lock` file, taken before the workspace exists.
+> - **P2 landed 2026-11-24** (`59ff4c9`): [dispatch](0.94.0-p2-the-rotation-rewritten-once-2026-11-24.md).
+>   The review found that a second rotation, with the last backup still
+>   kept, failed part-way, after which every start refused. Now refused
+>   before anything is created.
+> - **P3 dispatched 2026-11-24**: [dispatch](0.94.0-p3-custody-and-the-operators-word-2026-11-24.md).
+>   Custody (`backup remove`, `backup renew`, the overdue finding), and the
+>   operator documentation, with the "not yet crash-safe" warning replaced
+>   by the recovery procedure.
 >
-> ## Whose turn it is: **the implementation role's**, on P2.
+> ## Whose turn it is: **the implementation role's**, on P3.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).
