@@ -24,7 +24,13 @@
 >
 > Every crash point then has its recovery before rotation can reach it.
 >
-> ## Whose turn it is: **the implementation role's**, on P1.
+> ## Progress
+> - **P1 landed 2026-11-24** (`c3b8920`): [dispatch](0.94.0-p1-the-database-half-2026-11-24.md).
+> - **P2 dispatched 2026-11-24**: [dispatch](0.94.0-p2-the-rotation-rewritten-once-2026-11-24.md).
+>   The live rotation, rewritten once, with a liveness lock on a permanent
+>   `<key>.rotation-lock` file, taken before the workspace exists.
+>
+> ## Whose turn it is: **the implementation role's**, on P2.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).
