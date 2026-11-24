@@ -91,6 +91,14 @@ allowed_files = [
     # its own transaction per RFC 100 §4. The sentinel's reseal at
     # rotation runs inside K07's transaction (`commands.rs`), not here.
     "crates/sui-id-store/src/master_key_check.rs",
+    # RFC 100 `0.94.0` P1 §1-3 (2026-11-24): `master_key_rotation`'s row
+    # (singleton, like the sentinel above) -- `read_within_tx` takes a
+    # raw `&rusqlite::Connection` for the same reason (the read-only
+    # preview-connection path, before any migrated `Database` exists);
+    # its writes (`insert_pending_within_tx`, `mark_complete_within_tx`)
+    # run inside K08's and K05's own transactions in `commands.rs`, the
+    # same relationship `master_key_check.rs` has to K07.
+    "crates/sui-id-store/src/master_key_rotation.rs",
     "crates/sui-id-store/src/repos/audit.rs",
     "crates/sui-id-store/src/repos/auth_codes.rs",
     "crates/sui-id-store/src/repos/client_registration_token.rs",

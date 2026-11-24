@@ -116,6 +116,7 @@ fn a_refusal_survives_anyhow_context_and_downcasts() {
 
 // ── RFC 100 stage 1: `open_checked` ─────────────────────────────────────
 
+use crate::key_adapter::KeyFileOps;
 use rusqlite::OptionalExtension;
 use sui_id_store::crypto::MasterKey;
 
@@ -308,5 +309,171 @@ async fn migrating_up_from_0_92_0_creates_both_tables_and_writes_the_sentinel_un
     assert!(
         rotation_table_exists,
         "master_key_rotation must exist after migrating up"
+    );
+}
+
+// ── RFC 100 `0.94.0` P1 §4/§5: the service is not ready on a pending row ──
+
+/// A row 9 fixture: a published, `Prepared` journal; K08 already
+/// committed (reseal_master_key_for_rotation, directly -- the live
+/// rotation does not call it yet); and the active key file already
+/// swapped to the new key, as if an earlier run had activated it.
+/// `open_checked` is the only thing left owed: K05, then the clean.
+async fn seed_row9(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf, MasterKey) {
+    let old_key = MasterKey::generate();
+    let new_key = MasterKey::generate();
+    let db_path = dir.join("t.sqlite");
+    let key_path = dir.join("t.key");
+    write_key_file_for_test(&key_path, &old_key);
+    let db = sui_id_store::Database::open(&db_path, {
+        let mut bytes = *old_key.as_bytes();
+        let copy = MasterKey::from_bytes(bytes);
+        zeroize::Zeroize::zeroize(&mut bytes);
+        copy
+    })
+    .expect("open");
+    sui_id_store::master_key_check::ensure_sentinel_written(&db, db.key())
+        .await
+        .expect("sentinel");
+    drop(db);
+
+    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(&key_path);
+    let adapter = crate::key_adapter::Real;
+    crate::rotate::journal::lock_workspace(&adapter, &paths.workspace).expect("lock");
+    let body = crate::rotate::journal::sample_body(&key_path, &paths.workspace, &old_key, &new_key);
+    let rotation_id = body.rotation_id.clone();
+    let mut envelope =
+        crate::rotate::journal::write_intent(&adapter, &paths.workspace, body, &old_key, &new_key)
+            .expect("write_intent");
+    write_key_file_for_test(&paths.next_temp, &new_key);
+    envelope = crate::rotate::journal::advance(
+        &adapter,
+        &paths.workspace,
+        &envelope,
+        crate::rotate::journal::JournalState::NextTempVerified,
+        &old_key,
+        &new_key,
+    )
+    .expect("advance");
+    adapter
+        .publish_no_replace("test.next.publish", &paths.next_temp, &paths.next)
+        .expect("publish next");
+    envelope = crate::rotate::journal::advance(
+        &adapter,
+        &paths.workspace,
+        &envelope,
+        crate::rotate::journal::JournalState::NextPublished,
+        &old_key,
+        &new_key,
+    )
+    .expect("advance");
+    write_key_file_for_test(&paths.backup_temp, &old_key);
+    envelope = crate::rotate::journal::advance(
+        &adapter,
+        &paths.workspace,
+        &envelope,
+        crate::rotate::journal::JournalState::BackupTempVerified,
+        &old_key,
+        &new_key,
+    )
+    .expect("advance");
+    adapter
+        .publish_no_replace("test.backup.publish", &paths.backup_temp, &paths.backup)
+        .expect("publish backup");
+    envelope = crate::rotate::journal::advance(
+        &adapter,
+        &paths.workspace,
+        &envelope,
+        crate::rotate::journal::JournalState::BackupPublished,
+        &old_key,
+        &new_key,
+    )
+    .expect("advance");
+    crate::rotate::journal::advance(
+        &adapter,
+        &paths.workspace,
+        &envelope,
+        crate::rotate::journal::JournalState::Prepared,
+        &old_key,
+        &new_key,
+    )
+    .expect("advance to Prepared");
+
+    // Simulate K08: a real, open database, resealed through the real
+    // command.
+    let db = sui_id_store::Database::open(&db_path, {
+        let mut bytes = *old_key.as_bytes();
+        let copy = MasterKey::from_bytes(bytes);
+        zeroize::Zeroize::zeroize(&mut bytes);
+        copy
+    })
+    .expect("re-open with the old key");
+    sui_id_store::commands::reseal_master_key_for_rotation(
+        &db,
+        &{
+            let mut bytes = *new_key.as_bytes();
+            let copy = MasterKey::from_bytes(bytes);
+            zeroize::Zeroize::zeroize(&mut bytes);
+            copy
+        },
+        sui_id_store::master_key_rotation::RotationRecord {
+            rotation_id,
+            old_fingerprint: sui_id_store::crypto::fingerprint(&old_key),
+            backup_filename: paths
+                .backup
+                .file_name()
+                .and_then(|n| n.to_str())
+                .expect("utf8")
+                .to_owned(),
+            disposition:
+                sui_id_store::master_key_rotation::RotationDisposition::RemoveAfterVerified {
+                    verification_reference: "test".into(),
+                },
+        },
+    )
+    .await
+    .expect("simulate K08");
+    drop(db);
+
+    // Row 9: activation already happened, in an earlier run.
+    write_key_file_for_test(&key_path, &new_key);
+
+    (db_path, key_path, new_key)
+}
+
+#[tokio::test]
+async fn open_checked_completes_a_pending_rotation_and_cleans_the_workspace_before_returning() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (db_path, key_path, new_key) = seed_row9(dir.path()).await;
+    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(&key_path);
+
+    let (db, _origin) =
+        crate::database::open_checked(&db_path, &key_path, PreMigrationBackup::Declined)
+            .await
+            .expect("open_checked must complete the rotation and succeed");
+
+    // By the time `open_checked` returned `Ok`, K05 had already run:
+    // the row is `complete`.
+    let row = db
+        .with_conn(sui_id_store::master_key_rotation::read_within_tx)
+        .await
+        .expect("with_conn")
+        .expect("a row exists");
+    assert_eq!(
+        row.state,
+        sui_id_store::master_key_rotation::RotationState::Complete
+    );
+    assert!(row.completed_at.is_some());
+
+    // And the leftover workspace was cleaned, the same run.
+    assert!(!paths.workspace.exists());
+    assert!(!paths.next.exists());
+    assert!(!paths.backup.exists());
+
+    // The returned database is the real thing: it opens with the new
+    // key, which is what `open_checked`'s own caller gets to use.
+    assert_eq!(
+        sui_id_store::crypto::fingerprint(db.key()),
+        sui_id_store::crypto::fingerprint(&new_key)
     );
 }

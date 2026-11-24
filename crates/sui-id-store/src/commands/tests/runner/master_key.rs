@@ -426,3 +426,433 @@ async fn k07_refuses_and_changes_nothing_when_the_sentinel_is_not_the_old_keys()
     );
     assert_eq!(audit_rows(&db).await, audit_before, "no audit row");
 }
+
+// ── K08 — master-key re-seal, for a journalled rotation ─────────────────
+//
+// RFC 100 `0.94.0` P1 §2. Built as a function the live rotation does
+// not call yet.
+
+use crate::master_key_rotation::{RotationDisposition, RotationRecord};
+
+fn remove_after_verified() -> RotationDisposition {
+    RotationDisposition::RemoveAfterVerified {
+        verification_reference: "verified-by-test".into(),
+    }
+}
+
+async fn row_for(db: &Database) -> Option<crate::master_key_rotation::MasterKeyRotationRow> {
+    db.with_conn(crate::master_key_rotation::read_within_tx)
+        .await
+        .expect("read")
+}
+
+#[tokio::test]
+async fn k08_reseal_for_rotation_appends_exactly_one_audit_row_and_writes_the_row() {
+    let db = fresh_db();
+    seed_a_signing_key(&db).await;
+    let before = audit_rows(&db).await;
+
+    let new_key = MasterKey::generate();
+    let record = RotationRecord {
+        rotation_id: "r-k08-1".into(),
+        old_fingerprint: crate::crypto::fingerprint(db.key()),
+        backup_filename: "key.pre-rotation".into(),
+        disposition: remove_after_verified(),
+    };
+    let report = crate::commands::reseal_master_key_for_rotation(&db, &new_key, record)
+        .await
+        .expect("reseal for rotation")
+        .into_inner();
+    assert_eq!(report.signing_keys, 1);
+
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("admin.master_key.resealed")
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+
+    let row = row_for(&db).await.expect("row written");
+    assert_eq!(row.rotation_id, "r-k08-1");
+    assert_eq!(
+        row.state,
+        crate::master_key_rotation::RotationState::DbCommittedPendingActivation
+    );
+    record_exactly_once_coverage("K08");
+}
+
+/// A pending row already exists (seeded directly -- see the module
+/// doc below on why a real double call cannot produce this on one
+/// `Database` handle) when K08 is asked to start a second rotation: it
+/// must refuse before touching anything, not merely before committing.
+#[tokio::test]
+async fn k08_refuses_while_a_row_is_already_pending_and_changes_nothing() {
+    let db = fresh_db();
+    seed_a_signing_key(&db).await;
+    let old_key_copy = crate::crypto::MasterKey::from_bytes(*db.key().as_bytes());
+    let decoy_key = MasterKey::generate();
+    db.with_conn({
+        let old_key_copy = crate::crypto::MasterKey::from_bytes(*old_key_copy.as_bytes());
+        let decoy_key = crate::crypto::MasterKey::from_bytes(*decoy_key.as_bytes());
+        move |c| {
+            crate::master_key_rotation::insert_pending_within_tx(
+                c,
+                &RotationRecord {
+                    rotation_id: "r-k08-pending".into(),
+                    old_fingerprint: crate::crypto::fingerprint(&old_key_copy),
+                    backup_filename: "key.pre-rotation".into(),
+                    disposition: remove_after_verified(),
+                },
+                &old_key_copy,
+                &decoy_key,
+                chrono::Utc::now(),
+            )
+        }
+    })
+    .await
+    .expect("seed a pending row directly");
+
+    let signing_before = repos::signing_keys::active(&db).await.expect("active");
+    let audit_before = audit_rows(&db).await;
+
+    let new_key = MasterKey::generate();
+    let result = crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &new_key,
+        RotationRecord {
+            rotation_id: "r-k08-second".into(),
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::AlreadyPending
+        ))
+    ));
+
+    let signing_after = repos::signing_keys::active(&db).await.expect("active");
+    assert_eq!(
+        signing_after.private_key_enc, signing_before.private_key_enc,
+        "no reseal happened"
+    );
+    assert_eq!(audit_rows(&db).await, audit_before, "no audit row");
+    let row = row_for(&db).await.expect("the seeded row is untouched");
+    assert_eq!(row.rotation_id, "r-k08-pending");
+}
+
+#[tokio::test]
+async fn k08_refuses_on_old_fingerprint_mismatch_and_changes_nothing() {
+    let db = fresh_db();
+    seed_a_signing_key(&db).await;
+    let signing_before = repos::signing_keys::active(&db).await.expect("active");
+    let audit_before = audit_rows(&db).await;
+
+    let new_key = MasterKey::generate();
+    let wrong_old_key = MasterKey::generate();
+    let result = crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &new_key,
+        RotationRecord {
+            rotation_id: "r-k08-mismatch".into(),
+            old_fingerprint: crate::crypto::fingerprint(&wrong_old_key),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::OldFingerprintMismatch
+        ))
+    ));
+
+    let signing_after = repos::signing_keys::active(&db).await.expect("active");
+    assert_eq!(
+        signing_after.private_key_enc, signing_before.private_key_enc,
+        "no reseal happened"
+    );
+    assert_eq!(audit_rows(&db).await, audit_before, "no audit row");
+    assert!(row_for(&db).await.is_none(), "no row written");
+}
+
+/// "A failpoint between the reseal and the row insert" (RFC 100
+/// `0.94.0` P1 §5): the row insert's own refusal, reached only after
+/// every `reseal_all` call in the closure already ran, rolls the
+/// reseal back too -- proving both are in the one transaction, not
+/// two. Mechanism: seed a pending row directly (bypassing K08 itself),
+/// so the reseal succeeds and the *insert* step is what fails.
+#[tokio::test]
+async fn k08_a_failure_between_the_reseal_and_the_row_insert_rolls_back_the_reseal_too() {
+    let db = fresh_db();
+    seed_a_signing_key(&db).await;
+    let old_key_copy = crate::crypto::MasterKey::from_bytes(*db.key().as_bytes());
+    let decoy_key = MasterKey::generate();
+    db.with_conn({
+        let old_key_copy = crate::crypto::MasterKey::from_bytes(*old_key_copy.as_bytes());
+        let decoy_key = crate::crypto::MasterKey::from_bytes(*decoy_key.as_bytes());
+        move |c| {
+            crate::master_key_rotation::insert_pending_within_tx(
+                c,
+                &RotationRecord {
+                    rotation_id: "r-already-there".into(),
+                    old_fingerprint: crate::crypto::fingerprint(&old_key_copy),
+                    backup_filename: "key.pre-rotation".into(),
+                    disposition: remove_after_verified(),
+                },
+                &old_key_copy,
+                &decoy_key,
+                chrono::Utc::now(),
+            )
+        }
+    })
+    .await
+    .expect("seed a pending row directly");
+
+    let signing_before = repos::signing_keys::active(&db).await.expect("active");
+    let audit_before = audit_rows(&db).await;
+
+    let new_key = MasterKey::generate();
+    let result = crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &new_key,
+        RotationRecord {
+            rotation_id: "r-k08-blocked".into(),
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await;
+    assert!(
+        result.is_err(),
+        "the row insert refuses: a row is already pending"
+    );
+
+    let signing_after = repos::signing_keys::active(&db).await.expect("active");
+    assert_eq!(
+        signing_after.private_key_enc, signing_before.private_key_enc,
+        "the reseal that ran before the insert must be rolled back too"
+    );
+    assert_eq!(audit_rows(&db).await, audit_before, "no audit row");
+    record_rollback_coverage("K08");
+}
+
+/// "A failpoint... between the insert and the commit" (RFC 100
+/// `0.94.0` P1 §5): RFC 094's own established shape, `fail_before_next_
+/// append`, fires after the whole closure (reseal, then the row
+/// insert) has run, right before the Class-A runner's own append and
+/// commit.
+#[tokio::test]
+async fn k08_a_failure_between_the_insert_and_the_commit_rolls_back_everything() {
+    let db = fresh_db();
+    seed_a_signing_key(&db).await;
+    let signing_before = repos::signing_keys::active(&db).await.expect("active");
+    let audit_before = audit_rows(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let new_key = MasterKey::generate();
+    let result = crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &new_key,
+        RotationRecord {
+            rotation_id: "r-k08-failpoint".into(),
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let signing_after = repos::signing_keys::active(&db).await.expect("active");
+    assert_eq!(
+        signing_after.private_key_enc, signing_before.private_key_enc,
+        "the reseal must not have committed"
+    );
+    assert_eq!(audit_rows(&db).await, audit_before, "no audit row");
+    assert!(row_for(&db).await.is_none(), "no row written");
+}
+
+#[tokio::test]
+async fn k08_leaves_the_wal_checkpointed_to_zero_bytes_on_return() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("a2-k08.db");
+    let db = Database::open(&path, MasterKey::generate()).expect("open file db");
+    seed_a_signing_key(&db).await;
+
+    let new_key = MasterKey::generate();
+    crate::commands::reseal_master_key_for_rotation(
+        &db,
+        &new_key,
+        RotationRecord {
+            rotation_id: "r-k08-durable".into(),
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await
+    .expect("reseal");
+
+    let wal_len = std::fs::metadata(wal_path_for(&path))
+        .map(|m| m.len())
+        .unwrap_or(0);
+    assert_eq!(
+        wal_len, 0,
+        "the -wal file must be checkpointed to zero bytes"
+    );
+}
+
+// ── K05 — master-key rotation completion ─────────────────────────────────
+//
+// RFC 100 `0.94.0` P1 §3. Built as a function the live rotation does
+// not call yet.
+
+async fn seed_a_pending_rotation(db: &Database, rotation_id: &str) -> MasterKey {
+    seed_a_signing_key(db).await;
+    let new_key = MasterKey::generate();
+    crate::commands::reseal_master_key_for_rotation(
+        db,
+        &new_key,
+        RotationRecord {
+            rotation_id: rotation_id.into(),
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition: remove_after_verified(),
+        },
+    )
+    .await
+    .expect("reseal for rotation");
+    new_key
+}
+
+#[tokio::test]
+async fn k05_completes_a_pending_row_and_appends_exactly_one_audit_row() {
+    let db = fresh_db();
+    seed_a_pending_rotation(&db, "r-k05-1").await;
+    let before = audit_rows(&db).await;
+
+    let audited = crate::commands::complete_master_key_rotation(&db, "r-k05-1".into())
+        .await
+        .expect("complete")
+        .expect("something changed");
+    let () = audited.into_inner();
+
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("admin.master_key.rotated")
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    let row = row_for(&db).await.expect("row");
+    assert_eq!(
+        row.state,
+        crate::master_key_rotation::RotationState::Complete
+    );
+    assert!(row.completed_at.is_some());
+    record_exactly_once_coverage("K05");
+}
+
+#[tokio::test]
+async fn k05_run_twice_is_idempotent_with_no_duplicate_event() {
+    let db = fresh_db();
+    seed_a_pending_rotation(&db, "r-k05-twice").await;
+
+    let first = crate::commands::complete_master_key_rotation(&db, "r-k05-twice".into())
+        .await
+        .expect("first complete");
+    assert!(first.is_some());
+    let after_first = audit_rows(&db).await;
+
+    let second = crate::commands::complete_master_key_rotation(&db, "r-k05-twice".into())
+        .await
+        .expect("second complete");
+    assert!(second.is_none(), "the second call reports no change");
+    assert_eq!(
+        audit_rows(&db).await,
+        after_first,
+        "no duplicate admin.master_key.rotated"
+    );
+}
+
+#[tokio::test]
+async fn k05_refuses_for_an_unknown_rotation_id() {
+    let db = fresh_db();
+    let before = audit_rows(&db).await;
+    let result =
+        crate::commands::complete_master_key_rotation(&db, "no-such-rotation".into()).await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::NoRow
+        ))
+    ));
+    assert_eq!(audit_rows(&db).await, before, "no audit row");
+}
+
+#[tokio::test]
+async fn k05_refuses_for_a_different_rotation_id_and_changes_nothing() {
+    let db = fresh_db();
+    seed_a_pending_rotation(&db, "r-k05-real").await;
+    let before = audit_rows(&db).await;
+
+    let result = crate::commands::complete_master_key_rotation(&db, "r-k05-wrong".into()).await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::RotationIdMismatch
+        ))
+    ));
+    assert_eq!(audit_rows(&db).await, before, "no audit row");
+    let row = row_for(&db).await.expect("row");
+    assert_eq!(
+        row.state,
+        crate::master_key_rotation::RotationState::DbCommittedPendingActivation,
+        "the real row was not completed"
+    );
+}
+
+#[tokio::test]
+async fn k05_a_failure_before_the_append_rolls_back_the_completion() {
+    let db = fresh_db();
+    seed_a_pending_rotation(&db, "r-k05-failpoint").await;
+    let before_audit = audit_rows(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = crate::commands::complete_master_key_rotation(&db, "r-k05-failpoint".into()).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    assert_eq!(audit_rows(&db).await, before_audit, "no audit row");
+    let row = row_for(&db).await.expect("row");
+    assert_eq!(
+        row.state,
+        crate::master_key_rotation::RotationState::DbCommittedPendingActivation,
+        "the row must not have been marked complete"
+    );
+    record_rollback_coverage("K05");
+}
+
+#[tokio::test]
+async fn k05_leaves_the_wal_checkpointed_to_zero_bytes_on_return() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("a2-k05.db");
+    let db = Database::open(&path, MasterKey::generate()).expect("open file db");
+    let new_key = seed_a_pending_rotation(&db, "r-k05-durable").await;
+    let _ = new_key;
+
+    crate::commands::complete_master_key_rotation(&db, "r-k05-durable".into())
+        .await
+        .expect("complete")
+        .expect("something changed");
+
+    let wal_len = std::fs::metadata(wal_path_for(&path))
+        .map(|m| m.len())
+        .unwrap_or(0);
+    assert_eq!(
+        wal_len, 0,
+        "the -wal file must be checkpointed to zero bytes"
+    );
+}

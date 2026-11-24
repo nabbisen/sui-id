@@ -94,6 +94,10 @@ const EXCLUDED_TABLES: &[&str] = &[
     "_clients_new",
     "_signing_keys_new",
     "_user_totp_new",
+    // Migration 0053 (RFC 100 `0.94.0` P1): same idiom, rebuilding
+    // `master_key_rotation` to its full shape -- already excluded,
+    // above, for the same reason the staging name is here.
+    "_master_key_rotation_new",
 ];
 
 /// A migration that attaches a `CHECK` to a column of an **already
@@ -544,7 +548,12 @@ fn derive_ranges_matches_the_accepted_stage1_table() {
         // seeded data -- so it opens no new boundary; it only moves the
         // last range's end to the new head, the same mechanical move
         // 0050 made.
-        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 52],
+        // RFC 100 `0.94.0` P1 (migration 0053): extends it again, to
+        // 53. 0053 rebuilds `master_key_rotation` to its full shape
+        // through `_master_key_rotation_new` -- both excluded, neither
+        // seeded data -- so it opens no new boundary either; same
+        // mechanical move.
+        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 53],
         "range ends changed -- full ranges: {ranges:#?}"
     );
 

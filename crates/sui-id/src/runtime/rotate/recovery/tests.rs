@@ -64,13 +64,27 @@ impl Fixture {
     /// advances and writes whatever artifacts each state beyond that
     /// implies, up to and including `state`.
     fn prepare_to(&self, state: JournalState) -> JournalEnvelope {
+        self.prepare_to_naming(state, None)
+    }
+
+    /// [`prepare_to`], with the journal naming `new_fingerprint` instead
+    /// of the new key's own: a body a buggy writer could seal, since it
+    /// holds both keys.
+    fn prepare_to_naming(
+        &self,
+        state: JournalState,
+        new_fingerprint: Option<String>,
+    ) -> JournalEnvelope {
         journal::lock_workspace(&Real, &self.paths.workspace).expect("lock");
-        let body = journal::sample_body(
+        let mut body = journal::sample_body(
             &self.key_path,
             &self.paths.workspace,
             &self.old_key,
             &self.new_key,
         );
+        if let Some(fp) = new_fingerprint {
+            body.new_fingerprint = fp;
+        }
         let mut envelope = journal::write_intent(
             &Real,
             &self.paths.workspace,
@@ -513,9 +527,12 @@ async fn a_journal_sealed_under_keys_that_do_not_include_the_active_one_fails_cl
 async fn role_new_with_the_active_key_fails_closed() {
     let dir = tempfile::tempdir().expect("tempdir");
     // The database's sentinel is already sealed under the *new* key --
-    // as if K04 had already committed and activation had already
+    // as if K07/K08 had already committed and activation had already
     // swapped the key file -- and the active key file now holds that
-    // same new key. Rows 8-10's territory; stage 4 fails closed on it.
+    // same new key. Rows 8-10's territory (`0.94.0` P1) -- but no
+    // `master_key_rotation` row exists here, one of P1's own named
+    // fail-closed conditions, so this still fails closed, even though
+    // rows 9/10 themselves are now recovered.
     let old_key = MasterKey::generate();
     let new_key = MasterKey::generate();
     let db_path = sentinel_db(dir.path(), &new_key).await;
@@ -862,4 +879,333 @@ async fn a_refusal_detail_starts_a_sentence() {
     );
     assert!(err.contains("check out. The pre-rotation backup"), "{err}");
     assert!(err.contains("it should be"), "{err}");
+}
+
+// ---------- Rows 8-10 (`0.94.0` P1): the database half already ran ----------
+//
+// Each fixture is a `Fixture::bare()` database sealed under `old_key`,
+// fully prepared (`Prepared`, so `next`/`backup` are both published),
+// with K08 simulated directly -- the store-side primitives themselves,
+// since the live rotation does not call them yet (this stage's own
+// scoping).
+//
+// `journal::sample_body`'s own `rotation_id` is a fixed constant; every
+// row that must *match* the journal uses it verbatim, and only the
+// mismatch test below uses a different one on purpose.
+
+const SAMPLE_ROTATION_ID: &str = "11111111-1111-1111-1111-111111111111";
+
+/// Simulate K08 having committed: reseal the sentinel to `new_key` and
+/// write the `master_key_rotation` row `db_committed_pending_
+/// activation`, through the real store command (`commands::
+/// reseal_master_key_for_rotation`) -- not a raw write, so this fixture
+/// is exactly what a real K08 run leaves.
+async fn seed_db_committed(fixture: &Fixture, rotation_id: &str) {
+    let db =
+        Database::open(&fixture.db_path, dup_key(&fixture.old_key)).expect("open with old key");
+    sui_id_store::commands::reseal_master_key_for_rotation(
+        &db,
+        &dup_key(&fixture.new_key),
+        sui_id_store::master_key_rotation::RotationRecord {
+            rotation_id: rotation_id.to_owned(),
+            old_fingerprint: sui_id_store::crypto::fingerprint(&fixture.old_key),
+            backup_filename: fixture
+                .paths
+                .backup
+                .file_name()
+                .and_then(|n| n.to_str())
+                .expect("utf8")
+                .to_owned(),
+            disposition:
+                sui_id_store::master_key_rotation::RotationDisposition::RemoveAfterVerified {
+                    verification_reference: "test".into(),
+                },
+        },
+    )
+    .await
+    .expect("simulate K08");
+}
+
+/// Simulate K05 having completed too (row 10), through the real store
+/// command.
+async fn mark_row_complete(fixture: &Fixture, rotation_id: &str) {
+    let db =
+        Database::open(&fixture.db_path, dup_key(&fixture.new_key)).expect("open with new key");
+    sui_id_store::commands::complete_master_key_rotation(&db, rotation_id.to_owned())
+        .await
+        .expect("simulate K05")
+        .expect("K05 writes something the first time");
+}
+
+#[tokio::test]
+async fn row8_activates_the_next_key_and_needs_completion() {
+    let f = Fixture::bare().await;
+    f.prepare_to(JournalState::Prepared);
+    seed_db_committed(&f, SAMPLE_ROTATION_ID).await;
+    // The active key file still holds `old_key` (`bare()`'s own setup):
+    // K08 ran, but activation has not -- exactly row 8.
+
+    let result = recover(&Real, &f.key_path, &f.db_path).expect("recover");
+    match result {
+        Recovered::NeedsCompletion {
+            rotation_id,
+            active_fingerprint,
+            activated,
+        } => {
+            assert_eq!(rotation_id, SAMPLE_ROTATION_ID);
+            assert_eq!(
+                active_fingerprint,
+                sui_id_store::crypto::fingerprint(&f.new_key)
+            );
+            assert!(activated, "row 8 activates");
+        }
+        other => panic!("expected NeedsCompletion, got {other:?}"),
+    }
+    let active_now = std::fs::read_to_string(&f.key_path).expect("read key file");
+    assert_eq!(
+        active_now.trim(),
+        f.new_key.to_base64(),
+        "the active key file now holds the new key"
+    );
+    assert!(!f.paths.next.exists(), "renamed into place, not copied");
+    // K05 has not run yet -- nothing in the workspace is cleaned until
+    // the caller does that.
+    assert!(f.paths.workspace.exists());
+    assert!(f.paths.backup.exists());
+}
+
+#[tokio::test]
+async fn row9_needs_completion_without_activating_again() {
+    let f = Fixture::bare().await;
+    f.prepare_to(JournalState::Prepared);
+    seed_db_committed(&f, SAMPLE_ROTATION_ID).await;
+    write_key_at(&f.key_path, &f.new_key, 0o600); // activation already done, in an earlier run
+
+    let result = recover(&Real, &f.key_path, &f.db_path).expect("recover");
+    match result {
+        Recovered::NeedsCompletion {
+            rotation_id,
+            activated,
+            ..
+        } => {
+            assert_eq!(rotation_id, SAMPLE_ROTATION_ID);
+            assert!(!activated, "row 9: already activated before this run");
+        }
+        other => panic!("expected NeedsCompletion, got {other:?}"),
+    }
+    assert!(f.paths.next.exists(), "recover itself does not clean yet");
+    assert!(f.paths.workspace.exists());
+}
+
+#[tokio::test]
+async fn row10_only_cleans_the_stale_workspace() {
+    let f = Fixture::bare().await;
+    f.prepare_to(JournalState::Prepared);
+    seed_db_committed(&f, SAMPLE_ROTATION_ID).await;
+    write_key_at(&f.key_path, &f.new_key, 0o600);
+    mark_row_complete(&f, SAMPLE_ROTATION_ID).await;
+
+    let result = recover(&Real, &f.key_path, &f.db_path).expect("recover");
+    match result {
+        Recovered::Cleaned {
+            active_fingerprint, ..
+        } => {
+            assert_eq!(
+                active_fingerprint,
+                sui_id_store::crypto::fingerprint(&f.new_key)
+            );
+        }
+        other => panic!("expected Cleaned, got {other:?}"),
+    }
+    assert!(
+        f.remaining_artifacts().is_empty(),
+        "everything cleaned: {:?}",
+        f.remaining_artifacts()
+    );
+    // The service starts normally, against the new key, afterward.
+    let db = Database::open(&f.db_path, dup_key(&f.new_key)).expect("the new key opens it");
+    drop(db);
+}
+
+#[tokio::test]
+async fn row8_without_next_fails_closed() {
+    let f = Fixture::bare().await;
+    f.prepare_to(JournalState::Prepared);
+    seed_db_committed(&f, SAMPLE_ROTATION_ID).await;
+    std::fs::remove_file(&f.paths.next).expect("remove next");
+    let before = f.remaining_artifacts();
+
+    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    assert!(format!("{err:#}").contains("does not open"), "{err:#}");
+    assert_eq!(f.remaining_artifacts(), before, "nothing removed");
+}
+
+#[tokio::test]
+async fn row8_a_next_of_the_wrong_key_fails_closed() {
+    let f = Fixture::bare().await;
+    f.prepare_to(JournalState::Prepared);
+    seed_db_committed(&f, SAMPLE_ROTATION_ID).await;
+    write_key_at(&f.paths.next, &MasterKey::generate(), 0o600);
+    let before = f.remaining_artifacts();
+
+    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    assert!(format!("{err:#}").contains("does not open"), "{err:#}");
+    assert_eq!(f.remaining_artifacts(), before, "nothing removed");
+}
+
+#[tokio::test]
+async fn row9_a_row_rotation_id_mismatch_fails_closed() {
+    let f = Fixture::bare().await;
+    f.prepare_to(JournalState::Prepared);
+    // A different rotation entirely -- not the journal's own
+    // `SAMPLE_ROTATION_ID`.
+    seed_db_committed(&f, "22222222-2222-2222-2222-222222222222").await;
+    write_key_at(&f.key_path, &f.new_key, 0o600);
+    let before = f.remaining_artifacts();
+
+    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    assert!(format!("{err:#}").contains("different rotation"), "{err:#}");
+    assert_eq!(f.remaining_artifacts(), before, "nothing removed");
+}
+
+/// Row 10's own inconsistent twin: the row says complete, but the
+/// active key file is still the old one -- K05 only ever marks a row
+/// complete after activation, so this should never happen; fail
+/// closed rather than guess which fact to trust.
+#[tokio::test]
+async fn complete_row_with_the_active_key_still_old_fails_closed() {
+    let f = Fixture::bare().await;
+    f.prepare_to(JournalState::Prepared);
+    seed_db_committed(&f, SAMPLE_ROTATION_ID).await;
+    mark_row_complete(&f, SAMPLE_ROTATION_ID).await;
+    // The active key file was never swapped to `new_key`.
+
+    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    assert!(
+        format!("{err:#}").contains("activation and completion disagree"),
+        "{err:#}"
+    );
+}
+
+/// Activation's own crash safety (row 8), in the power-loss mode: every
+/// state the simulator enumerates during `recover`'s own run -- most
+/// importantly the `rename` that activates `next` and its directory
+/// sync. The real `recover`, re-run against the real adapter from each
+/// materialized state, must reach `NeedsCompletion` (this stage's own
+/// stopping point -- row 9's shape, since by then the file swap, at
+/// least, already happened) and never fail closed on a state its own
+/// activation could leave.
+#[tokio::test]
+async fn row8_activation_is_crash_safe_under_power_loss() {
+    let f = Fixture::bare().await;
+    f.prepare_to(JournalState::Prepared);
+    seed_db_committed(&f, SAMPLE_ROTATION_ID).await;
+
+    let sim = Simulated::new(&[(
+        f.key_path.clone(),
+        format!("{}\n", f.old_key.to_base64()).into_bytes(),
+    )]);
+    // Seed the real, prepared workspace and artifacts into the
+    // simulator, then run `recover` through it to record its own
+    // crash points -- the same shape `recovery_survives_a_crash_from`
+    // already uses for rows 2-7.
+    for entry in [&f.paths.next, &f.paths.backup] {
+        seed_from_real(&sim, entry);
+    }
+    seed_dir_from_real(&sim, &f.paths.workspace);
+
+    let before = sim.points().len();
+    let result = recover(&sim, &f.key_path, &f.db_path);
+    assert!(
+        matches!(
+            result,
+            Ok(Recovered::NeedsCompletion {
+                activated: true,
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+    let points = sim.points();
+    let points = &points[before..];
+    assert!(!points.is_empty());
+
+    let base = f._dir.path();
+    // The database itself is real, not simulated (`seed_db_committed`
+    // already wrote it, under the real adapter, and checkpointed it --
+    // K08's own durability contract) -- only the key files and the
+    // workspace move with each materialized disk. `materialize` clears
+    // and repopulates `base` from the simulator's own tracked files
+    // alone, which never included `t.sqlite`, so it is saved here and
+    // restored after each one.
+    let db_bytes = std::fs::read(&f.db_path).expect("read the real database file");
+    for point in points {
+        let mut disks = point.power_loss_states();
+        disks.push(point.kill_state());
+        for disk in disks {
+            if base.exists() {
+                std::fs::remove_dir_all(base).expect("clear base directory");
+            }
+            std::fs::create_dir_all(base).expect("recreate base directory");
+            materialize(&disk, base).expect("materialize");
+            std::fs::write(&f.db_path, &db_bytes).expect("restore the real database file");
+            let key_path = base.join("t.key");
+            // Unlike rows 2-7's own equivalent loop, a missing active
+            // key file here is not skipped: `t.key` existed (holding
+            // `old_key`) before this run started, so M2 ("no crash
+            // prefix leaves the system without a key that decrypts
+            // the database") applies squarely to it. An atomic
+            // `rename` can never observe this; only remove-then-rename
+            // could, which is exactly the regression this guards.
+            assert!(
+                key_path.exists(),
+                "{}: the active key file must never go missing during activation",
+                point.label
+            );
+            match recover(&Real, &key_path, &f.db_path) {
+                Ok(Recovered::NeedsCompletion { .. }) => {}
+                Ok(other) => panic!("{}: expected NeedsCompletion, got {other:?}", point.label),
+                Err(e) => panic!(
+                    "{}: must not fail closed on its own activation: {e:#}",
+                    point.label
+                ),
+            }
+        }
+    }
+}
+
+// ---------- review fold-in (2026-11-24): M6, the fingerprint itself ----------
+
+/// RFC 100 M6: a fingerprint mismatch fails closed. Here the journal
+/// and the `master_key_rotation` row **agree** on a new fingerprint that
+/// the bound `next` key does not have, though `next` is the key that
+/// really opens the sentinel. Only recovery's own comparison of `next`'s
+/// fingerprint against the journal's can refuse this: the row-versus-
+/// journal check passes, because both were made to agree. That is the
+/// state a buggy writer, or a tampered row, could leave.
+#[tokio::test]
+async fn row8_a_next_whose_fingerprint_the_journal_and_row_do_not_name_fails_closed() {
+    let f = Fixture::bare().await;
+    let claimed = sui_id_store::crypto::fingerprint(&MasterKey::generate());
+    f.prepare_to_naming(JournalState::Prepared, Some(claimed.clone()));
+    seed_db_committed(&f, SAMPLE_ROTATION_ID).await;
+    {
+        let conn = rusqlite::Connection::open(&f.db_path).expect("open for tampering");
+        let n = conn
+            .execute(
+                "UPDATE master_key_rotation SET new_fingerprint = ?1 WHERE id = 1",
+                [&claimed],
+            )
+            .expect("tamper the row");
+        assert_eq!(n, 1);
+    }
+    let before = f.remaining_artifacts();
+
+    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    assert!(format!("{err:#}").contains("fingerprint"), "{err:#}");
+    assert_eq!(
+        f.remaining_artifacts(),
+        before,
+        "nothing removed or activated"
+    );
 }

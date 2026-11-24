@@ -6659,6 +6659,19 @@ static K07_RESEALED: EventDescriptor = EventDescriptor {
             description: "rows re-sealed in `email_outbox`",
             required: false,
         },
+        // RFC 100 `0.94.0` P1 §2: K08 (`reseal_master_key_for_rotation`)
+        // shares this exact event name with K07 above -- both assert
+        // only "the database phase committed", M4's own boundary,
+        // whichever command produced it. Optional and absent from
+        // every K07-produced event (K07's own call site, below,
+        // constructs `K07Event::Resealed` with no such field to set):
+        // present only when K08 wrote this row, naming the rotation
+        // it belongs to and that activation is still pending.
+        AttributeSpec {
+            name: "rotation_id",
+            description: "the pending rotation this re-seal belongs to (K08 only; absent from a K07-written event)",
+            required: false,
+        },
     ],
 };
 
@@ -6848,6 +6861,294 @@ pub async fn reseal_master_key(
     .await?;
 
     Ok(audited)
+}
+
+// ── K08 — master-key re-seal, for a journalled rotation ─────────────────
+//
+// RFC 100 `0.94.0` P1 §2. A **new** command beside K07, not an edit to
+// it: `reseal_master_key` (K07) is today's live rotation's own call,
+// untouched by this stage. This one is built as a function the live
+// rotation does not call yet -- P2 wires it in, once the journal and
+// activation it depends on are themselves live. In one Class-A
+// transaction it does everything K07 does, plus writes the
+// `master_key_rotation` row pending activation -- RFC 100's own `K04`,
+// under a fresh inventory id (`K04`'s own stays retired, per the RFC's
+// refresh: "Extend K07's transaction... K04's inventory id stays
+// retired").
+
+crate::declare_write_command! {
+    /// K08 — re-seal every column-encrypted value under a new master
+    /// key, for a journalled rotation: the same work K07 does, plus the
+    /// pending `master_key_rotation` row, in one transaction.
+    command K08 = "K08" {
+        system_principal: permitted;
+        enum K08Event {
+            Resealed {
+                rotation_id: String,
+                signing_keys: u64,
+                refresh_tokens: u64,
+                user_totp_secrets: u64,
+                user_totp_recovery_codes: u64,
+                user_webauthn_credentials: u64,
+                smtp_config: u64,
+                email_outbox_rows: u64,
+            } => &K07_RESEALED,
+        }
+    }
+}
+
+impl SealedCommandEvent<K08> for K08Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Resealed {
+            rotation_id,
+            signing_keys,
+            refresh_tokens,
+            user_totp_secrets,
+            user_totp_recovery_codes,
+            user_webauthn_credentials,
+            smtp_config,
+            email_outbox_rows,
+        } = self;
+        AuditAttributes::builder()
+            .attribute("rotation_id", rotation_id.clone())
+            .attribute("signing_keys", signing_keys.to_string())
+            .attribute("refresh_tokens", refresh_tokens.to_string())
+            .attribute("user_totp_secrets", user_totp_secrets.to_string())
+            .attribute(
+                "user_totp_recovery_codes",
+                user_totp_recovery_codes.to_string(),
+            )
+            .attribute(
+                "user_webauthn_credentials",
+                user_webauthn_credentials.to_string(),
+            )
+            .attribute("smtp_config", smtp_config.to_string())
+            .attribute("email_outbox_rows", email_outbox_rows.to_string())
+            .build()
+    }
+}
+
+/// Run K08: the same six-table-plus-sentinel re-seal `reseal_master_key`
+/// (K07) performs, plus writing the `master_key_rotation` row
+/// `db_committed_pending_activation`, all in one Class-A transaction,
+/// made durable before this returns -- exactly K07's own contract
+/// (`0.91.0` A2). Refuses before writing anything (RFC 100 `0.94.0` P1
+/// §2): a row already pending, or `record.old_fingerprint` not the
+/// database's current key.
+pub async fn reseal_master_key_for_rotation(
+    db: &crate::Database,
+    new_key: &crate::crypto::MasterKey,
+    record: crate::master_key_rotation::RotationRecord,
+) -> StoreResult<crate::registry::Audited<RotationReport>> {
+    use zeroize::Zeroize;
+    let mut old_key_bytes = *db.key().as_bytes();
+    let old_key = crate::crypto::MasterKey::from_bytes(old_key_bytes);
+    old_key_bytes.zeroize();
+    let mut new_key_bytes = *new_key.as_bytes();
+    let new_key = crate::crypto::MasterKey::from_bytes(new_key_bytes);
+    new_key_bytes.zeroize();
+
+    let context = AuthorizedCommandContext::<K08>::for_system_actor(None);
+    let audited = db
+        .class_a(
+            context,
+            move |tx: &mut ClassATx<'_, K08>| -> StoreResult<(RotationReport, K08Event)> {
+                // Reseal first, the row insert after (RFC 100 `0.94.0`
+                // P1 §5's own test shape names a failpoint "between the
+                // reseal and the row insert"): both are inside this one
+                // transaction, so a failure at either point --
+                // including the row insert's own refusals, already
+                // pending or a fingerprint mismatch -- rolls the reseal
+                // back too. Nothing commits until both have succeeded.
+                let signing_keys =
+                    crate::repos::signing_keys::reseal_all(tx.tx(), &old_key, &new_key)?;
+                let refresh_tokens =
+                    crate::repos::refresh_tokens::reseal_all(tx.tx(), &old_key, &new_key)?;
+                let (user_totp_secrets, user_totp_recovery_codes) =
+                    crate::repos::user_totp::reseal_all(tx.tx(), &old_key, &new_key)?;
+                let user_webauthn_credentials =
+                    crate::repos::user_webauthn_credentials::reseal_all(
+                        tx.tx(),
+                        &old_key,
+                        &new_key,
+                    )?;
+                let smtp_config =
+                    crate::repos::smtp_config::reseal_all(tx.tx(), &old_key, &new_key)?;
+                let email_outbox_rows =
+                    crate::repos::email_outbox::reseal_all(tx.tx(), &old_key, &new_key)? as u64;
+                crate::master_key_check::reseal_sentinel_within_tx(tx.tx(), &old_key, &new_key)?;
+                crate::master_key_rotation::insert_pending_within_tx(
+                    tx.tx(),
+                    &record,
+                    &old_key,
+                    &new_key,
+                    chrono::Utc::now(),
+                )?;
+                let report = RotationReport {
+                    signing_keys,
+                    refresh_tokens,
+                    user_totp_secrets,
+                    user_totp_recovery_codes,
+                    user_webauthn_credentials,
+                    smtp_config,
+                    email_outbox_rows,
+                };
+                let event = K08Event::Resealed {
+                    rotation_id: record.rotation_id.clone(),
+                    signing_keys: report.signing_keys,
+                    refresh_tokens: report.refresh_tokens,
+                    user_totp_secrets: report.user_totp_secrets,
+                    user_totp_recovery_codes: report.user_totp_recovery_codes,
+                    user_webauthn_credentials: report.user_webauthn_credentials,
+                    smtp_config: report.smtp_config,
+                    email_outbox_rows: report.email_outbox_rows,
+                };
+                Ok((report, event))
+            },
+        )
+        .await?;
+
+    // `0.91.0` A2's own contract, restated for K08: durable before this
+    // returns, the same checkpoint K07 runs.
+    db.with_conn(|conn| {
+        let (busy, _log, _checkpointed): (i64, i64, i64) =
+            conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })?;
+        if busy != 0 {
+            return Err(StoreError::RotationNotDurable);
+        }
+        Ok(())
+    })
+    .await?;
+
+    Ok(audited)
+}
+
+// ── K05 — master-key rotation completion ─────────────────────────────────
+//
+// RFC 100 `0.94.0` P1 §3. Built as a function the live rotation does
+// not call yet (P2 wires it in). Today's completion record,
+// `admin.master_key.rotated`, is a best-effort append outside any
+// transaction (`sui-id/src/cli/handlers.rs:529`) -- unchanged here, and
+// not removed by this stage. This command gives the same event name a
+// second, sealed writer: once P2 calls this after activation, that
+// best-effort append becomes dead code for the path this command
+// covers, but nothing about it is touched in this stage.
+
+static K05_ROTATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AdminMasterKeyRotated,
+    name: "admin.master_key.rotated",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::None,
+    attributes: &[AttributeSpec {
+        name: "rotation_id",
+        description: "the rotation this completes",
+        required: true,
+    }],
+};
+
+crate::declare_write_command! {
+    /// K05 — mark a master-key rotation complete: the database phase
+    /// (K08) already committed; this records that activation (the key
+    /// file replacement) happened too.
+    command K05 = "K05" {
+        system_principal: permitted;
+        enum K05Event {
+            Rotated { rotation_id: String } => &K05_ROTATED,
+        }
+    }
+}
+
+impl SealedCommandEvent<K05> for K05Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Rotated { rotation_id } = self;
+        AuditAttributes::builder()
+            .attribute("rotation_id", rotation_id.clone())
+            .build()
+    }
+}
+
+/// Run K05: mark the `master_key_rotation` row `complete` and append
+/// `admin.master_key.rotated`, in one Class-A transaction, made durable
+/// before this returns. Opened **with the new key** -- the caller must
+/// already have it active (RFC 100 `0.94.0` P1 §3: "K05 needs an open
+/// database").
+///
+/// **Idempotent** (crash-matrix row 9, "K05 run twice"): a row already
+/// `complete` with this exact `rotation_id` returns success and appends
+/// nothing, so a crash between this commit and the caller observing
+/// success, followed by a retry, never writes a second
+/// `admin.master_key.rotated`. Refuses, not succeeds, for no row or a
+/// different `rotation_id` -- those are not "already done", they are
+/// wrong.
+pub async fn complete_master_key_rotation(
+    db: &crate::Database,
+    rotation_id: String,
+) -> StoreResult<Option<crate::registry::Audited<()>>> {
+    let context = AuthorizedCommandContext::<K05>::for_system_actor(None);
+    let result = db
+        .class_a(
+            context,
+            move |tx: &mut ClassATx<'_, K05>| -> StoreResult<((), K05Event)> {
+                let wrote = crate::master_key_rotation::mark_complete_within_tx(
+                    tx.tx(),
+                    &rotation_id,
+                    chrono::Utc::now(),
+                )?;
+                if !wrote {
+                    // Already complete with this exact rotation_id:
+                    // RFC 100's own "no duplicate event" (crash-matrix
+                    // row 9, "K05 run twice") requires this call append
+                    // nothing. `NoChange` is this registry's own seam
+                    // for exactly that -- an opened transaction that
+                    // commits no write and appends no event, the same
+                    // way C23/C25 use it for "found nothing to
+                    // change."
+                    return Err(StoreError::NoChange);
+                }
+                Ok(((), K05Event::Rotated { rotation_id }))
+            },
+        )
+        .await;
+    let audited = match result {
+        Ok(audited) => audited,
+        Err(StoreError::NoChange) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+
+    // `0.91.0` A2's own contract, restated for K05: durable before
+    // this returns.
+    db.with_conn(|conn| {
+        let (busy, _log, _checkpointed): (i64, i64, i64) =
+            conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })?;
+        if busy != 0 {
+            return Err(StoreError::RotationNotDurable);
+        }
+        Ok(())
+    })
+    .await?;
+
+    Ok(Some(audited))
 }
 
 // ── C08 — set a dev-mode client's secret hash ────────────────────────────

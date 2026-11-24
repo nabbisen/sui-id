@@ -207,6 +207,44 @@ pub enum StoreError {
          sealed under the new key. The key files were not touched."
     )]
     RotationNotDurable,
+
+    /// RFC 100 `0.94.0` P1: K08 (reseal under a new key, for rotation)
+    /// or K05 (completion) refused, before writing anything. The
+    /// variant says why.
+    #[error("master-key rotation refused: {0}")]
+    RotationRefused(RotationRefusal),
+}
+
+/// Why K08 or K05 (RFC 100 `0.94.0` P1) refused a master-key rotation
+/// step, before writing anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RotationRefusal {
+    /// K08: a `master_key_rotation` row is already pending — a second
+    /// rotation cannot start, and recovery, not a fresh K08 call, owns
+    /// finishing or cleaning the one in progress.
+    AlreadyPending,
+    /// K08: the record's old fingerprint does not match the database's
+    /// current key — this reseal was not derived from the key this
+    /// database is actually sealed under.
+    OldFingerprintMismatch,
+    /// K05: no `master_key_rotation` row exists to complete.
+    NoRow,
+    /// K05: a row exists, but names a different `rotation_id` than the
+    /// one given.
+    RotationIdMismatch,
+}
+
+impl std::fmt::Display for RotationRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::AlreadyPending => "a rotation is already pending",
+            Self::OldFingerprintMismatch => {
+                "the record's old fingerprint does not match the database's current key"
+            }
+            Self::NoRow => "no rotation row exists to complete",
+            Self::RotationIdMismatch => "the row names a different rotation",
+        })
+    }
 }
 
 /// Why U37 refused to issue a recovery link (RFC 103 D5, D6, D8).

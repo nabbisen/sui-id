@@ -46,6 +46,23 @@ pub enum Recovered {
         removed: Vec<PathBuf>,
         active_fingerprint: String,
     },
+    /// RFC 100 `0.94.0` P1 §4, rows 8/9: the database is already
+    /// resealed under the new key, and (row 8 only) the active key
+    /// file has just been replaced with it -- but the
+    /// `master_key_rotation` row is still `db_committed_pending_
+    /// activation`. `recover` cannot complete it itself: K05 needs an
+    /// open database, and this runs before one exists. The caller
+    /// (`database::open_checked`) opens one with the now-active key,
+    /// runs K05, then cleans the workspace -- the service must not
+    /// become ready before both have happened.
+    NeedsCompletion {
+        rotation_id: String,
+        active_fingerprint: String,
+        /// `true` for row 8 (this call just replaced the active key
+        /// file with the bound `next`); `false` for row 9 (the file
+        /// swap already happened in an earlier run).
+        activated: bool,
+    },
 }
 
 fn fail_closed(paths: &RotationPaths, detail: &str) -> anyhow::Error {
@@ -175,18 +192,46 @@ pub fn recover(
             ));
         }
     };
-    if !master_key_check::sentinel_opens(&active_key, &sentinel.sealed) {
-        return Err(fail_closed(
-            &paths,
-            &format!(
-                "the key at {} does not open the database's master key sentinel -- the database \
-                 may already be sealed under a different key (fingerprint {}).",
-                paths.active.display(),
-                sentinel.key_fingerprint
-            ),
-        ));
-    }
-    let active_fingerprint = crypto::fingerprint(&active_key);
+
+    // RFC 100 `0.94.0` P1 §4, rows 8-10: the active key may no longer
+    // open the sentinel at all (row 8 -- K07/K08 already committed
+    // under the *new* key, but the file swap has not happened yet).
+    // Try the active key first, exactly as rows 1-7 always have; only
+    // on its own failure does the bound `next` key get a chance, and
+    // only if it opens the sentinel -- anything else here still fails
+    // closed with the same message rows 1-7 always gave, naming the
+    // active key.
+    let (candidate_key, candidate_is_active) =
+        if master_key_check::sentinel_opens(&active_key, &sentinel.sealed) {
+            (active_key, true)
+        } else {
+            let next_candidate = (|| {
+                let meta = adapter
+                    .metadata("recovery.row8.next.metadata", &paths.next)
+                    .ok()?;
+                if meta.is_symlink {
+                    return None;
+                }
+                let key = read_key_file(adapter, &paths.next).ok()?;
+                master_key_check::sentinel_opens(&key, &sentinel.sealed).then_some(key)
+            })();
+            match next_candidate {
+                Some(key) => (key, false),
+                None => {
+                    return Err(fail_closed(
+                        &paths,
+                        &format!(
+                            "the key at {} does not open the database's master key sentinel -- \
+                             the database may already be sealed under a different key \
+                             (fingerprint {}).",
+                            paths.active.display(),
+                            sentinel.key_fingerprint
+                        ),
+                    ));
+                }
+            }
+        };
+    let candidate_fingerprint = crypto::fingerprint(&candidate_key);
 
     // List the workspace once; every later step classifies from this.
     let entries = adapter
@@ -261,25 +306,37 @@ pub fn recover(
         }
         None
     } else {
-        // Step 5: `intent.json` is published -- authenticate it with the
-        // active key and bind it to this exact deployment.
-        let (body, role) = journal::read(adapter, &paths.workspace, &active_key)
+        // Step 5: `intent.json` is published -- authenticate it with
+        // whichever key opened the sentinel (the active key for rows
+        // 2-7 and 9-10; the bound `next` key for row 8) and bind it to
+        // this exact deployment.
+        let (body, role) = journal::read(adapter, &paths.workspace, &candidate_key)
             .map_err(|e| fail_closed(&paths, &format!("{e:#}.")))?;
-        if role != KeyRole::Old {
+        // RFC 100 `0.94.0` P1 §4: a candidate that opened the sentinel
+        // but authenticates the journal under the *wrong* role for its
+        // own position is not one of rows 2-10 -- fail closed rather
+        // than guess. The active key reaching here as role `New`
+        // (rows 9/10) or `next` reaching here as role `Old` (nothing
+        // this stage's rows produce) are both refused the same way.
+        if !candidate_is_active && role != KeyRole::New {
             return Err(fail_closed(
                 &paths,
-                "the rotation journal authenticates the active key as the *new* role, which \
-                 means activation may already have started -- that is a later row this sui-id \
-                 does not recover yet.",
+                "the bound next key authenticates the rotation journal as the *old* role, \
+                 which should never happen -- the journal's own domain separation ties each \
+                 role to a specific key, and this is neither.",
             ));
         }
-        if body.old_fingerprint != active_fingerprint {
+        let role_fingerprint = match role {
+            KeyRole::Old => &body.old_fingerprint,
+            KeyRole::New => &body.new_fingerprint,
+        };
+        if *role_fingerprint != candidate_fingerprint {
             return Err(fail_closed(
                 &paths,
                 &format!(
-                    "the journal's old key fingerprint ({}) does not match the active key's \
-                     ({active_fingerprint}).",
-                    body.old_fingerprint
+                    "the journal's {} key fingerprint ({role_fingerprint}) does not match the \
+                     candidate key's ({candidate_fingerprint}).",
+                    if role == KeyRole::Old { "old" } else { "new" }
                 ),
             ));
         }
@@ -306,10 +363,36 @@ pub fn recover(
                 ));
             }
         }
+
+        // RFC 100 `0.94.0` P1 §4, rows 8-10: the database is already
+        // resealed; the preparation-prefix checks above (bound paths,
+        // whitelisted temporaries) still apply -- the journal's own
+        // authenticity does not depend on which row this turns out to
+        // be -- but rows 9/10 need no further file verification before
+        // consulting the `master_key_rotation` row, and row 8 needs
+        // one more: `next` itself, fully, before it is trusted enough
+        // to become the active key.
+        if role == KeyRole::New {
+            if !candidate_is_active {
+                check_published_artifact(
+                    adapter,
+                    &paths.next,
+                    body.expected_uid,
+                    body.expected_mode,
+                    &body.new_fingerprint,
+                    "next key",
+                )
+                .map_err(|e| fail_closed(&paths, &format!("{e:#}.")))?;
+            }
+            let row = sui_id_store::master_key_rotation::read_within_tx(&conn)
+                .context("reading the master_key_rotation row")?;
+            return recover_rows_8_to_10(adapter, &paths, row, &body, candidate_is_active);
+        }
         Some(body)
     };
 
-    // Step 6: the published artifacts outside the workspace.
+    // Step 6: the published artifacts outside the workspace (rows 2-7
+    // only -- rows 8-10 returned above).
     if let Some(body) = &body {
         check_published_artifact(
             adapter,
@@ -325,16 +408,36 @@ pub fn recover(
             &paths.backup,
             body.expected_uid,
             body.expected_mode,
-            &active_fingerprint,
+            &candidate_fingerprint,
             "pre-rotation backup (a copy of the active key)",
         )
         .map_err(|e| fail_closed(&paths, &format!("{e:#}.")))?;
     }
 
-    // Step 7: clean, in the dispatch's exact order. Every removal
-    // tolerates `NotFound`, so a re-run after a crash mid-cleanup
-    // finishes the job instead of failing on what an earlier run already
-    // removed.
+    // Step 7: clean (rows 2-7 only -- rows 8-10 returned above).
+    let removed = clean_workspace(adapter, &paths)?;
+
+    Ok(Recovered::Cleaned {
+        removed,
+        active_fingerprint: candidate_fingerprint,
+    })
+}
+
+/// RFC 100 stage 4 §3's step 7, factored out so rows 8-10 (`0.94.0` P1
+/// §4) can reuse it: row 10 calls it directly (nothing else owed); row
+/// 9, and row 8 once it has activated, return [`Recovered::
+/// NeedsCompletion`] instead, and the caller (`database::open_checked`)
+/// calls this itself, after K05, so the workspace is removed only once
+/// the completion it depends on describing has actually been recorded.
+///
+/// Every removal tolerates `NotFound`, so a re-run after a crash
+/// mid-cleanup finishes the job instead of failing on what an earlier
+/// run already removed. The dispatch's own exact order.
+pub(crate) fn clean_workspace(
+    adapter: &dyn KeyFileOps,
+    paths: &RotationPaths,
+) -> anyhow::Result<Vec<PathBuf>> {
+    let published = paths.workspace.join("intent.json");
     let mut removed = Vec::new();
     let mut remove = |adapter: &dyn KeyFileOps, point: &str, path: &std::path::Path| {
         match adapter.remove(point, path) {
@@ -382,10 +485,96 @@ pub fn recover(
     crate::keyring::sync_parent_dir_impl(adapter, "recovery.clean.sync_parent", &paths.workspace)
         .context("syncing the workspace's parent directory after removing it")?;
 
-    Ok(Recovered::Cleaned {
-        removed,
-        active_fingerprint,
-    })
+    Ok(removed)
+}
+
+/// RFC 100 `0.94.0` P1 §4, rows 8-10: the database is already resealed
+/// under the journal's new key (`body`); `candidate_is_active` says
+/// whether the active key file is already that key (rows 9/10) or the
+/// bound `next` key is (row 8, not yet activated). Called only once
+/// the journal itself is authenticated and every preparation-prefix
+/// check (bound paths, whitelisted temporaries, and -- for row 8 --
+/// `next`'s own owner/mode/fingerprint) has already passed.
+fn recover_rows_8_to_10(
+    adapter: &dyn KeyFileOps,
+    paths: &RotationPaths,
+    row: Option<sui_id_store::master_key_rotation::MasterKeyRotationRow>,
+    body: &JournalBody,
+    candidate_is_active: bool,
+) -> anyhow::Result<Recovered> {
+    let row = row.ok_or_else(|| {
+        fail_closed(
+            paths,
+            "the database's sentinel is sealed under the journal's new key, but no \
+             master_key_rotation row exists to say which rotation that was.",
+        )
+    })?;
+    if row.rotation_id != body.rotation_id
+        || row.old_fingerprint != body.old_fingerprint
+        || row.new_fingerprint != body.new_fingerprint
+    {
+        return Err(fail_closed(
+            paths,
+            "the master_key_rotation row names a different rotation, or different \
+             fingerprints, than the journal does.",
+        ));
+    }
+
+    use sui_id_store::master_key_rotation::RotationState;
+    match (row.state, candidate_is_active) {
+        // Row 8: not yet activated. Atomically replace the active key
+        // path with the already-verified `next` -- rename, never
+        // remove-then-rename -- then fsync the directory. From here
+        // the state is identical to row 9: K05 is owed.
+        (RotationState::DbCommittedPendingActivation, false) => {
+            adapter
+                .rename("recovery.row8.activate", &paths.next, &paths.active)
+                .with_context(|| {
+                    format!(
+                        "activating {} -> {}",
+                        paths.next.display(),
+                        paths.active.display()
+                    )
+                })
+                .map_err(|e| fail_closed(paths, &format!("{e:#}.")))?;
+            crate::keyring::sync_parent_dir_impl(
+                adapter,
+                "recovery.row8.sync_active_dir",
+                &paths.active,
+            )
+            .context("syncing the key file's directory after activation")?;
+            Ok(Recovered::NeedsCompletion {
+                rotation_id: row.rotation_id,
+                active_fingerprint: body.new_fingerprint.clone(),
+                activated: true,
+            })
+        }
+        // Row 9: the file swap already happened; K05 is still owed.
+        (RotationState::DbCommittedPendingActivation, true) => Ok(Recovered::NeedsCompletion {
+            rotation_id: row.rotation_id,
+            active_fingerprint: body.new_fingerprint.clone(),
+            activated: false,
+        }),
+        // Row 10: K05 already ran too. Only the stale workspace is
+        // left to clean.
+        (RotationState::Complete, true) => {
+            let removed = clean_workspace(adapter, paths)?;
+            Ok(Recovered::Cleaned {
+                removed,
+                active_fingerprint: body.new_fingerprint.clone(),
+            })
+        }
+        // `complete` while the active key is still old: K05 only ever
+        // marks a row complete *after* activation, so the active key
+        // should already be the new one. An inconsistency this sui-id
+        // does not recover from.
+        (RotationState::Complete, false) => Err(fail_closed(
+            paths,
+            "the master_key_rotation row is already complete, but the active key file is not \
+             the journal's new key -- activation and completion disagree about whether the key \
+             file was ever replaced.",
+        )),
+    }
 }
 
 /// Every one of a journal's eight bound paths must equal what this exact
@@ -499,6 +688,27 @@ pub fn report(recovered: &Recovered) -> Vec<String> {
             }
             lines.push("to rotate again, run `sui-id admin master-key rotate`.".to_owned());
             lines
+        }
+        Recovered::NeedsCompletion {
+            rotation_id,
+            active_fingerprint,
+            activated,
+        } => {
+            let swap = if *activated {
+                format!(
+                    "the active key file was replaced with the already-resealed new key \
+                     (fingerprint {active_fingerprint})"
+                )
+            } else {
+                format!(
+                    "the active key file already held the resealed new key (fingerprint \
+                     {active_fingerprint})"
+                )
+            };
+            vec![format!(
+                "a rotation was completed at start (rotation {rotation_id}): {swap}; sui-id \
+                 continues on it."
+            )]
         }
     }
 }

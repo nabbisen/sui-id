@@ -206,12 +206,18 @@ pub enum AuditEventKind {
     /// `ActorRequirement::None`, `system_principal: permitted`, target =
     /// the created admin's user id.
     AdminSetupCompleted,
-    /// `admin.master_key.resealed` — K07 (RFC 094 cycle J stage 4). The
-    /// six-table re-seal under the new master key, one transaction.
-    /// Distinct from `admin.master_key.rotated` (unchanged, best-effort,
-    /// fires after the key file is replaced): a sealed command for that
-    /// second record is not this stage's job.
+    /// `admin.master_key.resealed` — K07 (RFC 094 cycle J stage 4), and
+    /// K08 (RFC 100 `0.94.0` P1 §2, a second sealed writer of this same
+    /// event, for a journalled rotation's database phase — M4's own
+    /// boundary, whichever command produced it).
     AdminMasterKeyResealed,
+    /// `admin.master_key.rotated` — K05 (RFC 100 `0.94.0` P1 §3), built
+    /// as a function the live rotation does not call yet. Today's
+    /// production record of the same name is still the best-effort
+    /// append after the key file is replaced (`sui-id/src/cli/
+    /// handlers.rs`), unchanged by this stage — a sealed command for it
+    /// is this stage's own job, finally, once P2 wires this in.
+    AdminMasterKeyRotated,
     /// `auth.password.changed_self` — U09.
     AuthPasswordChangedSelf,
     /// `auth.password.reset_completed` — U10.

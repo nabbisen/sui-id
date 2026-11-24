@@ -50,6 +50,7 @@ pub mod db;
 pub mod errors;
 pub mod federation_policy;
 pub mod master_key_check;
+pub mod master_key_rotation;
 pub mod metrics;
 pub mod migrations;
 pub mod models;

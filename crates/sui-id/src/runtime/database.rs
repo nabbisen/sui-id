@@ -215,13 +215,45 @@ pub async fn open_checked(
     // leftover `.new`-style precondition does not cover (that is
     // rotation's own concern; a *workspace*, this module's).
     let adapter = crate::key_adapter::default_adapter();
-    crate::rotate::recovery::recover_and_report(adapter.as_ref(), key_file, path)?;
+    let recovered = crate::rotate::recovery::recover_and_report(adapter.as_ref(), key_file, path)?;
 
     let resolved = crate::keyring::resolve_checked(key_file, path)?;
     let db = open(path, resolved.key, backup)?;
     sui_id_store::master_key_check::ensure_sentinel_written(&db, db.key())
         .await
         .context("writing the master key sentinel")?;
+
+    // RFC 100 `0.94.0` P1 §4, rows 8/9: `recover` found the database
+    // already resealed under the now-active key, with K05 still owed
+    // -- it could not run K05 itself (no open database at that point).
+    // Run it now, with the database just opened above, **before**
+    // returning it to this function's own caller: the service must not
+    // become ready on a pending row. Only then is the leftover
+    // workspace cleaned -- the same order the dispatch gives for rows
+    // 8/9, "K05, then the clean".
+    if let crate::rotate::recovery::Recovered::NeedsCompletion { rotation_id, .. } = recovered {
+        match sui_id_store::commands::complete_master_key_rotation(&db, rotation_id).await {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(anyhow::Error::new(e).context(
+                    "completing a master-key rotation recovery found pending -- the database \
+                     is already sealed under the active key, but its own completion record \
+                     could not be written",
+                ));
+            }
+        }
+        let paths = crate::rotate::preconditions::RotationPaths::for_key_file(key_file);
+        let removed = crate::rotate::recovery::clean_workspace(adapter.as_ref(), &paths)
+            .context("cleaning the rotation workspace after completing it at start")?;
+        for line in crate::rotate::recovery::report(&crate::rotate::recovery::Recovered::Cleaned {
+            removed,
+            active_fingerprint: sui_id_store::crypto::fingerprint(db.key()),
+        }) {
+            tracing::warn!("{line}");
+            eprintln!("{line}");
+        }
+    }
+
     Ok((db, resolved.origin))
 }
 

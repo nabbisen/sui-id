@@ -18,9 +18,9 @@ RFC 100's body keeps the names it was written with. Its refresh maps them
 
 | RFC 100's body says | Build | Why |
 |---|---|---|
-| `K04` | **K07**, `commands::reseal_master_key` (`sui-id-store/src/commands.rs:6755`), extended | it already is the database phase; `K04` stays retired |
+| `K04` | **K08**, `commands::reseal_master_key_for_rotation`, a new command beside K07 that reseals **and** writes the `master_key_rotation` row pending in one transaction. *(Updated 2026-11-24, P1: the plan said "K07, extended". P1 built K08 so today's K07 stays untouched until P2 switches the live rotation over.)* | `K04` stays retired; K07 remains for the live rotation until P2 |
 | `admin.master_key.database_resealed` | **`admin.master_key.resealed`** | shipped; it already asserts only that the database phase committed (M4) |
-| `admin.master_key.activated` | **`admin.master_key.rotated`**, made Class-A in K05 | shipped as a best-effort append (`cli.rs:671`); K05 makes it a Class-A record |
+| `admin.master_key.activated` | **`admin.master_key.rotated`**, made Class-A in K05 (`commands::complete_master_key_rotation`, P1) | shipped as a best-effort append (now `cli/handlers.rs:524`); K05 writes it Class-A. Until P2 removes the append, it has two writers |
 | `DbCommitted` | **durable**, not only committed | prefix 4: WAL with `synchronous=NORMAL` (`db.rs:43-44`) |
 
 ## The rules every stage keeps
