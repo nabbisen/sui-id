@@ -83,6 +83,8 @@ The decision is recorded as an amendment, with the prototype's measurements.
 
 ### §4a — breadth: a capability list, one suite, named support levels (added 2026-11-26)
 
+**Authorized as the direction, 2026-11-26** (`@nabbisen`: *"Authorized."*). This RFC remains Proposed.
+
 The refresh adopts the breadth model of RFC 119's [host setup design](../handoffs/119-embedding-contract/host-setup-design-2026-11-26.md), §15, which records the direction it answers:
 - **an engine is eligible** only if it has multi-statement ACID transactions, a usable row or advisory lock, enforced
   `CHECK`s or an equivalent, read-only transactions, and byte-exact binary storage;

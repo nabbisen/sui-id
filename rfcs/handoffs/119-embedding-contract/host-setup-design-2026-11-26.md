@@ -358,6 +358,10 @@ differ per deployment is one a tool or a guide can get wrong.
 
 ## 15 — wide database support, without delegating the guarantees
 
+> **Authorized 2026-11-26** (`@nabbisen`: *"Authorized."*) as the direction for database breadth: A with D below. It
+> authorizes the direction. **It is not RFC 009's acceptance, and not a freeze exception.** Each engine is still a stage that
+> needs both.
+
 **The goal**, in `@nabbisen`'s words: not to force SQLite's limitations, and to support many kinds of database. **The
 constraint** is the philosophy's first half. Every guarantee in RFC 009's §2 (the audit row atomic with its effect, the
 chain that never forks, read-only handles, the floor checks in the schema) must hold on each kind. A kind on which one
