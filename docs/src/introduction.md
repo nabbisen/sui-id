@@ -21,6 +21,11 @@ pre-built IdP integrations, sui-id does not offer them; see the
 [scope statement](./getting-started/overview.md#scope). LDAP user sources,
 upstream OIDC federation and dynamic client registration are supported.
 
+sui-id is also not an embeddable library today. A
+[contract for embedding it](https://github.com/nabbisen/sui-id/blob/main/rfcs/accepted/119-embedding-contract.md) in another
+application is accepted, but no embeddable module exists, and none is
+scheduled.
+
 ## How to read this documentation
 
 | You want to… | Start here |

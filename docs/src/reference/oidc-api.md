@@ -563,11 +563,12 @@ exposing the underlying cause to the caller.
   not yet honour an RP's `acr_values` ask for a minimum assurance
   level up front. Filter on the issued `acr` at the relying party
   for now.
-- `prompt=login`, `prompt=none`, or `max_age` parameter
-  enforcement.
-- Full JWKS signature verification of upstream ID tokens in the
-  federation flow (currently trusts the TLS-authenticated
-  `token_endpoint`; JWKS validation is a planned hardening step).
+- `prompt=login`, `prompt=none`, or `max_age`. **sui-id ignores
+  them today, without an error**, and its ID tokens carry no
+  `auth_time`. So a code returned to a request that sent
+  `prompt=login` or `max_age` **does not mean the user signed in
+  again**: if they already had a sui-id session, no new sign-in
+  happened. Do not treat it as evidence of a recent sign-in.
 
 If you need any of those today, you may need a different IdP. Several are on
 the [roadmap](https://github.com/nabbisen/sui-id/blob/main/ROADMAP.md).

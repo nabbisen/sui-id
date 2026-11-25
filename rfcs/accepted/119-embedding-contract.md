@@ -5,9 +5,14 @@
 **Approved by.** `@nabbisen`, 2026-11-01: *"Accepted."* — on the review below, which he asked for the same day. His first acceptance was recorded **2026-09-26**; the status could not move then, because G11 refuses an Accepted RFC whose security review is Required and which cites no design review, the guard adopted after RFC 105 shipped without one. **The 36 days between were not deliberation**: the review request named a reviewer that §S1a (2026-10-01) then forbade, so there was nobody it could go to. The architect did not work around the gate to record the status sooner.
 **Security review.** Required
 **Independent design review.** [Design review record, 2026-11-01](../handoffs/119-embedding-contract/design-review-2026-11-01.md). **By the architect, at `@nabbisen`'s request** — *"Review the questions carefully by yourself with my fundamental philosophy"* — which is the exception `ROADMAP.md` §S1c reserves to him, and the record says he asked. **The architect wrote this RFC and is therefore not independent of it.** §S1a places design review with him or an external architect he engages; none was engaged, which §S1a makes his option rather than a requirement.
-**Design prerequisites.** None. This RFC is the prerequisite: RFC 121 (the split; not yet written) may not be written until this is Accepted.
+**Design prerequisites.** None. This RFC is the prerequisite: the split's RFC (not yet written, and without a number: **RFC 121 was reassigned**, corrected 2026-11-25) may not be written until this is Accepted.
 **Implementation prerequisites.** None — **this RFC ships no code.** It is a contract and a conformance suite's specification.
 **Closure prerequisites.** Every security property sui-id claims today is either (a) carried by the embeddable module itself, (b) written here as a numbered obligation on the host with a stated failure mode and a conformance test, or (c) named as a property an embedding cannot have, in which case sui-id says so in its own documentation. No property is left unassigned, and sui-id's own service crate satisfies the contract through the published interface rather than around it.
+**Amended.** 2026-11-25. Both changes come from the architect's review of a prospective embedder's letter.
+- **Non-material:** the split was cited as "RFC 121", a number since given to an unrelated, Implemented RFC.
+- **Material, approved by `@nabbisen`, 2026-11-25:** *"Authorized."* H3's stated failure mode, in the handoff, was a
+  measured error. The client address is not in audit rows; it keys per-address rate limiting.
+
 **Tracks.** Architecture. Raised by `@nabbisen` on 2026-09-25 as one of two themes for the future.
 **Touches.** This RFC and its handoff only. No crate, no gate, no document changes until it is Accepted.
 **Accountable owner and approver.** `@nabbisen`.
@@ -85,7 +90,7 @@ interfaces, and the public one is the one that rots.
 **D6 — Non-goals, stated so they are not rediscovered.** This is not a plugin
 ABI, not dynamic loading, and not a stable Rust ABI; the boundary is a Rust
 API under semver. It does not make sui-id framework-agnostic at the HTTP
-layer by itself — that is RFC 121 (the split; not yet written). It does not
+layer by itself — that is the split's RFC (not yet written; not RFC 121, see the header). It does not
 commit to publishing anything: publishing is an outward-facing act and
 `@nabbisen`'s decision separately.
 
@@ -93,7 +98,7 @@ commit to publishing anything: publishing is an outward-facing act and
 moves a line, every security-relevant behaviour in `crates/sui-id/src/http/`
 is enumerated and assigned one of D4's three outcomes. The table above has
 three rows because that is what one afternoon's measurement found; the real
-set is larger, and finding it is this RFC's work, not RFC 121's.
+set is larger, and finding it is this RFC's work, not the split's.
 
 ## Open questions
 

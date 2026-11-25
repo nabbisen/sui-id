@@ -58,6 +58,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configured minimum). Both the reset and self-service change pages
   now state the minimum that was actually checked against, in the
   page's own language.
+- **The OIDC reference said two things that were not true.**
+  - It said upstream ID tokens in federation were not verified
+    against the upstream's JWKS. They are, since RFC 096-B1.
+  - It said only that `prompt` and `max_age` were not enforced. It
+    now says what that means for a relying party: they are ignored
+    without an error, so a code returned to `prompt=login` is not
+    evidence of a new sign-in, and no `auth_time` is issued.
+    RFC 152 (Proposed) is to honour or refuse them.
+- **The README and the introduction now say where embedding stands**:
+  a contract for embedding sui-id (RFC 119) is accepted, but no
+  embeddable module exists or is scheduled. Before, a prospective host
+  read only that sui-id offers no plugin system.
 
 ### Removed
 

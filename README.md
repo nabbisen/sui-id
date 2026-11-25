@@ -72,6 +72,11 @@ If you want SAML, multi-tenant isolation, a plugin system, or a catalogue of
 twenty pre-built IdP integrations out of the box: sui-id is not for you, and
 that's a feature.
 
+sui-id is also not an embeddable library today. A
+[contract for embedding it](rfcs/accepted/119-embedding-contract.md) in another
+application is accepted, but no embeddable module exists, and none is
+scheduled.
+
 ## Quick start
 
 Download a prebuilt binary (x86_64/aarch64 Linux, no toolchain) from the
