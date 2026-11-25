@@ -42,9 +42,13 @@
 >   both halves unmet. **P7** is the fix
 >   ([dispatch](0.94.0-p7-what-the-philosophy-check-found-2026-11-25.md)),
 >   and M2c closes when it lands.
+> - **P7 landed 2026-11-25** (`070e7f7`, CI `45577018318` 28/28). Every
+>   sui-id process now holds the rotation lock shared, and a rotation
+>   refuses beside one, before its summary. The operator's words are
+>   fixed. **M2c CLOSED 2026-11-25.**
 >
-> ## Whose turn it is: **the implementation role's**, on P7.
-> P5 (RFC 151) and P6 (RFC 097 stage 1) follow it.
+> ## Whose turn it is: **the architect's**, to dispatch P5 (RFC 151) and
+> P6 (RFC 097 stage 1).
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).

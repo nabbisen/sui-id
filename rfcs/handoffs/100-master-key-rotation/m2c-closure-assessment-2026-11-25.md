@@ -1,6 +1,11 @@
 # M2c — closure assessment (RFC 100)
 
-> ## Accepted 2026-11-25, on a condition, and closing when P7 lands
+> ## M2c CLOSED 2026-11-25, when P7 landed
+> P7 landed as `070e7f7`, CI `45577018318` 28/28, with the review's two
+> fold-ins: [review](0.94.0-p7-what-the-philosophy-check-found-2026-11-25.md).
+> The condition below is met.
+>
+> ## Accepted 2026-11-25, on a condition
 > `@nabbisen`: *"Accepted. Verify carefully they match my fundamental
 > philosophy."* The architect walked the shipped build and found it did
 > not yet match either half:
@@ -9,8 +14,8 @@
 >
 > Asked how the closure should stand, he chose *"Fix first; close M2c on
 > that (Recommended)"*. The findings, and their fix, are
-> [P7](0.94.0-p7-what-the-philosophy-check-found-2026-11-25.md). **M2c is
-> recorded closed when P7 lands.**
+> [P7](0.94.0-p7-what-the-philosophy-check-found-2026-11-25.md). **M2c was
+> recorded closed when P7 landed** (above).
 
 **Written.** 2026-11-25, by the architect.
 

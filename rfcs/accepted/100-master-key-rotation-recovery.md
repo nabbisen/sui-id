@@ -17,7 +17,9 @@ RFC 094 closed in `v0.88.0`, and its seam carries a reseal command already
 **Closure prerequisites.** Every transition prefix in the recovery table either
 resumes idempotently or returns cleanly to `OldReady`; no prefix yields mixed
 ciphertext, a missing active key, or an overstated audit record; independent
-adversarial closure review accepts the durable evidence. **Consolidated 2026-10-06 with `ROADMAP.md`'s M2c row**, which required that **no prefix yields mixed ciphertext, a missing active key, or an overstated audit record** — stated there and not here. The ROADMAP row now points at this field.
+adversarial closure review accepts the durable evidence. **Met 2026-11-25:
+M2c closed** on the [closure assessment](../handoffs/100-master-key-rotation/m2c-closure-assessment-2026-11-25.md)
+(`@nabbisen`: *"Accepted. Verify carefully they match my fundamental philosophy."*, then *"Fix first; close M2c on that (Recommended)"*), when P7 landed (`070e7f7`). The RFC moves to `done/` at `0.94.0`'s cut. **Consolidated 2026-10-06 with `ROADMAP.md`'s M2c row**, which required that **no prefix yields mixed ciphertext, a missing active key, or an overstated audit record** — stated there and not here. The ROADMAP row now points at this field.
 **Tracks.** ROADMAP M2c — Master-key rotation recovery. Begins after RFC 094 M2a (it consumes that Class-A seam) and runs in parallel with M2b/M3/M4. **Required before M6 entry**, because the M7 workload contract requires a master-key rotation exercise and RFC 099 requires zero blocker-severity defects; rotating a key that is not crash-safe against the immutable soak artifact is not an acceptable exercise.
 **Handoff.** [`../handoffs/100-master-key-rotation/README.md`](../handoffs/100-master-key-rotation/README.md)
 **Touches.** Master-key loading and rotation CLI, key-file handling, startup
