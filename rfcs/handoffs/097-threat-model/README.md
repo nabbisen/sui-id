@@ -5,7 +5,8 @@
 **Audience:** security reviewer and documentation owner
 **Status:** Planning companion; inherits the governing RFC's current status —
 **Accepted 2026-11-23.** Stage 1 (the contract and its gate, with the
-inventory) is scheduled for cycle P.
+inventory) is **dispatched 2026-11-25** as `0.94.0` P6:
+[`0.94.0-p6-the-inventory-and-its-gate-2026-11-25.md`](0.94.0-p6-the-inventory-and-its-gate-2026-11-25.md).
 
 ## Entry gate
 
@@ -34,6 +35,7 @@ delivered it.
 |---|---|
 | [`review-checklist.md`](./review-checklist.md) | Boundary inventory, STRIDE coverage, and the residual-risk contract |
 | [`method-2026-11-23.md`](./method-2026-11-23.md) | **The method, drafted for acceptance (2026-11-23)**: the entry gate measured, the inventory contract and its gate, evidence-link syntax, the STRIDE worksheet, the 3 × 3 rubric, diagrams, and the five stages |
+| [`0.94.0-p6-the-inventory-and-its-gate-2026-11-25.md`](./0.94.0-p6-the-inventory-and-its-gate-2026-11-25.md) | **Stage 1's dispatch**: the inventory contract, and G24, which keeps it complete against the routes, tables and CLI commands |
 
 ## Known boundaries the current model omits
 
