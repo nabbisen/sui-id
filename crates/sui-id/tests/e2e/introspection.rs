@@ -10,6 +10,7 @@ use axum::http::{Method, Request, StatusCode, header};
 use sui_id::{AppState, build_router};
 
 use super::common::*;
+use super::r102_stage1::sign_in;
 use tower::ServiceExt;
 use url::Url;
 
@@ -477,4 +478,346 @@ async fn discovery_advertises_introspect_and_revoke_endpoints() {
     assert!(methods_set.contains(&"client_secret_basic"));
     // Public clients (auth method "none") must NOT be listed.
     assert!(!methods_set.contains(&"none"));
+}
+
+// ---------- introspection must agree with userinfo about who may be served ----------
+//
+// An administrator can't disable or delete themselves, so these need a
+// second, ordinary user as the resource owner. `obtain_tokens` above is
+// kept as-is (it's used by tests that don't care who the owner is); this
+// is the same shape, parameterized over the owner's own session.
+
+const TARGET_PASSWORD: &str = "a-very-strong-target-password";
+
+/// One client, pre-authorized for `username` (an ordinary user, created
+/// and signed in for real, never by writing a row directly), with
+/// everything [`token_as`] needs to mint another token for that same
+/// user later -- the point of a second mint being that it postdates a
+/// state change the first token was issued before.
+struct OwnerClient {
+    user_id: sui_id_shared::ids::UserId,
+    username: String,
+    client_id: String,
+    client_secret: String,
+}
+
+async fn ordinary_user_with_client(
+    state: &AppState,
+    admin_session: &str,
+    username: &str,
+) -> OwnerClient {
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("admin user must already exist (complete_setup_and_login)")
+        .id;
+    let user = create_user_with_password(
+        &state.db,
+        &state.clock,
+        &admin_actor_for(admin_id),
+        sui_id_core::admin::CreateUserSpec {
+            username,
+            display_name: None,
+            email: None,
+            is_admin: false,
+        },
+        TARGET_PASSWORD,
+    )
+    .await
+    .expect("create ordinary user");
+    let (client_id, client_secret) = create_client(state, admin_session).await;
+    OwnerClient {
+        user_id: user.id,
+        username: username.to_owned(),
+        client_id,
+        client_secret,
+    }
+}
+
+/// Sign this user in and run the authorize + token exchange against
+/// its own client, returning a fresh access token issued *now*.
+async fn token_as(state: &AppState, owner: &OwnerClient) -> String {
+    let owner_session = sign_in(state, &owner.username, TARGET_PASSWORD).await;
+    let (verifier, challenge) = pkce_pair();
+    let auth_url = format!(
+        "/oauth2/authorize?client_id={}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
+         &response_type=code&scope=openid&state=x&nonce=n&code_challenge={challenge}&code_challenge_method=S256",
+        owner.client_id
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(&auth_url)
+        .header(header::COOKIE, format!("sui_id_session={owner_session}"))
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("authorize");
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .expect("location")
+        .to_owned();
+    let code = Url::parse(&loc)
+        .expect("url")
+        .query_pairs()
+        .find(|(k, _)| k == "code")
+        .map(|(_, v)| v.into_owned())
+        .expect("code");
+    let body = format!(
+        "grant_type=authorization_code&code={code}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
+         &client_id={}&client_secret={}&code_verifier={verifier}",
+        owner.client_id, owner.client_secret
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/oauth2/token")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("token");
+    assert_eq!(resp.status(), StatusCode::OK);
+    let json: serde_json::Value =
+        serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
+    json["access_token"]
+        .as_str()
+        .expect("access_token")
+        .to_owned()
+}
+
+async fn introspect_active(state: &AppState, owner: &OwnerClient, access: &str) -> Option<bool> {
+    let body = format!(
+        "token={access}&client_id={}&client_secret={}",
+        owner.client_id, owner.client_secret
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/oauth2/introspect")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("introspect");
+    let v: serde_json::Value =
+        serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
+    v["active"].as_bool()
+}
+
+async fn userinfo_ok(state: &AppState, access: &str) -> bool {
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/oauth2/userinfo")
+        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+        .body(Body::empty())
+        .expect("req");
+    router.oneshot(req).await.expect("userinfo").status() == StatusCode::OK
+}
+
+#[tokio::test]
+async fn introspection_agrees_with_userinfo_about_a_disabled_user() {
+    let state = test_app();
+    let admin_session = complete_setup_and_login(&state).await;
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("admin")
+        .id;
+    let owner = ordinary_user_with_client(&state, &admin_session, "bob").await;
+    let access = token_as(&state, &owner).await;
+
+    // Before: active everywhere -- proves the test, not a broken token.
+    assert_eq!(introspect_active(&state, &owner, &access).await, Some(true));
+    assert!(userinfo_ok(&state, &access).await);
+
+    sui_id_core::admin::set_user_disabled(
+        &state.db,
+        &state.clock,
+        &admin_actor_on_session(admin_id, &admin_session),
+        owner.user_id,
+        true,
+        None,
+    )
+    .await
+    .expect("disable bob");
+
+    // After: inactive everywhere, same token.
+    assert_eq!(
+        introspect_active(&state, &owner, &access).await,
+        Some(false),
+        "introspection must refuse a disabled user's unexpired access token"
+    );
+    assert!(
+        !userinfo_ok(&state, &access).await,
+        "userinfo already refused this; introspection must agree"
+    );
+}
+
+#[tokio::test]
+async fn introspection_agrees_with_userinfo_about_a_deleted_user() {
+    let state = test_app();
+    let admin_session = complete_setup_and_login(&state).await;
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("admin")
+        .id;
+    let owner = ordinary_user_with_client(&state, &admin_session, "bob").await;
+    let access = token_as(&state, &owner).await;
+
+    assert_eq!(introspect_active(&state, &owner, &access).await, Some(true));
+    assert!(userinfo_ok(&state, &access).await);
+
+    sui_id_core::admin::delete_user(
+        &state.db,
+        &state.clock,
+        &admin_actor_on_session(admin_id, &admin_session),
+        owner.user_id,
+        None,
+    )
+    .await
+    .expect("delete bob");
+
+    assert_eq!(
+        introspect_active(&state, &owner, &access).await,
+        Some(false),
+        "introspection must refuse a deleted user's unexpired access token"
+    );
+    assert!(!userinfo_ok(&state, &access).await);
+}
+
+#[tokio::test]
+async fn a_token_issued_after_re_enabling_is_active_again() {
+    let state = test_app();
+    let admin_session = complete_setup_and_login(&state).await;
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("admin")
+        .id;
+    let owner = ordinary_user_with_client(&state, &admin_session, "bob").await;
+    let actor = admin_actor_on_session(admin_id, &admin_session);
+
+    sui_id_core::admin::set_user_disabled(
+        &state.db,
+        &state.clock,
+        &actor,
+        owner.user_id,
+        true,
+        None,
+    )
+    .await
+    .expect("disable");
+    sui_id_core::admin::set_user_disabled(
+        &state.db,
+        &state.clock,
+        &actor,
+        owner.user_id,
+        false,
+        None,
+    )
+    .await
+    .expect("re-enable");
+
+    // A fresh token, issued after re-enabling.
+    let access = token_as(&state, &owner).await;
+    assert_eq!(
+        introspect_active(&state, &owner, &access).await,
+        Some(true),
+        "a token issued after re-enabling must be active"
+    );
+    assert!(userinfo_ok(&state, &access).await);
+}
+
+/// Walks a single token through enabled, disabled and deleted, asserting
+/// userinfo and introspection agree at every step. `userinfo_ok` already
+/// holds (it's the reference behaviour this stage matches introspection
+/// to); the point is that `introspect_active` tracks it exactly, not
+/// just that both happen to refuse a disabled user for their own
+/// separate reasons.
+#[tokio::test]
+async fn introspection_and_userinfo_agree_on_whether_a_user_can_be_served() {
+    let state = test_app();
+    let admin_session = complete_setup_and_login(&state).await;
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("admin")
+        .id;
+    let owner = ordinary_user_with_client(&state, &admin_session, "bob").await;
+    let actor = admin_actor_on_session(admin_id, &admin_session);
+
+    async fn assert_agree_as(state: &AppState, owner: &OwnerClient, access: &str, expected: bool) {
+        let introspection = introspect_active(state, owner, access).await;
+        let userinfo = userinfo_ok(state, access).await;
+        assert_eq!(
+            introspection,
+            Some(userinfo),
+            "introspection and userinfo disagree"
+        );
+        assert_eq!(introspection, Some(expected));
+    }
+
+    // Enabled.
+    let access = token_as(&state, &owner).await;
+    assert_agree_as(&state, &owner, &access, true).await;
+
+    // Disabled.
+    sui_id_core::admin::set_user_disabled(
+        &state.db,
+        &state.clock,
+        &actor,
+        owner.user_id,
+        true,
+        None,
+    )
+    .await
+    .expect("disable");
+    assert_agree_as(&state, &owner, &access, false).await;
+
+    // Deleted (from disabled -- deletion doesn't require a prior enable).
+    sui_id_core::admin::delete_user(&state.db, &state.clock, &actor, owner.user_id, None)
+        .await
+        .expect("delete");
+    assert_agree_as(&state, &owner, &access, false).await;
+}
+
+/// `delete_user`'s real soft-delete sets `is_disabled` alongside
+/// `is_deleted` (`users::soft_delete_within_tx`), so a test that only
+/// goes through that command can't tell a fix that checks both flags
+/// apart from one that checks `is_disabled` alone -- the exact
+/// mutation dispatch §3 names. This flips `is_deleted` on its own, by
+/// direct SQL (the real command can't produce this state; a test
+/// helper reaching around it is the established way to isolate a
+/// case production code can't, per `common::create_user_with_password`'s
+/// own precedent), to prove the check reads `is_deleted` too, not only
+/// as a side effect of what `delete_user` happens to also set.
+#[tokio::test]
+async fn introspection_refuses_a_user_marked_deleted_without_being_marked_disabled() {
+    let state = test_app();
+    let admin_session = complete_setup_and_login(&state).await;
+    let owner = ordinary_user_with_client(&state, &admin_session, "bob").await;
+    let access = token_as(&state, &owner).await;
+    assert_eq!(introspect_active(&state, &owner, &access).await, Some(true));
+
+    let uid = owner.user_id;
+    state
+        .db
+        .with_conn(move |c| {
+            Ok(c.execute(
+                "UPDATE users SET is_deleted = 1 WHERE id = ?1",
+                [uid.to_string()],
+            )?)
+        })
+        .await
+        .expect("mark deleted without disabling");
+    assert!(
+        !sui_id_store::repos::users::get(&state.db, uid)
+            .await
+            .expect("user")
+            .is_disabled,
+        "is_disabled must still be false -- otherwise this isn't isolating is_deleted"
+    );
+
+    assert_eq!(
+        introspect_active(&state, &owner, &access).await,
+        Some(false),
+        "a user marked deleted, even with is_disabled still false, must be inactive"
+    );
 }

@@ -490,6 +490,9 @@ A few sui-id-specific points:
   for valid tokens.
 - The `Authorization: Basic` header is preferred per RFC 6749 §2.3.1
   but `client_id` + `client_secret` form fields also work.
+- An access token whose user has been disabled or deleted is reported
+  inactive, even before it expires — the same rule `/oauth2/userinfo`
+  applies.
 
 ## Token revocation (RFC 7009)
 

@@ -118,23 +118,36 @@ async fn try_introspect_access(
 }
 
 async fn active_from_access(claims: &AccessTokenClaims, db: &Database) -> IntrospectionResponse {
-    // username is best-effort: if the user no longer exists (deleted)
-    // we still report the token active until exp, but skip the
-    // username field. RFC 7662 doesn't require username; it's a
-    // courtesy.
-    let username = {
-        let uid_opt = claims.sub.parse::<sui_id_shared::ids::UserId>().ok();
-        if let Some(uid) = uid_opt {
-            users::get(db, uid).await.ok().map(|u| u.username)
-        } else {
-            None
+    // An active answer requires an enabled, existing user, exactly as
+    // userinfo requires (`handlers/oidc.rs`'s own `is_disabled ||
+    // is_deleted` check). Fail closed on every way that can't be
+    // confirmed: no `sub`, no row, or a read error all answer
+    // inactive, the same as RFC 7662 §2.2 already does for a bad
+    // audience.
+    let Some(uid) = claims.sub.parse::<sui_id_shared::ids::UserId>().ok() else {
+        return IntrospectionResponse::inactive();
+    };
+    let user = match users::get(db, uid).await {
+        Ok(user) => user,
+        // A token whose user does not exist is simply inactive.
+        Err(sui_id_store::StoreError::NotFound) => return IntrospectionResponse::inactive(),
+        // P8 review: still inactive (fail closed), but a read failure
+        // is not an answer about the user, so it is logged. Without
+        // this, an unreadable database looks to every resource server
+        // like a wave of revoked tokens, and to the operator like nothing.
+        Err(e) => {
+            tracing::warn!(error = %e, "introspection could not read the token's user; answering inactive");
+            return IntrospectionResponse::inactive();
         }
     };
+    if user.is_disabled || user.is_deleted {
+        return IntrospectionResponse::inactive();
+    }
     IntrospectionResponse {
         active: true,
         scope: Some(claims.scope.clone()),
         client_id: Some(claims.aud.clone()),
-        username,
+        username: Some(user.username),
         token_type: Some("Bearer"),
         exp: Some(claims.exp),
         iat: Some(claims.iat),

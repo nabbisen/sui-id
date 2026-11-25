@@ -79,6 +79,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<key_file>.pre-rotation`, kept under the operator's own custody
   choice above.
 
+### Security
+
+- **Token introspection reported a disabled or deleted user's unexpired
+  access token as active**, while `/oauth2/userinfo` already refused
+  it — the two endpoints disagreed about the same user at the same
+  moment. A resource server that relies on introspection, rather than
+  userinfo, kept accepting such a token for up to the access-token
+  lifetime after an administrator disabled or deleted the account.
+  Introspection now answers inactive for such a token, matching
+  userinfo.
+
 ## [0.93.1] — 2026-11-23
 
 **The master key is now checked at every start**: a key that cannot open
