@@ -65,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     now says what that means for a relying party: they are ignored
     without an error, so a code returned to `prompt=login` is not
     evidence of a new sign-in, and no `auth_time` is issued.
-    RFC 152 (Proposed) is to honour or refuse them.
+    RFC 152 (Accepted) is to honour or refuse them.
 - **The README and the introduction now say where embedding stands**:
   a contract for embedding sui-id (RFC 119) is accepted, but no
   embeddable module exists or is scheduled. Before, a prospective host

@@ -1,6 +1,8 @@
 # RFC 152 — What a relying party asks for, sui-id honours or refuses
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-26
+**Approved by.** `@nabbisen`, 2026-11-26: *"Accepted."*
 **Security review.** Required. It changes when a user must sign in again, and what an authorization response means.
 **Design prerequisites.** None.
 **Implementation prerequisites.** This RFC Accepted. The schedule proposed for it (cycle Q, beside RFC 149) was authorized
@@ -14,6 +16,7 @@ relying party that caches the JWKS as sui-id tells it to. Each of these is teste
 **Touches.** `crates/sui-id/src/http/handlers/oidc.rs` (the authorization request and userinfo); `crates/sui-id-core/src/oidc/`
 (the code and token issuance, discovery, JWKS); `crates/sui-id-store` (an authorization code and a refresh token carry the
 sign-in time; signing-key publication); `docs/src/reference/oidc-api.md`.
+**Independent design review.** [Design review record, 2026-11-26](../handoffs/152-what-a-relying-party-can-rely-on/design-review-2026-11-26.md). By `@nabbisen`, who did not author it.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/152-what-a-relying-party-can-rely-on/README.md`](../handoffs/152-what-a-relying-party-can-rely-on/README.md)

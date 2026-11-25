@@ -57,8 +57,10 @@
 >   disabled or deleted user's token, as userinfo does. It was a held
 >   security fix, published with the fix
 >   ([dispatch](../152-what-a-relying-party-can-rely-on/0.94.0-p8-introspection-agrees-with-userinfo-2026-11-25.md)).
+> - **P9 dispatched 2026-11-26**: [a restore refuses beside a running sui-id](0.94.0-p9-a-restore-refuses-beside-a-running-sui-id-2026-11-26.md).
+>   P7's lock, taken by `backup restore` too.
 >
-> ## Whose turn it is: **the implementation role's**, on P6.
+> ## Whose turn it is: **the implementation role's**, on P6 and P9, in either order. Both land before the `0.94.0` cut.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).

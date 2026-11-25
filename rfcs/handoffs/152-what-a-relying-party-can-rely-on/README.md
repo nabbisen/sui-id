@@ -1,13 +1,14 @@
 # RFC 152 — handoff
 
-**RFC.** [`../../proposed/152-what-a-relying-party-can-rely-on.md`](../../proposed/152-what-a-relying-party-can-rely-on.md)
-**Status.** **Proposed 2026-11-25.** Not dispatched. Building waits for its acceptance. The schedule proposed for it, cycle
-Q beside RFC 149, is authorized.
+**RFC.** [`../../accepted/152-what-a-relying-party-can-rely-on.md`](../../accepted/152-what-a-relying-party-can-rely-on.md)
+**Status.** **Accepted 2026-11-26** ([design review record](design-review-2026-11-26.md)). Not yet dispatched. It is built
+in cycle Q beside RFC 149, as authorized 2026-11-25.
 
 ## Documents
 
 | Document | Contents |
 |---|---|
+| [`design-review-2026-11-26.md`](design-review-2026-11-26.md) | The acceptance record, and the three questions it left open |
 | [`2026-11-25-introspection-active-after-disable.md`](2026-11-25-introspection-active-after-disable.md) | A finding of the same measurement, held under SECURITY.md until fixed |
 | [`0.94.0-p8-introspection-agrees-with-userinfo-2026-11-25.md`](0.94.0-p8-introspection-agrees-with-userinfo-2026-11-25.md) | Its fix, `0.94.0` P8, landed `31106bf` |
 
