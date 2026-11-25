@@ -254,7 +254,7 @@ real-environment soak of the current core before any implementation.
 | 004 | [Federation as upstream OIDC relying party](./done/004-federation.md) | Shipped v0.76.4 |
 | 005 | [Pluggable user backends (LDAP)](./done/005-pluggable-user-backends.md) | Shipped v0.76.1 |
 | 006 | [Prometheus metrics endpoint](./done/006-metrics.md) | Shipped v0.76.0 |
-| 009 | [Pluggable SQL backends (PostgreSQL, MariaDB)](./proposed/009-sql-backends.md) | Low — post-1.0 (Step 1 done v0.76.2) |
+| 009 | [Pluggable SQL backends (PostgreSQL, MariaDB)](./proposed/009-sql-backends.md) | **Refreshed 2026-11-25** (see its header); stage 1, the database-neutral store, is not done (the `Backend` trait of v0.76.2 is SQLite-shaped) |
 
 ### Implemented
 

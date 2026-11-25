@@ -1,15 +1,134 @@
 # RFC 009 — Pluggable SQL Backends (PostgreSQL, MariaDB/MySQL)
 
-**Status.** Proposed (longer-term, no scheduled delivery)
-**Priority.** Low. Large, multi-step storage feature. SQLite remains the
-default and recommendation. Requires explicit owner direction before
-scheduling.
-**Tracks.** ROADMAP / Longer term — "Pluggable SQL backends".
-**Touches.** `sui-id-store` (wide rewrite — repository implementations and
-the migration runner behind a `Backend` trait); `sui-id` (config gains
-`[storage] driver`; backup/restore/verify CLI learn to dispatch);
-`Cargo.toml` (`sqlx` with selectable driver features); docs (deployment
-guidance, "which backend" essay).
+**Status.** Proposed. **Refreshed 2026-11-25** against the code as built (`b18c862`); see *Refresh* below.
+**Direction.** `@nabbisen`, 2026-11-25: *"Do you want us to be limited to SQLite ? SQLite's limitations become our
+limitations. It is not my expect."*, and, on the architect's proposal to refresh this RFC: *"Yes. Approved."* That
+approves the refresh as design work. **It is not this RFC's acceptance**, and nothing here may be built until it is
+Accepted (RFC 000).
+**Priority.** Was *Low, post-1.0*. **Now a direction**: SQLite must not be sui-id's only database. Scheduling the build is
+proposed in *Refresh, §6*.
+**Security review.** Required. It changes where every sealed column, the audit chain and the master-key rotation live.
+**Design prerequisites.** None.
+**Implementation prerequisites.** This RFC Accepted. Stage 1 (*Refresh, §5*) needs nothing else. Stage 2 needs stage 1
+landed, and the driver decision (*§4*) recorded as an amendment.
+**Closure prerequisites.** PostgreSQL is supported on the same terms as SQLite: every guarantee in *Refresh, §2* has a
+conformance test that passes on both, in CI, and the RFC 097 inventory carries the new boundary. SQLite's behaviour is
+unchanged, and the default deployment still needs no database server.
+**Tracks.** ROADMAP / Longer term, *"Pluggable SQL backends"*. **Frozen**: the ROADMAP's feature freeze names alternative
+SQL backends, so building any stage needs a freeze exception (*Refresh, §6*). It is designed together with the unscheduled
+store-boundary RFC (*Refresh, §5*).
+**Touches.** `sui-id-store` (the store interface, then a second backend); `sui-id` (`[storage]` configuration; `backup`,
+`restore`, master-key rotation); CI (a PostgreSQL service); the RFC 097 inventory; docs.
+**Accountable owner and approver.** `@nabbisen`.
+**RFC author / architect.** High-capability model, requirements-architect role. The original text (2026-07-01) is kept
+below the refresh. **Where the two disagree, the refresh governs.**
+
+## Refresh against the code as built (2026-11-25)
+
+### §1 — why the original text is not enough any more
+
+It was written before RFC 094 (the audit row in the same transaction as its effect), RFC 096-B1's `ReadConn`, RFC 100
+(crash-safe master-key rotation) and 37 of today's 55 migrations. **Three of its claims are no longer true**:
+- **"Step 1 done" (the index, `rfcs/README.md`).** A `Backend` trait exists (`crates/sui-id-store/src/backend.rs`), but its
+  closures take `&rusqlite::Connection` and `&rusqlite::Transaction`. So every one of the store's 391 SQL call sites is
+  written against SQLite through it, and the seam is SQLite-shaped. **Stage 1 is not done.**
+- **"`--batch-size N` commits in save-points" (*Master-key rotation*, and P5).** Committing a partial reseal leaves the
+  database sealed under two keys. That is exactly RFC 100's invariant M1, and RFC 100 forbids it. **Withdrawn**: the reseal
+  stays one transaction on every backend. Savepoints inside it are fine; commits are not.
+- **"Single-instance" (*Non-goals*)** is right, but it is only written down. On SQLite, the file and RFC 100's liveness
+  lock keep it true. On a networked database, nothing would (§2, row 9).
+
+### §2 — what each backend must re-prove, measured
+
+Each row is a guarantee sui-id ships today, the SQLite fact it rests on, and what another backend needs. **A backend is
+supported only when every row has a conformance test that passes on it.**
+
+| # | Guarantee | Rests today on | Another backend needs |
+|---|---|---|---|
+| 1 | **The audit row commits with its effect** (RFC 094 Class A) | `db.class_a(…, \|tx\| …)`: a **synchronous** closure over one `rusqlite::Transaction`. It cannot `await` anything (a hash, a network call) while it holds the write lock, **by construction** | The same by construction. Whatever the driver, the transaction body gets a handle that offers database operations only. A test fails if a command's body can reach anything else |
+| 2 | **The audit chain never forks** | `append_within_tx` reads the last `hash` (`ORDER BY seq DESC LIMIT 1`), then inserts. That is safe only because SQLite has one writer, and sui-id one connection | **Explicit serialization of the chain head**: a locked chain-head row or a transaction-scoped advisory lock. A test runs N concurrent appends and asserts one unbroken chain. PostgreSQL's default `READ COMMITTED` would fork it |
+| 3 | **Read-only handles cannot write** (`ReadConn`) | `sqlite3_stmt_readonly`, per statement, plus refusing `PRAGMA` and similar by keyword (`read_conn.rs`) | The server's own read-only transaction (PostgreSQL `SET TRANSACTION READ ONLY`, MariaDB `START TRANSACTION READ ONLY`). That is **stronger** than today's check, and is tested by a write attempt that must fail |
+| 4 | **Lock-before-read where a guard is read** (C17, RFC 096-B2 S4) | `BEGIN IMMEDIATE` (`with_tx_immediate_erased`) | An explicit row lock (`SELECT … FOR UPDATE`) or an advisory lock at each such site. The sites are enumerated in stage 1, not found later |
+| 5 | **Rollback is proven, not assumed** (RFC 094 M2a, lane G20) | Real commit failure injected through rusqlite's `commit_hook` | A per-backend way to make a real commit fail. **Without one, G20 cannot run on that backend, and it is not supported** |
+| 6 | **The floor and invariants hold in the store** | 55 SQLite migrations: `CHECK`s (for example `password_min_len BETWEEN 12 AND 128`), a `RAISE(ABORT)` guard (0053), one partial index, `PRAGMA`s in 5 and date functions in 5 | Per-driver migrations, as the original proposes. **And a gate that compares the constraint sets across drivers**, so a `CHECK` that is security-bearing on SQLite cannot be missing on PostgreSQL |
+| 7 | **Sealed columns open on every backend** (original P1) | XChaCha20-Poly1305. The AAD is a constant per column, or is built from row identifiers rendered as text (for example `federation_login_attempt`) | P1 as written, plus: an identifier used in an AAD is stored and read back **as the same text**. A native `uuid` column type is allowed only if a round-trip test proves the bytes identical |
+| 8 | **Master-key rotation is crash-safe and refuses beside a running sui-id** (RFC 100, P7) | One reseal transaction (K08). A journal beside the key file. **A `flock` on `<key>.rotation-lock`**, which every process holding the database takes shared | The reseal as row 1. **The liveness guard must also live in the database.** `flock` sees only one host, and a networked database can be opened from any host. Rotation stays offline |
+| 9 | **One instance** | One file and one process. The rate limiter (`runtime/ratelimit.rs`), the revoked-token cache and the signing-key cache (`sui-id-core/src/cache.rs`) are **process memory** | **An instance lease in the database, so a second instance refuses to start**, rather than a sentence saying not to start one. Two instances would multiply every rate limit. And a token revoked through one would be accepted by the other until its cache expired. Multi-instance is a later, separate RFC |
+| 10 | **Backups carry the database and its key** | `backup create`: SQLite's backup API (`cli/handlers.rs`), with the key file, in one tarball | The original's Option B, refined. On a networked backend, `backup create` **refuses the database part and names the native tool**. It still saves the key file, because the database dump is unreadable without it, and saying only "use `pg_dump`" would leave the key behind |
+| 11 | **Embedding** (RFC 119) | `libsqlite3-sys` declares `links = "sqlite3"`: one version per build | Stage 1's interface is RFC 119's store boundary too. The driver decision (§4) weighs the embedder's version coupling |
+
+### §3 — what stays from the original
+
+Its motivation, and SQLite as the default for ever. P1 (with row 7), P2 (the password only through `${VAR}`), P3 (TLS
+required unless explicitly allowed, **and the server certificate verified**), P4 and P6. Per-driver migration directories.
+PostgreSQL before MariaDB.
+
+### §4 — the driver: decided by prototype, against stated criteria
+
+The original recommended sqlx behind a shim. **The refresh does not decide**: the guarantees in §2 decide, measured on a
+prototype in stage 2. The candidates:
+- **sqlx for every backend**, including SQLite;
+- **a hybrid**: rusqlite for SQLite, and sqlx (or a native driver) for the networked backends;
+- **a native driver per backend** (for example `tokio-postgres`).
+
+The criteria, in order:
+1. rows 1 to 5 of §2 hold **by construction** on that driver;
+2. a security fix in the bundled SQLite reaches a sui-id release without waiting for an intermediate crate (the
+   RUSTSEC-2026-0459 bump of rusqlite to 0.41 is the precedent);
+3. the build needs no running database, so no compile-time query checking against a live server;
+4. dependency weight and supply chain;
+5. an embedder's version coupling (row 11).
+
+The decision is recorded as an amendment, with the prototype's measurements.
+
+### §5 — stages
+
+1. **The store, database-neutral.** Commands and repositories become typed operations behind an interface **no driver type
+   crosses**. SQLite stays on rusqlite and behaves byte for byte as today. This stage also enumerates row 4's sites and row 9's
+   in-process state. **It changes no behaviour, and it is the largest stage.**
+
+   **It is not the ROADMAP's store-boundary RFC, and the two must be designed together.** That RFC (unscheduled, no number)
+   puts a trait between `sui-id-core` and `sui-id-store`, for embedding. This stage puts the line lower, between the
+   store's commands and the SQL a driver runs. **The lower line is the one that keeps every §2 guarantee implemented once.**
+   Class A, the audit chain and the registry stay in shared code, and only SQL and locking differ per backend. A backend
+   that implemented the upper trait from scratch would implement every guarantee again, and could get one wrong
+   independently. The upper trait can still come later, above this one; neither forecloses the other.
+2. **The driver prototype and decision** (§4), recorded as an amendment.
+3. **PostgreSQL**:
+   - its migrations;
+   - rows 1 to 10, each with its conformance test;
+   - CI with a PostgreSQL service;
+   - the instance lease;
+   - the database-level liveness guard;
+   - the RFC 097 inventory's new boundary (a database reached over the network).
+4. **The operator's side**: `[storage]`, `backup` and `restore` dispatch, and the guide (*Choosing a storage backend*).
+5. **MariaDB/MySQL**, on the same terms.
+
+### §6 — sequencing, proposed
+
+- **Now, during cycle Q, beside RFC 149**: the review of this refresh, and its acceptance.
+- **Stage 1: the cycle after Q**, or Q's second half if RFC 149 lands early. It touches every store call site, so it must not
+  run beside other store-heavy work.
+- **Stages 2 to 4 follow, one cycle each at most.**
+- **Not before the `0.94.0` cut, and it does not displace RFC 149.** This sequencing is a proposal.
+- **Every build stage needs a freeze exception.** The ROADMAP's freeze admits four kinds of work: urgent security fixes,
+  remediation-enabling refactors, dependency and security maintenance, and repairs that keep approved gates executable.
+  Alternative SQL backends are named as frozen. **Stage 1 is none of the four**: it enables a feature, not the
+  remediation. The exception is the owner's to grant or refuse. Designing and reviewing this refresh needs none.
+
+### §7 — open questions, for the review and the owner
+
+1. **Multi-instance.** Row 9 keeps it out, enforced. Is a multi-instance sui-id on PostgreSQL wanted at all? If so, it is the
+   next RFC after this one, because every in-process state in row 9 then needs a shared home.
+2. **MySQL as well as MariaDB**, or MariaDB only? They have diverged enough that "MariaDB/MySQL" is two test targets, not
+   one.
+3. **Moving an existing deployment between backends.** The original leaves it to the operator: a dump, a restore, and the
+   sealed-column canary. Should sui-id offer a verified `migrate-storage` command instead? Half 2 argues yes, because a
+   hand-made migration that silently drops a `CHECK` is the failure row 6 exists for.
+
+---
+
+*The original text, 2026-07-01, follows. The refresh above governs where they differ.*
 
 ## Summary
 

@@ -878,7 +878,8 @@ rfcs/handoffs/149-the-console-follows-the-operator/design-review-2026-11-15.md	e
 rfcs/handoffs/150-an-administrator-can-edit-a-user/design-review-2026-11-16.md	5faac92f1174e1f6a30de76456d1e69b268e2416109cf847eccc6b5c1633fd60	1	RFC. [ ../../accepted/150-an-administrator-can-edit-a-user.md ](../../accepted/150-an-administrator-can-edit-a-user.md) Reviewer. @nabbisen 
 rfcs/handoffs/151-password-policy-can-be-made-stricter/0.94.0-p5-the-minimum-can-be-raised-2026-11-25.md	ca391177880cd068d9b895ee16f867fa2f7d29f8473c5aaf50eeb82efd992b53	1	RFC. [RFC 151](../../accepted/151-password-policy-can-be-made-stricter.md), Accepted 2026-11-16 ( @nabbisen : "All accepted." ).
 rfcs/handoffs/151-password-policy-can-be-made-stricter/design-review-2026-11-16.md	af57692fab83d92b28c19f35019fc4680ee1e901f6d4bc615efa05a8c26e97d2	1	RFC. [ ../../accepted/151-password-policy-can-be-made-stricter.md ](../../accepted/151-password-policy-can-be-made-stricter.md) Reviewer. @n
-rfcs/proposed/009-sql-backends.md	71bcda199dd7a9e7b4d32577425dd85cea7613eb17d006d2782f3750fd63e515	1	Requires explicit owner direction before scheduling.
+rfcs/proposed/009-sql-backends.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
+rfcs/proposed/009-sql-backends.md	c90298f104f81c416d2213b2a283e7cfa56bef29d181c90b59214ae325b2c9b3	1	Direction. @nabbisen , 2026-11-25: "Do you want us to be limited to SQLite ?
 rfcs/proposed/009-sql-backends.md	deca24718bfe0e0e869e69bbc850d2c1ad5c9ccb19ad62ea5bfb0e49c168ef1d	1	No version designation without owner direction and soak.
 rfcs/proposed/025-multi-tenant-expansion.md	0cc20e476f66f4f49426328e287924dccec9a9d6083964e83f23b106f4b201e5	1	If the owner later decides not to pursue multi-tenancy, this RFC moves to archive/ with status Withdrawn .
 rfcs/proposed/025-multi-tenant-expansion.md	0f82fdc78f51cbf208aced26e6a702f1e37f96b44cf757412f81592babe43fd8	1	A schedule requires explicit owner direction.

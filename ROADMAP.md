@@ -1265,7 +1265,7 @@ Integration epic"); the supporting artifacts were
 | [RFC 005](rfcs/done/005-pluggable-user-backends.md) | Pluggable user backends | Shipped | LDAP directory integration |
 | [RFC 006](rfcs/done/006-metrics.md) | Metrics and observability | Shipped | Prometheus endpoint |
 | [RFC 008](rfcs/done/008-third-party-posture.md) | Third-party posture / consent screen | Shipped | Dynamic registration and explicit consent for external RPs |
-| [RFC 009](rfcs/proposed/009-sql-backends.md) | Alternative SQL backends | Low | PostgreSQL / MySQL support |
+| [RFC 009](rfcs/proposed/009-sql-backends.md) | Alternative SQL backends | **Refreshed 2026-11-25**; frozen for building (needs a freeze exception) | PostgreSQL / MariaDB / MySQL support |
 | [RFC 025](rfcs/proposed/025-multi-tenant-expansion.md) | Multi-tenant expansion | Low | Per-tenant namespaces (post-1.0) |
 
 ---
@@ -1467,7 +1467,7 @@ review, and integration verification have occurred.**
 - **Single realm.** All users share one namespace. Per-tenant isolation is
   RFC 025, post-1.0. See [the operator guide](docs/src/guides/operators.md),
   "User–client relationship and the single-realm model".
-- **SQLite only.** Alternative backends are RFC 009, low priority. For the
+- **SQLite only, today.** Alternative backends are RFC 009, refreshed 2026-11-25; building them waits on a freeze exception. For the
   readiness of the current implementation, see *Active plan* above: the tree is
   not approved for a production release.
 - **No user-facing theming API.** CSS tokens are for the maintainer, not
