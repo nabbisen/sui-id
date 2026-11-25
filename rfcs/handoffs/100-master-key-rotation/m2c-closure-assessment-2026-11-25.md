@@ -1,11 +1,16 @@
 # M2c — closure assessment (RFC 100)
 
-> ## Whose turn it is: **the owner's**, as M2c's independent closure reviewer.
-> RFC 100's last acceptance criterion is *"independent closure review — by
-> a reviewer who did not author this RFC — accepts the adversarial
-> evidence"*. Cycle P named the owner for that role: *"Yes, both
-> (Recommended)"*. This document **recommends** closure; it does not grant
-> it. **Read it adversarially**: §4 lists what the evidence does not show.
+> ## Accepted 2026-11-25, on a condition, and closing when P7 lands
+> `@nabbisen`: *"Accepted. Verify carefully they match my fundamental
+> philosophy."* The architect walked the shipped build and found it did
+> not yet match either half:
+> - a rotation runs beside a running server, which breaks M1 silently;
+> - operator text an operator can misread.
+>
+> Asked how the closure should stand, he chose *"Fix first; close M2c on
+> that (Recommended)"*. The findings, and their fix, are
+> [P7](0.94.0-p7-what-the-philosophy-check-found-2026-11-25.md). **M2c is
+> recorded closed when P7 lands.**
 
 **Written.** 2026-11-25, by the architect.
 

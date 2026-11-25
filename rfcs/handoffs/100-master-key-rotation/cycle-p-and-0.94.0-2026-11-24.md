@@ -38,8 +38,13 @@
 >   requires.
 > - **P4, M2c's closure assessment, written 2026-11-25**: [assessment](m2c-closure-assessment-2026-11-25.md).
 >
-> ## Whose turn it is: **the owner's**, as M2c's independent closure reviewer (P4).
-> P5 (RFC 151) and P6 (RFC 097 stage 1) can be dispatched meanwhile.
+> - **P4 accepted 2026-11-25, on a condition.** The philosophy check found
+>   both halves unmet. **P7** is the fix
+>   ([dispatch](0.94.0-p7-what-the-philosophy-check-found-2026-11-25.md)),
+>   and M2c closes when it lands.
+>
+> ## Whose turn it is: **the implementation role's**, on P7.
+> P5 (RFC 151) and P6 (RFC 097 stage 1) follow it.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).
