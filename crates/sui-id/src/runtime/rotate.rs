@@ -33,6 +33,9 @@ pub mod journal;
 #[path = "rotate/recovery.rs"]
 pub mod recovery;
 
+#[path = "rotate/backup.rs"]
+pub mod backup;
+
 /// [`rotate`]'s success: K08's own per-table counts, alongside the
 /// rotation id it minted -- the caller prints both.
 pub struct RotateOutcome {

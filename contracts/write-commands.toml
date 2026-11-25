@@ -1283,6 +1283,32 @@ event = ["admin.master_key.rotated"]
 descriptor = ["K05_ROTATED"]
 
 [[command]]
+id = "K09"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
+owner = "Remove a pre-rotation backup's custody"
+rationale = "RFC 100 `0.94.0` P3 (stage 7). `admin master-key backup remove`'s own call, CLI-only, offline, the same non-human-caller shape K05/K08 use. The caller (`sui-id`'s `rotate::backup::remove`) has already verified the file against the row (name, old fingerprint, owner, mode, not a symlink), unlinked it, and synced its directory, by the time this runs -- it only ever records that the removal happened, and refuses if no row exists. The `verification_reference` it records is the row's own, for `RemoveAfterVerified`, or the operator's `--verification-reference`, for `RetainUntil` (`master_key_rotation::resolve_removal_verification_reference`, a pure function the caller runs before touching the file at all, so a missing override refuses before anything is unlinked)."
+mutation_surface = "`master_key_rotation::mark_backup_removed_within_tx`"
+files = ["crates/sui-id-store/src/master_key_rotation.rs"]
+test_id = "`k09_removes_a_remove_after_verified_backup_and_appends_exactly_one_audit_row`, `k09_refuses_when_no_row`, `k09_a_failure_before_the_append_rolls_back_the_removal`"
+event = ["admin.master_key.backup_removed"]
+descriptor = ["BACKUP_REMOVED_EVENT"]
+
+[[command]]
+id = "K10"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
+owner = "Renew a retained backup's review date"
+rationale = "RFC 100 `0.94.0` P3 (stage 7). `admin master-key backup renew`'s own call. Refuses a row whose disposition is `RemoveAfterVerified` (nothing to renew) or a new `review_at` that is not after now; otherwise moves `review_at` forward and records a new `custody_reference`."
+mutation_surface = "`master_key_rotation::renew_backup_within_tx`"
+files = ["crates/sui-id-store/src/master_key_rotation.rs"]
+test_id = "`k10_renews_a_retain_until_backup_and_appends_exactly_one_audit_row`, `k10_refuses_when_no_row`, `k10_refuses_for_remove_after_verified_and_changes_nothing`, `k10_refuses_when_the_new_review_at_is_not_in_the_future_and_changes_nothing`, `k10_a_failure_before_the_append_rolls_back_the_renewal`"
+event = ["admin.master_key.backup_renewed"]
+descriptor = ["BACKUP_RENEWED_EVENT"]
+
+[[command]]
 id = "O01"
 class = "O"
 status = "implemented"  # implemented | target-absent | target-legacy

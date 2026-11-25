@@ -288,6 +288,11 @@ const MIGRATIONS: &[Migration] = &[
         name: "0053_master_key_rotation_full_shape",
         sql: include_str!("./migrations/0053_master_key_rotation_full_shape.sql"),
     },
+    Migration {
+        version: 54,
+        name: "0054_master_key_rotation_backup_removed_at",
+        sql: include_str!("./migrations/0054_master_key_rotation_backup_removed_at.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

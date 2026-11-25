@@ -6979,6 +6979,202 @@ pub async fn complete_master_key_rotation(
     Ok(Some(audited))
 }
 
+// ── K09 — remove a pre-rotation backup's custody ──────────────────────────
+//
+// RFC 100 `0.94.0` P3 (stage 7). `admin master-key backup remove`'s own
+// call: CLI-only, offline, the same non-human-caller shape K05/K08 use.
+
+static BACKUP_REMOVED_EVENT: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AdminMasterKeyBackupRemoved,
+    name: "admin.master_key.backup_removed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "rotation_id",
+            description: "the rotation whose pre-rotation backup this retires",
+            required: true,
+        },
+        AttributeSpec {
+            name: "verification_reference",
+            description: "how the backup was confirmed retired or re-encrypted, before removal",
+            required: true,
+        },
+        AttributeSpec {
+            name: "os_user",
+            description: "the OS account that ran the command (uid[:name]) -- sui-id does not \
+                          authenticate this; it is read from the process and /etc/passwd",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// K09 — unlink a pre-rotation backup, once the operator has
+    /// confirmed it is retired or re-encrypted, and record who and
+    /// when.
+    command K09 = "K09" {
+        system_principal: permitted;
+        enum K09Event {
+            BackupRemoved {
+                rotation_id: String,
+                verification_reference: String,
+                os_user: String,
+            } => &BACKUP_REMOVED_EVENT,
+        }
+    }
+}
+
+impl SealedCommandEvent<K09> for K09Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::BackupRemoved {
+            rotation_id,
+            verification_reference,
+            os_user,
+        } = self;
+        AuditAttributes::builder()
+            .attribute("rotation_id", rotation_id.clone())
+            .attribute("verification_reference", verification_reference.clone())
+            .attribute("os_user", os_user.clone())
+            .build()
+    }
+}
+
+/// Run K09. The caller (`sui-id`'s `rotate::backup::remove`) has
+/// already resolved `verification_reference` (`master_key_rotation::
+/// resolve_removal_verification_reference`) and already unlinked the
+/// backup file and synced its directory -- this call only ever records
+/// that the removal happened, never performs it.
+pub async fn remove_master_key_backup(
+    db: &crate::Database,
+    verification_reference: String,
+    os_user: String,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<K09>::for_system_actor(None);
+    db.class_a(
+        context,
+        move |tx: &mut ClassATx<'_, K09>| -> StoreResult<((), K09Event)> {
+            let removal = crate::master_key_rotation::mark_backup_removed_within_tx(
+                tx.tx(),
+                chrono::Utc::now(),
+            )?;
+            let event = K09Event::BackupRemoved {
+                rotation_id: removal.rotation_id,
+                verification_reference,
+                os_user,
+            };
+            Ok(((), event))
+        },
+    )
+    .await
+}
+
+// ── K10 — renew a retained backup's review date ───────────────────────────
+//
+// RFC 100 `0.94.0` P3 (stage 7). `admin master-key backup renew`'s own
+// call.
+
+static BACKUP_RENEWED_EVENT: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AdminMasterKeyBackupRenewed,
+    name: "admin.master_key.backup_renewed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "rotation_id",
+            description: "the rotation whose pre-rotation backup's review date moves forward",
+            required: true,
+        },
+        AttributeSpec {
+            name: "review_at",
+            description: "the new review date (RFC 3339)",
+            required: true,
+        },
+        AttributeSpec {
+            name: "custody_reference",
+            description: "who is accountable for reviewing it by then",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// K10 — move a retained pre-rotation backup's `review_at` forward,
+    /// with a new custody reference.
+    command K10 = "K10" {
+        system_principal: permitted;
+        enum K10Event {
+            BackupRenewed {
+                rotation_id: String,
+                review_at: chrono::DateTime<chrono::Utc>,
+                custody_reference: String,
+            } => &BACKUP_RENEWED_EVENT,
+        }
+    }
+}
+
+impl SealedCommandEvent<K10> for K10Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::BackupRenewed {
+            rotation_id,
+            review_at,
+            custody_reference,
+        } = self;
+        AuditAttributes::builder()
+            .attribute("rotation_id", rotation_id.clone())
+            .attribute("review_at", review_at.to_rfc3339())
+            .attribute("custody_reference", custody_reference.clone())
+            .build()
+    }
+}
+
+/// Run K10: refuses a row that is not `RetainUntil`, or a
+/// `new_review_at` that is not after now.
+pub async fn renew_master_key_backup(
+    db: &crate::Database,
+    new_review_at: chrono::DateTime<chrono::Utc>,
+    new_custody_reference: String,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<K10>::for_system_actor(None);
+    db.class_a(
+        context,
+        move |tx: &mut ClassATx<'_, K10>| -> StoreResult<((), K10Event)> {
+            let now = chrono::Utc::now();
+            let renewal = crate::master_key_rotation::renew_backup_within_tx(
+                tx.tx(),
+                new_review_at,
+                &new_custody_reference,
+                now,
+            )?;
+            let event = K10Event::BackupRenewed {
+                rotation_id: renewal.rotation_id,
+                review_at: new_review_at,
+                custody_reference: new_custody_reference,
+            };
+            Ok(((), event))
+        },
+    )
+    .await
+}
+
 // ── C08 — set a dev-mode client's secret hash ────────────────────────────
 //
 // RFC 094 M2b wave 4 stage 3. A wave-1 shape, not a wave-4 one: the

@@ -421,6 +421,47 @@ enum AdminMasterKeyCommand {
         #[arg(long, value_name = "TEXT", requires = "remove_backup_after_verified")]
         verification_reference: Option<String>,
     },
+    /// Custody of the pre-rotation backup a completed rotation kept
+    /// (RFC 100 old-key custody).
+    Backup(AdminMasterKeyBackupArgs),
+}
+
+#[derive(clap::Args, Debug)]
+struct AdminMasterKeyBackupArgs {
+    #[command(subcommand)]
+    command: AdminMasterKeyBackupCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum AdminMasterKeyBackupCommand {
+    /// Remove the pre-rotation backup, once it is retired or
+    /// re-encrypted. RFC 100: no secure-erasure claim -- this is an
+    /// ordinary unlink.
+    #[command(about = "Remove the pre-rotation backup")]
+    Remove {
+        /// States, explicitly, that the backup is retired or
+        /// re-encrypted and safe to unlink. Required.
+        #[arg(long)]
+        confirm_retired_or_reencrypted: bool,
+        /// How it was verified. Required when the backup's own
+        /// disposition is --retain-backup-until (that disposition
+        /// carries no reference of its own to reuse); ignored for
+        /// --remove-backup-after-verified, which already has one.
+        #[arg(long, value_name = "TEXT")]
+        verification_reference: Option<String>,
+    },
+    /// Move a retained backup's review date forward, with a new
+    /// custody reference. Only for a backup kept under
+    /// --retain-backup-until.
+    #[command(about = "Renew a retained backup's review")]
+    Renew {
+        /// The new review date (RFC 3339; must be in the future).
+        #[arg(long, value_name = "RFC3339_INSTANT")]
+        until: String,
+        /// Who is accountable for reviewing it by then.
+        #[arg(long, value_name = "TEXT")]
+        custody_reference: String,
+    },
 }
 
 #[derive(clap::Args, Debug)]
@@ -712,35 +753,55 @@ async fn dispatch_admin(
                 handlers::run_admin_issue_recovery_link(cfg_path, policy, &username, &reason).await
             }
         },
-        AdminCommand::MasterKey(AdminMasterKeyArgs {
-            command:
-                AdminMasterKeyCommand::Rotate {
-                    generate_new_key,
-                    new_key,
-                    yes,
-                    check,
-                    retain_backup_until,
-                    custody_reference,
-                    remove_backup_after_verified,
-                    verification_reference,
-                },
-        }) => {
-            handlers::run_admin_rotate_key(
-                cfg_path,
-                policy,
+        AdminCommand::MasterKey(AdminMasterKeyArgs { command }) => match command {
+            AdminMasterKeyCommand::Rotate {
                 generate_new_key,
                 new_key,
                 yes,
                 check,
-                handlers::CustodyChoiceArgs {
-                    retain_backup_until,
-                    custody_reference,
-                    remove_backup_after_verified,
+                retain_backup_until,
+                custody_reference,
+                remove_backup_after_verified,
+                verification_reference,
+            } => {
+                handlers::run_admin_rotate_key(
+                    cfg_path,
+                    policy,
+                    generate_new_key,
+                    new_key,
+                    yes,
+                    check,
+                    handlers::CustodyChoiceArgs {
+                        retain_backup_until,
+                        custody_reference,
+                        remove_backup_after_verified,
+                        verification_reference,
+                    },
+                )
+                .await
+            }
+            AdminMasterKeyCommand::Backup(AdminMasterKeyBackupArgs { command }) => match command {
+                AdminMasterKeyBackupCommand::Remove {
+                    confirm_retired_or_reencrypted,
                     verification_reference,
-                },
-            )
-            .await
-        }
+                } => {
+                    handlers::run_admin_backup_remove(
+                        cfg_path,
+                        policy,
+                        confirm_retired_or_reencrypted,
+                        verification_reference,
+                    )
+                    .await
+                }
+                AdminMasterKeyBackupCommand::Renew {
+                    until,
+                    custody_reference,
+                } => {
+                    handlers::run_admin_backup_renew(cfg_path, policy, until, custody_reference)
+                        .await
+                }
+            },
+        },
         AdminCommand::MetricsToken(AdminMetricsTokenArgs {
             command: AdminMetricsTokenCommand::Rotate,
         }) => handlers::run_admin_rotate_metrics_token(cfg_path, policy).await,

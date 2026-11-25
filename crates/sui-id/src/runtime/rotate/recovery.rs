@@ -772,7 +772,10 @@ fn check_published_artifact(
     Ok(())
 }
 
-fn read_key_file(adapter: &dyn KeyFileOps, path: &std::path::Path) -> anyhow::Result<MasterKey> {
+pub(crate) fn read_key_file(
+    adapter: &dyn KeyFileOps,
+    path: &std::path::Path,
+) -> anyhow::Result<MasterKey> {
     let bytes = adapter.read("recovery.read_key", path)?;
     let s = String::from_utf8(bytes)
         .with_context(|| format!("{} is not valid UTF-8", path.display()))?;

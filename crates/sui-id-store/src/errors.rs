@@ -232,6 +232,15 @@ pub enum RotationRefusal {
     /// K05: a row exists, but names a different `rotation_id` than the
     /// one given.
     RotationIdMismatch,
+    /// K09 (RFC 100 `0.94.0` P3): removing a `RetainUntil` backup needs
+    /// an explicit `--verification-reference` -- that disposition's own
+    /// row carries none to reuse, unlike `RemoveAfterVerified`.
+    VerificationReferenceRequired,
+    /// K10 (RFC 100 `0.94.0` P3): only a `RetainUntil` row has a
+    /// `review_at` to renew.
+    RenewalRequiresRetainUntil,
+    /// K10: the renewed `review_at` must be after the current time.
+    RenewalNotInFuture,
 }
 
 impl std::fmt::Display for RotationRefusal {
@@ -242,6 +251,11 @@ impl std::fmt::Display for RotationRefusal {
                 "the record's old fingerprint does not match the database's current key"
             }
             Self::NoRow => "no rotation row exists to complete",
+            Self::VerificationReferenceRequired => {
+                "a --verification-reference is required to remove a retained backup"
+            }
+            Self::RenewalRequiresRetainUntil => "only a retained backup has a review date to renew",
+            Self::RenewalNotInFuture => "the renewed review date must be in the future",
             Self::RotationIdMismatch => "the row names a different rotation",
         })
     }

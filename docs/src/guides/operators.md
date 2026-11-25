@@ -134,8 +134,13 @@ non-secret identifier, never the key itself:
 ### Rotating the master key
 
 `sui-id admin master-key rotate` re-seals every encrypted column under a new
-32-byte XChaCha20-Poly1305 master key, archives the old key file beside
-the new one, and exits. Use it when:
+32-byte XChaCha20-Poly1305 master key. Since RFC 100 (`0.94.0`), the
+whole protocol — staging the new key, re-sealing, activating it, and
+custody of the old one — is crash-safe end to end. A failure or power
+loss at any point either changes nothing, or is finished or undone at
+the next start. If what it left does not check out, sui-id refuses to
+start and changes nothing, rather than guess (see "Recovering an
+interrupted rotation" below). Use it when:
 
 - the existing key may have been exposed (laptop stolen, file leaked,
   contractor offboarded, etc);
@@ -156,15 +161,48 @@ re-sealed. Unset the variable and point `key_file` at a file holding the
 current key before rotating here, or rotate the key wherever the
 deployment system that sets the variable manages it.
 
+**Every rotation requires an old-key custody choice.** Once the new key
+is active, the old one is kept as a backup at a fixed path beside the
+key file (`<key_file>.pre-rotation`) until you settle it — see "Custody
+of the kept backup" below. Choose exactly one:
+
+- `--retain-backup-until <RFC3339_INSTANT> --custody-reference <TEXT>`
+  — keep the backup, under your own tracking reference, until that
+  date (which must be in the future). Use this when something still
+  needs it, e.g. a backup of the database taken before this rotation.
+- `--remove-backup-after-verified --verification-reference <TEXT>`
+  — state, right there, how you'll verify (or already verified) that
+  the backup is safe to discard. The backup itself is left in place
+  for you to remove afterwards with `backup remove`, once you've
+  actually checked.
+
+Neither flag is needed with `--check`, which only reports.
+
+**A kept backup blocks the next rotation.** Rotation always writes the
+backup to that one fixed path, so if the last rotation's backup (or a
+stray staged key from an interrupted one) is still there, a new
+rotation refuses outright, before touching anything:
+
+```text
+refusing to rotate: the last rotation's pre-rotation backup is still at
+<key_file>.pre-rotation. It may be the only key that opens a database
+backup taken before that rotation, so a new rotation never replaces it.
+Deal with it under the custody choice you made then: move it to its
+custody location, or remove it once you have verified that nothing
+needs it. Then rotate again.
+```
+
 **`sui-id admin master-key rotate --check`** reports whether a rotation
 could start, without changing anything: it checks that the current key
 comes from the key file (not `SUI_ID_MASTER_KEY`), that it opens the
-sentinel, that no staged key or workspace is left over from a previous
-attempt, and that the key file is a regular file, not a symlink — then
-exits 0 if all of those pass and 1 if any fail. It does not probe
-whether the filesystem itself supports what rotation needs (that would
-mean writing a file, so it says so instead); a real rotation checks that
-first, before anything else.
+sentinel, that no staged key, workspace, or kept backup is left over
+from a previous attempt or a previous rotation, and that the key file
+is a regular file, not a symlink — then exits 0 if all of those pass
+and 1 if any fail. Alongside those lines it also reports the kept-backup
+finding (see below) if one applies, whether or not that's also why the
+check failed. It does not probe whether the filesystem itself supports
+what rotation needs (that would mean writing a file, so it says so
+instead); a real rotation checks that first, before anything else.
 
 A typical run looks like:
 
@@ -177,8 +215,10 @@ systemctl stop sui-id
 #    if anything in the workflow goes wrong.
 sui-id backup create --to backup-pre-rotation.tar --encrypt
 
-# 3. Run the rotation. By default the CLI mints a fresh key.
-sui-id admin master-key rotate
+# 3. Run the rotation. By default the CLI mints a fresh key. Here the
+#    old key is verified against that backup and then discarded.
+sui-id admin master-key rotate --remove-backup-after-verified \
+    --verification-reference "checked against backup-pre-rotation.tar, 2026-11-25"
 
 # 4. Confirm at the prompt: type `yes`. Skip the prompt with --yes
 #    in scripts. The CLI prints a per-table count of re-sealed rows
@@ -189,25 +229,35 @@ sui-id admin master-key rotate
 systemctl start sui-id
 ```
 
+Or, to keep the old key around longer instead of verifying it up front:
+
+```sh
+sui-id admin master-key rotate --yes \
+    --retain-backup-until 2027-06-01T00:00:00Z \
+    --custody-reference "ops-team ticket 1234"
+```
+
 If you'd rather provide the new key yourself (e.g. derived from an
 HSM, a key-management server, or a reproducible derivation):
 
 ```sh
 # Prepare a base64-encoded 32-byte key in a file:
-sui-id admin master-key rotate --new-key /secure/new-master.key
+sui-id admin master-key rotate --new-key /secure/new-master.key \
+    --remove-backup-after-verified --verification-reference "..."
 ```
 
 After rotation:
 
-- The previous key file has been renamed to
-  `<original>.bak.<timestamp>` in the same directory. It is **not**
-  auto-deleted — keep it as long as you might need to read a backup
-  taken before the rotation, then remove it.
-- Two audit rows are appended, for two different facts (RFC 094 cycle
-  J stage 4/5, since v0.87.2): `admin.master_key.resealed`, inside the
-  transaction that re-sealed the six tables, carrying a per-table row
-  count; and `admin.master_key.rotated`, after both renames below, best
-  effort, reporting that the key files were replaced.
+- The old key is kept at `<key_file>.pre-rotation`, per the custody
+  choice you made. It is **not** auto-deleted — see "Custody of the
+  kept backup" below.
+- Three audit rows are appended, for three different facts:
+  `admin.master_key.resealed`, inside the transaction that re-sealed
+  the six tables, carrying a per-table row count; `admin.master_key.
+  rotated`, once the whole protocol — re-seal, activation, and backup
+  placement — has actually completed; and, later, whichever custody
+  record follows from how you settle the backup (`admin.master_key.
+  backup_removed` or `admin.master_key.backup_renewed`).
 - The new key file is written with `0600` permissions on Unix.
 
 **Sealed columns covered:** signing keys, refresh tokens, TOTP
@@ -218,119 +268,113 @@ tarballs are not re-keyed by this command — they have their own
 passphrase and are the operator's to refresh as needed.
 
 If the re-seal step fails for any reason (disk full, schema drift,
-etc), the SQLite transaction rolls back, the old key file is **not**
-yet renamed, and you can retry with the same arguments.
+etc), the SQLite transaction rolls back and you can retry with the
+same arguments — see "Recovering an interrupted rotation" below for
+what a failure at any *later* point leaves, and what happens about it
+automatically.
 
-### Diagnosing a rotation from the audit log
+### Custody of the kept backup
 
-A rotation that stops partway is otherwise silent — nothing paged you,
-the server may still be down, and you need to know what state the key
-files and the database are actually in before doing anything else.
-Read the two events together:
+Once a rotation completes, the old key stays at `<key_file>.pre-rotation`
+until you settle it, one of two ways:
 
-| what the log shows | what happened | what to do |
-|---|---|---|
-| both `resealed` and `rotated` | the rotation completed | nothing |
-| `resealed`, no `rotated` | the database is re-sealed under the new key; the key files may not have been swapped | the staged key in `<key_file>.new` is the one your database now needs — see "Recovering a rotation that stopped partway" below |
-| neither | nothing committed; the database is still under the old key | re-run the command |
-| `rotated`, no `resealed` | **only possible on a database rotated before v0.87.2** | see below — this is not a half-finished rotation |
+1. **`sui-id admin master-key backup remove --confirm-retired-or-reencrypted
+   [--verification-reference TEXT]`.** Verifies that the file really is
+   this backup (its name, its fingerprint against the rotation that
+   created it, that it's a regular file with the expected owner and
+   mode), unlinks it, and records when, and the OS account that ran the
+   command. sui-id does not authenticate that account: it is whatever user
+   the process ran as, recorded as `os_user`, not a verified identity. The
+   confirmation flag is required, and states, explicitly, that you've
+   already verified the backup is retired or re-encrypted and safe to
+   unlink. `--verification-reference` is required only if the backup
+   was kept under `--retain-backup-until` (a `--remove-backup-after-
+   verified` backup already carries the reference you gave at rotation
+   time). **No secure-erasure claim**: this is an ordinary file
+   removal, not a wipe — if the backup needs secure erasure, do that
+   yourself before or instead of running this. Run against a backup
+   that's already gone, it reports that and changes nothing.
+2. **Move the file to wherever you actually keep it in custody**,
+   outside the key file's own directory. No command is needed for this
+   — sui-id only cares that the fixed path is empty before the next
+   rotation. A later `backup remove` against that now-absent file
+   reports "nothing to remove" and records nothing.
 
-**That last row is not hypothetical.** Event names in this project do
-not change between releases (see
-[`docs/src/reference/audit-events.md`](../reference/audit-events.md)),
-so an audit log that spans the upgrade to v0.87.2 will hold `rotated`
-rows from earlier releases with no matching `resealed` row beside
-them — because `resealed` did not exist yet, not because anything was
-skipped. Applying this table to a pre-v0.87.2 `rotated` row would
-misdiagnose a **complete** rotation as a half-finished one. Check the
-release that was running at the time before concluding otherwise.
+**`sui-id admin master-key backup renew --until <RFC3339_INSTANT>
+--custody-reference <TEXT>`** moves a `--retain-backup-until` backup's
+review date forward (the new date must be later than the current one)
+and records the new custody reference. It only applies to that
+disposition — a `--remove-backup-after-verified` backup has no review
+date to move; renew refuses it.
 
-> ### Recovering a rotation that stopped partway. Corrected three times: 2026-11-03, this section used to end "There is no half-rotated state to recover from", which is not true of a failure *after* the re-seal commits; 2026-11-04, it still described the key-loss window that `0.87.1` had already closed; 2026-11-14, it said the new key was "written to disk," when until that date nothing had actually synced it there, and it did not yet say the re-seal itself is made durable before the key files move.
->
-> **The new key is synced to disk, along with its directory, before the
-> re-seal commits**, since `0.87.1` (sync added `0.91.0`). The order is:
->
-> 1. refuse outright if `<key_file>.new` already exists — before the
->    database is even opened, because that file may hold the key the
->    database is already sealed under;
-> 2. stage the new key at `<key_file>.new`, created with owner-only
->    permissions, then synced to disk together with its directory;
-> 3. re-seal every encrypted column, and record
->    `admin.master_key.resealed`, in one transaction — **this commits,
->    and is then checkpointed so the commit itself is durable** before
->    the command moves on to the key files;
-> 4. rename the old key file to `.bak.<timestamp>`, then sync that
->    directory;
-> 5. rename `<key_file>.new` to the configured path, then sync that
->    directory again.
->
-> **So an ordinary disk error no longer loses the key, and a power loss
-> can no longer lose the new key or the re-seal.** Steps 4 and 5 are
-> renames within one directory, and until step 5 completes the new key is
-> still at `<key_file>.new`.
->
-> **A failure or power loss between steps 4 and 5 can still leave nothing
-> at the configured path. Do not start sui-id, or run any `sui-id`
-> command, while that path is empty:** today it would generate a new,
-> unrelated key there, and anything sealed under it could not be read
-> with the key your database needs. Move `<key_file>.new` into place
-> first, as below. RFC 100 removes this hazard; until it ships, the
-> command's own error message says the same. Before `0.87.1` the generated
-> key existed only in memory until a single write *after* the commit, and
-> losing that write made every sealed column permanently undecryptable.
-> Before `0.91.0`, neither the staged key nor the committed re-seal was
-> actually synced to disk, so "written" and "committed" above did not
-> yet mean what they now mean.
-> **Those windows are closed**: losing the key to a disk error, in
-> `0.87.1`; losing it, or the re-seal, to a power loss, in `0.91.0`.
-> Upgrade to `0.91.0` or later before rotating.
->
-> **If a rotation stopped partway, here is what to do.** Read
-> "Diagnosing a rotation from the audit log" above first — it tells you
-> which of these you are in.
->
-> - **No `resealed` row.** Nothing committed; the database is still
->   under the old key. If `<key_file>.new` exists it is an unused key
->   from the failed run: confirm the server still starts on the
->   configured key, then delete `<key_file>.new` and retry. The command
->   refuses to run while that file is there, by design.
-> - **A `resealed` row, no `rotated` row, and `<key_file>.new` still
->   present.** The database is re-sealed under the key in
->   `<key_file>.new`, and the key files were not fully swapped. **That
->   staged file is the key your database now needs.** Copy it somewhere
->   durable, then move it to the configured path, and only then start the
->   server. The configured path may hold the old key, or nothing. Either
->   way, the staged file replaces it. This is also the state after the
->   command reports that the re-seal *"could not be made durable"*, which
->   happens when something else, usually a running sui-id, has the
->   database open.
->   Do not delete it, and do not re-run the rotation.
-> - **A `resealed` row, no `rotated` row, and no `<key_file>.new`.**
->   Step 5 completed and only the audit record failed; the command also
->   prints a warning when that happens. The configured path already
->   holds the right key. Nothing to repair — note the rotation in your
->   own records, since the log will not show it.
->
-> **`--new-key` is still worth using, for a different reason than
-> before.** It no longer protects you from losing the key — step 2 does
-> that. What it gives you is an independent copy of the key in a
-> location you chose, which is what you need for key custody and for
-> restoring a backup taken before the rotation:
->
-> ```bash
-> # 1. Generate and keep the new key FIRST, somewhere already durable.
-> #    Not beside the configured key file: `<key_file>.new` is the name
-> #    the command stages under, and it refuses if one is already there.
-> head -c 32 /dev/urandom | base64 > /secure/backup/sui-id-master-key.b64
->
-> # 2. Rotate using it.
-> sui-id admin master-key rotate --config /etc/sui-id/sui-id.toml \
->                                 --new-key /secure/backup/sui-id-master-key.b64
-> ```
->
-> **Take a backup before rotating, either way.** The old key file is
-> archived to `.bak.<timestamp>` and opens a pre-rotation backup; it
-> does **not** open the database once the re-seal has committed.
+### The kept-backup finding
+
+A backup kept under `--retain-backup-until`, once its review date has
+passed, raises a finding — repeatedly, at every start, until you renew
+or remove it. sui-id never removes it for you. You'll see it:
+
+- once, as a `WARN` in the server's log, at every start, naming the
+  file, the review date, the custody reference, and the two commands
+  above;
+- beside `sui-id admin master-key rotate --check`'s own precondition
+  lines (and, separately, a kept backup of either disposition already
+  makes `--check` and a real rotation refuse outright, overdue or not
+  — see "A kept backup blocks the next rotation" above).
+
+A kept backup, overdue or not, is never read as a candidate key at
+startup — only the configured key file is.
+
+### Recovering an interrupted rotation
+
+**What recovery does on its own, with no operator action.** At every
+start, before the database is opened for normal use, sui-id looks for
+a rotation that didn't finish:
+
+- If the interruption was *before* the database was re-sealed, it
+  verifies and removes whatever that attempt had staged (a workspace,
+  a staged new key, an unpublished backup) and the service starts
+  normally on the still-active old key. Nothing was changed in the
+  database, so there's nothing to redo but run `sui-id admin master-key
+  rotate` again when you're ready.
+- If the interruption was *after* the database was re-sealed but
+  before the new key was fully in place, sui-id finishes that last
+  step itself — there is no partially-rotated state to leave the
+  service in. You don't need to do anything; the next start simply
+  completes.
+
+**What it refuses, and why.** If what's left behind doesn't check out
+against the rotation's own record — a file that should be a regular
+file is a symlink, a fingerprint doesn't match, something expected is
+missing or something unexpected is present — sui-id refuses to start
+at all, rather than guess. This is the same fail-closed stance as a
+corrupted master key (above): a wrong guess here could make a sealed
+column permanently unreadable, so an inconsistency it cannot verify is
+treated as untrustworthy, not as something to clean up anyway.
+
+**What to do when it refuses.** The refusal names exactly what it
+found and which check failed. Nothing has been changed by the refusal
+itself, so there is no urgency: the database is unaffected, and remains
+only as it was before this rotation attempt. **Do not remove or edit
+the named files by hand** — the key file, the pre-rotation backup, the
+staged next key, or the rotation workspace, whichever the message
+names — since one of them may be exactly what's needed to recover.
+Then:
+
+1. **Find what produced it.** The message names the file and the check:
+   a disk error, something else touching these files, or a filesystem
+   that lost writes. Fix that first.
+2. **If you need the service back before that is understood**, restore
+   the backup you took before rotating ("A typical run", step 2). It pairs
+   the database with the key that opens it:
+   1. move the named rotation files aside, out of the key file's
+      directory, and keep them;
+   2. restore that backup;
+   3. start sui-id.
+
+   The database then opens with the old key, as it did before the
+   rotation.
+3. **Keep the moved files until you know what happened.** One of them may
+   be the only copy of a key.
 
 ## Dev mode for local testing
 

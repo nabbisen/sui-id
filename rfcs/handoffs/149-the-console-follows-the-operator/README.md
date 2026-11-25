@@ -52,6 +52,15 @@ custom scopes kept. **The RFC was accepted 2026-11-15.**
     into Japanese and Chinese pages. Give each denied class a short
     localized label.
 
+- **From RFC 100's `0.94.0` P3 (2026-11-25), the kept-backup finding.**
+  A `--retain-backup-until` pre-rotation backup past its own review date
+  (`crates/sui-id/src/runtime/rotate/backup.rs`'s `overdue_finding_line`)
+  is not yet a console card — it only appears as a server-start `WARN`
+  and beside `admin master-key rotate --check`'s own report, the same
+  interim this RFC's design review already accepted for federation
+  providers "requiring review" (`runtime/startup.rs:426`). Give it a
+  dashboard notice, the same way, when this RFC's console is built.
+
 ## The mockups
 
 Open each file in a browser, straight from disk. They are static: no

@@ -553,7 +553,10 @@ fn derive_ranges_matches_the_accepted_stage1_table() {
         // through `_master_key_rotation_new` -- both excluded, neither
         // seeded data -- so it opens no new boundary either; same
         // mechanical move.
-        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 53],
+        // RFC 100 `0.94.0` P3 (migration 0054): extends it again, to
+        // 54. A single nullable `ADD COLUMN` on the same excluded,
+        // unseeded `master_key_rotation` -- same mechanical move.
+        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 54],
         "range ends changed -- full ranges: {ranges:#?}"
     );
 

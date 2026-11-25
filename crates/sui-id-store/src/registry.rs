@@ -218,6 +218,13 @@ pub enum AuditEventKind {
     /// handlers.rs`), unchanged by this stage — a sealed command for it
     /// is this stage's own job, finally, once P2 wires this in.
     AdminMasterKeyRotated,
+    /// `admin.master_key.backup_removed` — K09 (RFC 100 `0.94.0` P3
+    /// stage 7). The operator retires a pre-rotation backup's custody.
+    AdminMasterKeyBackupRemoved,
+    /// `admin.master_key.backup_renewed` — K10 (RFC 100 `0.94.0` P3
+    /// stage 7). The operator moves a retained backup's review date
+    /// forward.
+    AdminMasterKeyBackupRenewed,
     /// `auth.password.changed_self` — U09.
     AuthPasswordChangedSelf,
     /// `auth.password.reset_completed` — U10.

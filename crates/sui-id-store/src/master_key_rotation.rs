@@ -77,6 +77,10 @@ pub struct MasterKeyRotationRow {
     pub completed_at: Option<DateTime<Utc>>,
     pub backup_filename: String,
     pub disposition: RotationDisposition,
+    /// RFC 100 `0.94.0` P3: set once, by K09, after it has unlinked the
+    /// pre-rotation backup file. `None` while the backup is still (or
+    /// was never) kept.
+    pub backup_removed_at: Option<DateTime<Utc>>,
 }
 
 /// What K08 needs from its caller to write the row — everything
@@ -127,7 +131,7 @@ pub fn read_within_tx(conn: &Connection) -> StoreResult<Option<MasterKeyRotation
     conn.query_row(
         "SELECT rotation_id, old_fingerprint, new_fingerprint, state, prepared_at, \
                 committed_at, completed_at, backup_filename, disposition_kind, review_at, \
-                custody_reference, verification_reference \
+                custody_reference, verification_reference, backup_removed_at \
          FROM master_key_rotation WHERE id = 1",
         [],
         |row| {
@@ -143,11 +147,22 @@ pub fn read_within_tx(conn: &Connection) -> StoreResult<Option<MasterKeyRotation
                 completed_at: row.get("completed_at")?,
                 backup_filename: row.get("backup_filename")?,
                 disposition: disposition_from_row(row)?,
+                backup_removed_at: row.get("backup_removed_at")?,
             })
         },
     )
     .optional()
     .map_err(StoreError::from)
+}
+
+/// [`read_within_tx`], through an already-open [`crate::Database`] --
+/// the one path a caller outside this crate (RFC 100 `0.94.0` P3's own
+/// `sui-id`-crate orchestration) may use to read the row, since
+/// `Database::with_conn`/`with_tx` are themselves restricted to the
+/// allow-listed module set in `contracts/write-authority.toml`, and
+/// this file is on it.
+pub async fn read(db: &crate::Database) -> StoreResult<Option<MasterKeyRotationRow>> {
+    db.with_conn(read_within_tx).await
 }
 
 /// K08's own write: refuse if a row is already pending, or if
@@ -203,8 +218,8 @@ pub(crate) fn insert_pending_within_tx(
         "INSERT INTO master_key_rotation \
          (id, rotation_id, old_fingerprint, new_fingerprint, state, prepared_at, committed_at, \
           completed_at, backup_filename, disposition_kind, review_at, custody_reference, \
-          verification_reference) \
-         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?5, NULL, ?6, ?7, ?8, ?9, ?10) \
+          verification_reference, backup_removed_at) \
+         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?5, NULL, ?6, ?7, ?8, ?9, ?10, NULL) \
          ON CONFLICT(id) DO UPDATE SET \
            rotation_id = excluded.rotation_id, \
            old_fingerprint = excluded.old_fingerprint, \
@@ -217,7 +232,8 @@ pub(crate) fn insert_pending_within_tx(
            disposition_kind = excluded.disposition_kind, \
            review_at = excluded.review_at, \
            custody_reference = excluded.custody_reference, \
-           verification_reference = excluded.verification_reference",
+           verification_reference = excluded.verification_reference, \
+           backup_removed_at = excluded.backup_removed_at",
         rusqlite::params![
             record.rotation_id,
             old_fingerprint,
@@ -261,6 +277,123 @@ pub(crate) fn mark_complete_within_tx(
         rusqlite::params![RotationState::Complete.as_str(), now],
     )?;
     Ok(true)
+}
+
+/// RFC 100 `0.94.0` P3 §2: which `verification_reference` removing
+/// `row`'s backup will record -- the row's own, for `RemoveAfterVerified`
+/// (nothing else to reuse), or the operator's `--verification-reference`
+/// for `RetainUntil` (that disposition carries none of its own).
+/// Pure, and called by the orchestrating caller (`sui-id`'s own
+/// `rotate::backup::remove`) *before* it touches the backup file at
+/// all, so a missing override refuses before anything is unlinked.
+pub fn resolve_removal_verification_reference(
+    row: &MasterKeyRotationRow,
+    override_given: Option<&str>,
+) -> StoreResult<String> {
+    match &row.disposition {
+        RotationDisposition::RemoveAfterVerified {
+            verification_reference,
+        } => Ok(verification_reference.clone()),
+        RotationDisposition::RetainUntil { .. } => {
+            override_given
+                .map(str::to_owned)
+                .ok_or(StoreError::RotationRefused(
+                    RotationRefusal::VerificationReferenceRequired,
+                ))
+        }
+    }
+}
+
+/// K09's own return: what the caller (`commands::remove_master_key_backup`)
+/// needs to build `admin.master_key.backup_removed`'s attributes.
+pub(crate) struct BackupRemoval {
+    pub rotation_id: String,
+}
+
+/// K09's own write (RFC 100 `0.94.0` P3 §2): record that the pre-rotation
+/// backup file has been unlinked. Called *after* the file is actually
+/// gone (the dispatch's own order: verify, unlink, sync, then the row
+/// records it) — this function never touches a file itself.
+/// `verification_reference` is already resolved by
+/// [`resolve_removal_verification_reference`]; this just records it.
+pub(crate) fn mark_backup_removed_within_tx(
+    conn: &Connection,
+    now: DateTime<Utc>,
+) -> StoreResult<BackupRemoval> {
+    let Some(existing) = read_within_tx(conn)? else {
+        return Err(StoreError::RotationRefused(RotationRefusal::NoRow));
+    };
+    conn.execute(
+        "UPDATE master_key_rotation SET backup_removed_at = ?1 WHERE id = 1",
+        rusqlite::params![now],
+    )?;
+    Ok(BackupRemoval {
+        rotation_id: existing.rotation_id,
+    })
+}
+
+/// K10's own return: what `commands::renew_master_key_backup` needs to
+/// build `admin.master_key.backup_renewed`'s attributes.
+pub(crate) struct BackupRenewal {
+    pub rotation_id: String,
+}
+
+/// K10's own write (RFC 100 `0.94.0` P3 §2): move a `RetainUntil`
+/// backup's `review_at` forward and record a new `custody_reference`.
+/// Refuses a row whose disposition is `RemoveAfterVerified` (nothing to
+/// renew) or a `new_review_at` that is not after `now`.
+pub(crate) fn renew_backup_within_tx(
+    conn: &Connection,
+    new_review_at: DateTime<Utc>,
+    new_custody_reference: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<BackupRenewal> {
+    let Some(existing) = read_within_tx(conn)? else {
+        return Err(StoreError::RotationRefused(RotationRefusal::NoRow));
+    };
+    match existing.disposition {
+        RotationDisposition::RetainUntil { .. } => {}
+        RotationDisposition::RemoveAfterVerified { .. } => {
+            return Err(StoreError::RotationRefused(
+                RotationRefusal::RenewalRequiresRetainUntil,
+            ));
+        }
+    }
+    if new_review_at <= now {
+        return Err(StoreError::RotationRefused(
+            RotationRefusal::RenewalNotInFuture,
+        ));
+    }
+    conn.execute(
+        "UPDATE master_key_rotation SET review_at = ?1, custody_reference = ?2 WHERE id = 1",
+        rusqlite::params![new_review_at, new_custody_reference],
+    )?;
+    Ok(BackupRenewal {
+        rotation_id: existing.rotation_id,
+    })
+}
+
+/// RFC 100 `0.94.0` P3 §3: `Some((review_at, custody_reference))`
+/// exactly when a kept `RetainUntil` backup's own `review_at` has
+/// passed and it has not already been removed -- never for
+/// `RemoveAfterVerified`, and never once `backup_removed_at` is set.
+/// Pure, with `now` supplied by the caller, so a server start (its own
+/// `SharedClock`) and a one-off CLI run (`Utc::now()`) share one rule,
+/// and a test can inject either.
+pub fn overdue_backup_review(
+    row: &MasterKeyRotationRow,
+    now: DateTime<Utc>,
+) -> Option<(DateTime<Utc>, &str)> {
+    if row.backup_removed_at.is_some() {
+        return None;
+    }
+    match &row.disposition {
+        RotationDisposition::RetainUntil {
+            review_at,
+            custody_reference,
+        } if *review_at <= now => Some((*review_at, custody_reference.as_str())),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

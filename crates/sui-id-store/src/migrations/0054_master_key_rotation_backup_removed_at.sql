@@ -1,0 +1,13 @@
+-- RFC 100 `0.94.0` P3 (stage 7): `master_key_rotation` gains
+-- `backup_removed_at`, set once by `admin master-key backup remove`
+-- (K09) after it unlinks the pre-rotation backup file. `review_at` and
+-- `custody_reference` (RetainUntil's own fields) need no new column:
+-- `admin master-key backup renew` (K10) updates them in place.
+--
+-- A plain `ALTER TABLE ... ADD COLUMN`, not the create-new/drop/rename
+-- sequence 0053 used: that one proved the table empty first because it
+-- changed `CHECK` constraints no existing row could be migrated
+-- through. This column is nullable, with no new constraint tying it to
+-- anything else, so an in-place add is correct even over a `complete`
+-- row from a rotation 0.94.0 P1/P2 already ran.
+ALTER TABLE master_key_rotation ADD COLUMN backup_removed_at TEXT;

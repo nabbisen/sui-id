@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `admin master-key backup remove --confirm-retired-or-reencrypted
+  [--verification-reference TEXT]` settles a kept pre-rotation backup
+  by verifying it against its own rotation record and unlinking it —
+  no secure-erasure claim, an ordinary file removal.
+- `admin master-key backup renew --until <RFC3339_INSTANT>
+  --custody-reference <TEXT>` moves a `--retain-backup-until` backup's
+  review date forward.
+- **The kept-backup finding**: a `--retain-backup-until` backup past
+  its own review date is reported, repeatedly, at every start and
+  beside `admin master-key rotate --check`'s own precondition lines,
+  until it is renewed or removed. Never removed automatically.
+
 ### Changed
 
 - **`admin master-key rotate` now requires an old-key custody choice**:
@@ -14,9 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or `--remove-backup-after-verified --verification-reference <TEXT>`.
   `--check` needs neither. Rotation is now journaled end to end: every
   step is recorded before it runs, and a crash part-way is completed or
-  undone automatically, at the next start or rotation attempt. **This
-  is not yet documented as crash-safe in every case** — that statement,
-  and the operator warning that goes with it, are still to come.
+  undone automatically, at the next start or rotation attempt.
+- `docs/src/guides/operators.md`'s rotation section is rewritten for
+  the above: the custody choice, the kept-backup finding, settling a
+  backup, and what an interrupted rotation leaves — and now documents
+  the whole protocol as crash-safe, replacing the earlier "not yet
+  crash-safe" warning.
 
 ### Removed
 

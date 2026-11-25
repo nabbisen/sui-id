@@ -91,6 +91,17 @@ pub(super) const COMMAND_NOTES: &[(&str, &[&str], &str)] = &[
          --remove-backup-after-verified --verification-reference \"checked 2026-11-24\"",
     ),
     (
+        "admin master-key backup remove",
+        &["SUI_ID_MASTER_KEY"],
+        "sui-id admin master-key backup remove --confirm-retired-or-reencrypted",
+    ),
+    (
+        "admin master-key backup renew",
+        &["SUI_ID_MASTER_KEY"],
+        "sui-id admin master-key backup renew --until 2027-06-01T00:00:00Z \
+         --custody-reference \"ops-team ticket 1234\"",
+    ),
+    (
         "admin metrics-token rotate",
         &["SUI_ID_MASTER_KEY"],
         "sui-id admin metrics-token rotate",

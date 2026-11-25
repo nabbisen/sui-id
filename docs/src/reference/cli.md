@@ -221,6 +221,40 @@ Example:
 sui-id admin master-key rotate --generate-new-key --yes --remove-backup-after-verified --verification-reference "checked 2026-11-24"
 ```
 
+### `sui-id admin master-key backup remove` {#admin-master-key-backup-remove}
+
+Remove the pre-rotation backup
+
+```text
+sui-id admin master-key backup remove [OPTIONS]
+```
+
+Environment:
+- `SUI_ID_MASTER_KEY`
+
+Example:
+
+```sh
+sui-id admin master-key backup remove --confirm-retired-or-reencrypted
+```
+
+### `sui-id admin master-key backup renew` {#admin-master-key-backup-renew}
+
+Renew a retained backup's review
+
+```text
+sui-id admin master-key backup renew --until <RFC3339_INSTANT> --custody-reference <TEXT>
+```
+
+Environment:
+- `SUI_ID_MASTER_KEY`
+
+Example:
+
+```sh
+sui-id admin master-key backup renew --until 2027-06-01T00:00:00Z --custody-reference "ops-team ticket 1234"
+```
+
 ### `sui-id admin metrics-token rotate` {#admin-metrics-token-rotate}
 
 Rotate the metrics token

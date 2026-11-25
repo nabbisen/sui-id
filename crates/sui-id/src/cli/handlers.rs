@@ -688,6 +688,14 @@ fn run_rotate_check(key_file: &Path, db_path: &Path) -> Result<()> {
         }
     }
     println!();
+    if let Some(line) = crate::rotate::backup::overdue_finding_line_from_paths(
+        key_file,
+        db_path,
+        chrono::Utc::now(),
+    ) {
+        println!("{line}");
+        println!();
+    }
     println!(
         "not checked here: whether this filesystem supports the operations rotation needs; \
          a rotation probes that first, with a temporary file it removes."
@@ -704,6 +712,116 @@ fn run_rotate_check(key_file: &Path, db_path: &Path) -> Result<()> {
         );
         std::process::exit(1);
     }
+}
+
+/// RFC 100 `0.94.0` P3 §2: `uid[:name]`, read from the process and
+/// `/etc/passwd` -- never authenticated, which is why every caller
+/// labels the resulting attribute `os_user`, never `operator`.
+/// `rustix::process::getuid` (the `process` feature is already
+/// enabled); `rustix` has no uid-to-name lookup, so the name comes
+/// from reading `/etc/passwd` directly, with no new dependency. `None`
+/// for the name (uid alone) if the file cannot be read, or has no
+/// matching line -- never an error, since the uid alone is still a
+/// true, useful fact.
+fn os_user_identity() -> String {
+    let uid = rustix::process::getuid().as_raw();
+    let name = std::fs::read_to_string("/etc/passwd")
+        .ok()
+        .and_then(|contents| {
+            contents.lines().find_map(|line| {
+                let mut fields = line.split(':');
+                let name = fields.next()?;
+                let _password = fields.next()?;
+                let line_uid: u32 = fields.next()?.parse().ok()?;
+                (line_uid == uid).then(|| name.to_owned())
+            })
+        });
+    match name {
+        Some(name) => format!("{uid}:{name}"),
+        None => uid.to_string(),
+    }
+}
+
+/// `sui-id admin master-key backup remove --confirm-retired-or-reencrypted
+/// [--verification-reference TEXT]`. RFC 100 `0.94.0` P3 §2: verifies
+/// the kept pre-rotation backup against its own row, unlinks it, and
+/// records who and when. "No secure-erasure claim" (RFC 100): said in
+/// the command's own output, once.
+pub(crate) async fn run_admin_backup_remove(
+    config_path: &Path,
+    policy: PreMigrationBackup,
+    confirm_retired_or_reencrypted: bool,
+    verification_reference: Option<String>,
+) -> Result<()> {
+    if !confirm_retired_or_reencrypted {
+        bail!(
+            "refusing: --confirm-retired-or-reencrypted is required -- state, explicitly, that \
+             the backup is retired or re-encrypted and safe to unlink before this command \
+             unlinks it"
+        );
+    }
+    let cfg = Config::load(config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+    let (db, _origin) =
+        crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
+            .await
+            .context("loading master key and opening database")?;
+    let adapter = crate::key_adapter::default_adapter();
+    let os_user = os_user_identity();
+
+    match crate::rotate::backup::remove(
+        adapter.as_ref(),
+        &db,
+        &cfg.storage.key_file,
+        verification_reference,
+        os_user,
+    )
+    .await?
+    {
+        crate::rotate::backup::RemovalOutcome::NothingToRemove => {
+            eprintln!("Nothing to remove: no pre-rotation backup exists.");
+        }
+        crate::rotate::backup::RemovalOutcome::Removed {
+            rotation_id,
+            verification_reference,
+        } => {
+            eprintln!(
+                "Removed the pre-rotation backup for rotation {rotation_id}, citing: \
+                 {verification_reference}"
+            );
+            eprintln!("No secure-erasure claim: this is an ordinary file removal, not a wipe.");
+        }
+    }
+    Ok(())
+}
+
+/// `sui-id admin master-key backup renew --until <RFC3339_INSTANT>
+/// --custody-reference <TEXT>`. RFC 100 `0.94.0` P3 §2: for a
+/// `RetainUntil` backup only -- moves `review_at` forward and records
+/// the new reference, audited.
+pub(crate) async fn run_admin_backup_renew(
+    config_path: &Path,
+    policy: PreMigrationBackup,
+    until: String,
+    custody_reference: String,
+) -> Result<()> {
+    let review_at = chrono::DateTime::parse_from_rfc3339(&until)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .with_context(|| format!("--until {until:?} is not a valid RFC 3339 instant"))?;
+    let cfg = Config::load(config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+    let (db, _origin) =
+        crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
+            .await
+            .context("loading master key and opening database")?;
+    sui_id_store::commands::renew_master_key_backup(&db, review_at, custody_reference.clone())
+        .await
+        .map_err(anyhow::Error::new)?;
+    eprintln!(
+        "Renewed: review by {}, custody reference: {custody_reference}",
+        review_at.to_rfc3339()
+    );
+    Ok(())
 }
 
 /// `sui-id setup --admin-username NAME [--admin-email EMAIL]

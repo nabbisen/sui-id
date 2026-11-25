@@ -1205,3 +1205,484 @@ mod recovery {
         );
     }
 }
+
+// ---------- RFC 100 `0.94.0` P3 (2026-11-25): custody ----------
+mod custody {
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Output};
+
+    const BIN: &str = env!("CARGO_BIN_EXE_sui-id");
+
+    struct Home {
+        dir: tempfile::TempDir,
+    }
+
+    impl Home {
+        fn new() -> Self {
+            Self {
+                dir: tempfile::tempdir().expect("tempdir"),
+            }
+        }
+        fn db(&self) -> PathBuf {
+            self.dir.path().join("t.sqlite")
+        }
+        fn key(&self) -> PathBuf {
+            self.dir.path().join("t.key")
+        }
+        fn backup(&self) -> PathBuf {
+            self.dir.path().join("t.key.pre-rotation")
+        }
+        fn config(&self, port: u16) -> PathBuf {
+            let sample = Command::new(BIN)
+                .arg("--print-sample-config")
+                .output()
+                .expect("sample");
+            let mut text = String::from_utf8(sample.stdout).expect("utf8");
+            text = text
+                .replace("./sui-id.sqlite", &self.db().display().to_string())
+                .replace("./sui-id.key", &self.key().display().to_string())
+                .replace("127.0.0.1:8801", &format!("127.0.0.1:{port}"));
+            let path = self.dir.path().join("cfg.toml");
+            std::fs::write(&path, text).expect("config");
+            path
+        }
+        /// Creates the database and bootstraps the key file (no HTTP
+        /// wizard in this binary-only harness).
+        fn create(&self, cfg: &Path) {
+            let out = self.run(
+                &["admin", "unlock-user", "--username", "nobody", "--config"],
+                cfg,
+            );
+            assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+            assert!(self.db().exists());
+            assert!(self.key().exists());
+        }
+        fn run(&self, args: &[&str], cfg: &Path) -> Output {
+            Command::new(BIN).args(args).arg(cfg).output().expect("run")
+        }
+        fn audit_actions(&self) -> Vec<String> {
+            let conn = rusqlite::Connection::open(self.db()).expect("raw");
+            conn.prepare("SELECT action FROM audit_log ORDER BY seq")
+                .expect("prepare")
+                .query_map([], |r| r.get::<_, String>(0))
+                .expect("query")
+                .map(|r| r.expect("row"))
+                .collect()
+        }
+        fn backdate_review_at(&self, when: chrono::DateTime<chrono::Utc>) {
+            let conn = rusqlite::Connection::open(self.db()).expect("raw");
+            conn.execute(
+                "UPDATE master_key_rotation SET review_at = ?1",
+                rusqlite::params![when],
+            )
+            .expect("backdate");
+        }
+    }
+
+    fn stderr(o: &Output) -> String {
+        String::from_utf8_lossy(&o.stderr).into_owned()
+    }
+    fn stdout(o: &Output) -> String {
+        String::from_utf8_lossy(&o.stdout).into_owned()
+    }
+
+    fn rotate_remove_after_verified(h: &Home, cfg: &Path, reference: &str) -> Output {
+        h.run(
+            &[
+                "admin",
+                "master-key",
+                "rotate",
+                "--yes",
+                "--remove-backup-after-verified",
+                "--verification-reference",
+                reference,
+                "--config",
+            ],
+            cfg,
+        )
+    }
+    fn rotate_retain_until(h: &Home, cfg: &Path, until: &str, custody_reference: &str) -> Output {
+        h.run(
+            &[
+                "admin",
+                "master-key",
+                "rotate",
+                "--yes",
+                "--retain-backup-until",
+                until,
+                "--custody-reference",
+                custody_reference,
+                "--config",
+            ],
+            cfg,
+        )
+    }
+    fn far_future() -> String {
+        (chrono::Utc::now() + chrono::TimeDelta::days(90)).to_rfc3339()
+    }
+
+    /// RFC 100 `0.94.0` P3 §5: rotate, settle by removal, rotate again
+    /// -- the second rotation must succeed, and each command's own
+    /// audit event appears exactly once.
+    #[test]
+    fn rotate_settle_by_removal_then_rotate_again_succeeds() {
+        let h = Home::new();
+        let cfg = h.config(18901);
+        h.create(&cfg);
+
+        let first = rotate_remove_after_verified(&h, &cfg, "first-verified");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+        assert!(h.backup().exists());
+
+        let removed = h.run(
+            &[
+                "admin",
+                "master-key",
+                "backup",
+                "remove",
+                "--confirm-retired-or-reencrypted",
+                "--config",
+            ],
+            &cfg,
+        );
+        assert_eq!(removed.status.code(), Some(0), "{}", stderr(&removed));
+        assert!(!h.backup().exists());
+
+        let second = rotate_remove_after_verified(&h, &cfg, "second-verified");
+        assert_eq!(second.status.code(), Some(0), "{}", stderr(&second));
+        assert!(
+            h.backup().exists(),
+            "the second rotation's own fresh backup"
+        );
+
+        let actions = h.audit_actions();
+        assert_eq!(
+            actions
+                .iter()
+                .filter(|a| a.as_str() == "admin.master_key.backup_removed")
+                .count(),
+            1,
+            "{actions:?}"
+        );
+        assert_eq!(
+            actions
+                .iter()
+                .filter(|a| a.as_str() == "admin.master_key.rotated")
+                .count(),
+            2,
+            "{actions:?}"
+        );
+    }
+
+    /// RFC 100 `0.94.0` P3 §5: rotate, settle by moving the backup to
+    /// its own custody location (no command needed for that path),
+    /// rotate again -- succeeds, since nothing is left at the fixed
+    /// backup path.
+    #[test]
+    fn rotate_settle_by_moving_the_file_away_then_rotate_again_succeeds() {
+        let h = Home::new();
+        let cfg = h.config(18902);
+        h.create(&cfg);
+        let until = far_future();
+
+        let first = rotate_retain_until(&h, &cfg, &until, "ops-team");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+        assert!(h.backup().exists());
+
+        let elsewhere = h.dir.path().join("archived-elsewhere.key");
+        std::fs::rename(h.backup(), &elsewhere).expect("move the backup to its own custody");
+
+        let second = rotate_retain_until(&h, &cfg, &until, "ops-team");
+        assert_eq!(second.status.code(), Some(0), "{}", stderr(&second));
+        assert!(
+            h.backup().exists(),
+            "the second rotation's own fresh backup"
+        );
+    }
+
+    /// Mutation coverage: without `--confirm-retired-or-reencrypted`,
+    /// `backup remove` must refuse and change nothing.
+    #[test]
+    fn backup_remove_refuses_without_the_confirmation_flag_and_changes_nothing() {
+        let h = Home::new();
+        let cfg = h.config(18903);
+        h.create(&cfg);
+        let first = rotate_remove_after_verified(&h, &cfg, "first");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+        let before = std::fs::read(h.backup()).expect("backup bytes");
+
+        let out = h.run(
+            &["admin", "master-key", "backup", "remove", "--config"],
+            &cfg,
+        );
+        assert_ne!(
+            out.status.code(),
+            Some(0),
+            "must refuse without the confirmation flag"
+        );
+        assert!(
+            stderr(&out).contains("--confirm-retired-or-reencrypted"),
+            "{}",
+            stderr(&out)
+        );
+        assert!(h.backup().exists());
+        assert_eq!(std::fs::read(h.backup()).expect("backup bytes"), before);
+        assert!(
+            h.audit_actions()
+                .iter()
+                .all(|a| a != "admin.master_key.backup_removed")
+        );
+    }
+
+    /// A later `backup remove`, run against an already-absent backup,
+    /// reports that and records nothing (RFC 100 `0.94.0` P3 §2).
+    #[test]
+    fn backup_remove_against_an_absent_file_reports_and_records_nothing() {
+        let h = Home::new();
+        let cfg = h.config(18904);
+        h.create(&cfg);
+
+        let out = h.run(
+            &[
+                "admin",
+                "master-key",
+                "backup",
+                "remove",
+                "--confirm-retired-or-reencrypted",
+                "--config",
+            ],
+            &cfg,
+        );
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+        assert!(
+            stderr(&out).contains("Nothing to remove"),
+            "{}",
+            stderr(&out)
+        );
+        assert!(
+            h.audit_actions()
+                .iter()
+                .all(|a| a != "admin.master_key.backup_removed")
+        );
+    }
+
+    /// "No secure-erasure claim" (RFC 100 `0.94.0` P3 §2) is printed
+    /// exactly once on a real removal.
+    #[test]
+    fn backup_remove_prints_the_no_secure_erasure_claim_exactly_once() {
+        let h = Home::new();
+        let cfg = h.config(18905);
+        h.create(&cfg);
+        let first = rotate_remove_after_verified(&h, &cfg, "first");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+
+        let out = h.run(
+            &[
+                "admin",
+                "master-key",
+                "backup",
+                "remove",
+                "--confirm-retired-or-reencrypted",
+                "--config",
+            ],
+            &cfg,
+        );
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+        let err = stderr(&out);
+        assert_eq!(err.matches("No secure-erasure claim").count(), 1, "{err}");
+    }
+
+    /// `backup renew` refuses a past instant and changes nothing.
+    #[test]
+    fn backup_renew_refuses_a_past_instant_and_changes_nothing() {
+        let h = Home::new();
+        let cfg = h.config(18906);
+        h.create(&cfg);
+        let until = far_future();
+        let first = rotate_retain_until(&h, &cfg, &until, "ops-team");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+
+        let past = (chrono::Utc::now() - chrono::TimeDelta::days(1)).to_rfc3339();
+        let out = h.run(
+            &[
+                "admin",
+                "master-key",
+                "backup",
+                "renew",
+                "--until",
+                &past,
+                "--custody-reference",
+                "ops-team-2",
+                "--config",
+            ],
+            &cfg,
+        );
+        assert_ne!(out.status.code(), Some(0), "{}", stderr(&out));
+        assert!(
+            h.audit_actions()
+                .iter()
+                .all(|a| a != "admin.master_key.backup_renewed")
+        );
+    }
+
+    /// `backup renew` refuses a `RemoveAfterVerified` row -- it has no
+    /// `review_at` of its own to move.
+    #[test]
+    fn backup_renew_refuses_for_remove_after_verified_and_changes_nothing() {
+        let h = Home::new();
+        let cfg = h.config(18907);
+        h.create(&cfg);
+        let first = rotate_remove_after_verified(&h, &cfg, "first");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+
+        let until = far_future();
+        let out = h.run(
+            &[
+                "admin",
+                "master-key",
+                "backup",
+                "renew",
+                "--until",
+                &until,
+                "--custody-reference",
+                "ops-team",
+                "--config",
+            ],
+            &cfg,
+        );
+        assert_ne!(out.status.code(), Some(0), "{}", stderr(&out));
+        assert!(
+            h.audit_actions()
+                .iter()
+                .all(|a| a != "admin.master_key.backup_renewed")
+        );
+    }
+
+    /// A valid instant moves `review_at` forward and is audited.
+    #[test]
+    fn backup_renew_moves_review_at_forward_and_is_audited() {
+        let h = Home::new();
+        let cfg = h.config(18908);
+        h.create(&cfg);
+        let until = far_future();
+        let first = rotate_retain_until(&h, &cfg, &until, "ops-team");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+
+        let new_until = (chrono::Utc::now() + chrono::TimeDelta::days(200)).to_rfc3339();
+        let out = h.run(
+            &[
+                "admin",
+                "master-key",
+                "backup",
+                "renew",
+                "--until",
+                &new_until,
+                "--custody-reference",
+                "ops-team-2",
+                "--config",
+            ],
+            &cfg,
+        );
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+        assert_eq!(
+            h.audit_actions()
+                .iter()
+                .filter(|a| a.as_str() == "admin.master_key.backup_renewed")
+                .count(),
+            1
+        );
+    }
+
+    /// RFC 100 `0.94.0` P3 §3: `rotate --check` reports an overdue
+    /// `RetainUntil` backup beside its precondition lines.
+    #[test]
+    fn the_check_subcommand_reports_the_overdue_finding() {
+        let h = Home::new();
+        let cfg = h.config(18909);
+        h.create(&cfg);
+        let until = far_future();
+        let first = rotate_retain_until(&h, &cfg, &until, "ops-team");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+
+        h.backdate_review_at(chrono::Utc::now() - chrono::TimeDelta::days(1));
+
+        let out = h.run(
+            &["admin", "master-key", "rotate", "--check", "--config"],
+            &cfg,
+        );
+        // A kept backup already fails precondition P3 regardless of
+        // being overdue (P2's own fold-in) -- `--check` exits 1 for
+        // that reason, but still reports the finding alongside it.
+        assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
+        let text = stdout(&out);
+        assert!(text.contains("past its review date"), "{text}");
+        assert!(text.contains("ops-team"), "{text}");
+    }
+
+    /// RFC 100 `0.94.0` P3 §3: the same finding appears at every
+    /// server start too, not only under `--check`.
+    #[tokio::test]
+    async fn the_server_itself_logs_the_overdue_finding_at_every_start() {
+        use std::io::Read;
+        use std::time::{Duration, Instant};
+
+        let h = Home::new();
+        let cfg = h.config(18910);
+        h.create(&cfg);
+        let until = far_future();
+        let first = rotate_retain_until(&h, &cfg, &until, "ops-team");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+        h.backdate_review_at(chrono::Utc::now() - chrono::TimeDelta::days(1));
+
+        let mut child = Command::new(BIN)
+            .arg("serve")
+            .arg("--config")
+            .arg(&cfg)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn");
+        let out_buf = drain(child.stdout.take().expect("stdout"));
+        let err_buf = drain(child.stderr.take().expect("stderr"));
+
+        let start = Instant::now();
+        loop {
+            if let Some(status) = child.try_wait().expect("wait") {
+                panic!(
+                    "sui-id serve exited early ({status:?}): stdout={} stderr={}",
+                    String::from_utf8_lossy(&out_buf.lock().expect("lock")),
+                    String::from_utf8_lossy(&err_buf.lock().expect("lock")),
+                );
+            }
+            let err_text = String::from_utf8_lossy(&err_buf.lock().expect("lock")).into_owned();
+            if err_text.contains("past its review date") {
+                assert!(err_text.contains("ops-team"), "{err_text}");
+                let _ = child.kill();
+                return;
+            }
+            // A hang guard, not a speed assertion (see o2a_cli_registry.rs).
+            if start.elapsed() > Duration::from_secs(180) {
+                let _ = child.kill();
+                panic!("sui-id serve never logged the overdue finding: stderr={err_text}");
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+
+        fn drain(
+            mut pipe: impl Read + Send + 'static,
+        ) -> std::sync::Arc<std::sync::Mutex<Vec<u8>>> {
+            let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+            let shared = buf.clone();
+            std::thread::spawn(move || {
+                let mut chunk = [0u8; 4096];
+                loop {
+                    match pipe.read(&mut chunk) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => shared.lock().expect("lock").extend_from_slice(&chunk[..n]),
+                    }
+                }
+            });
+            buf
+        }
+    }
+}

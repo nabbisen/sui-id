@@ -368,6 +368,21 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
     // removed from config (A2) or never reconciled above still needs its
     // operator told.
     warn_providers_requiring_review(&state.db).await;
+    // RFC 100 `0.94.0` P3 §3: a kept backup past its own review date,
+    // every start -- a finding only, never an automatic removal.
+    if let Some(line) = crate::rotate::backup::overdue_finding_line_from_db(
+        &state.config.storage.key_file,
+        &state.db,
+        state.clock.now(),
+    )
+    .await
+    {
+        // `tracing_subscriber::fmt()`'s default writer is stdout, not
+        // stderr (`database::open_checked`'s own recovery report is
+        // why this is a pair, not `tracing::warn!` alone).
+        tracing::warn!("{line}");
+        eprintln!("{line}");
+    }
     Ok(Startup {
         state,
         listen_addr,

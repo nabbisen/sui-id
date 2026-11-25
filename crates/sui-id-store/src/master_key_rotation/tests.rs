@@ -433,3 +433,276 @@ async fn a_remove_after_verified_row_with_no_verification_reference_violates_the
         "expected a CHECK-constraint failure, got: {message}"
     );
 }
+
+// ── RFC 100 `0.94.0` P3: custody (K09/K10) ─────────────────────────────
+
+fn retain_until(review_at: DateTime<Utc>) -> RotationDisposition {
+    RotationDisposition::RetainUntil {
+        review_at,
+        custody_reference: "ops-team".into(),
+    }
+}
+
+async fn seed(db: &Database, rotation_id: &str, disposition: RotationDisposition) {
+    let old_key = copy_key(db.key());
+    let new_key = MasterKey::generate();
+    let record = RotationRecord {
+        rotation_id: rotation_id.into(),
+        old_fingerprint: crate::crypto::fingerprint(&old_key),
+        backup_filename: "key.pre-rotation".into(),
+        disposition,
+    };
+    insert(db, record, &old_key, &new_key, chrono::Utc::now())
+        .await
+        .expect("seed a pending row");
+    let rotation_id = rotation_id.to_owned();
+    db.with_conn(move |c| mark_complete_within_tx(c, &rotation_id, chrono::Utc::now()))
+        .await
+        .expect("complete it");
+}
+
+#[test]
+fn resolve_removal_verification_reference_reuses_the_rows_own_for_remove_after_verified() {
+    let row = MasterKeyRotationRow {
+        rotation_id: "r1".into(),
+        old_fingerprint: "old".into(),
+        new_fingerprint: "new".into(),
+        state: RotationState::Complete,
+        prepared_at: chrono::Utc::now(),
+        committed_at: chrono::Utc::now(),
+        completed_at: Some(chrono::Utc::now()),
+        backup_filename: "key.pre-rotation".into(),
+        disposition: remove_after_verified(),
+        backup_removed_at: None,
+    };
+    let reference = resolve_removal_verification_reference(&row, None).expect("resolve");
+    assert_eq!(reference, "verified-by-test");
+    // An override, if given anyway, is still ignored for this disposition.
+    let reference =
+        resolve_removal_verification_reference(&row, Some("ignored-override")).expect("resolve");
+    assert_eq!(reference, "verified-by-test");
+}
+
+#[test]
+fn resolve_removal_verification_reference_requires_an_override_for_retain_until() {
+    let row = MasterKeyRotationRow {
+        rotation_id: "r1".into(),
+        old_fingerprint: "old".into(),
+        new_fingerprint: "new".into(),
+        state: RotationState::Complete,
+        prepared_at: chrono::Utc::now(),
+        committed_at: chrono::Utc::now(),
+        completed_at: Some(chrono::Utc::now()),
+        backup_filename: "key.pre-rotation".into(),
+        disposition: retain_until(chrono::Utc::now() + chrono::TimeDelta::days(90)),
+        backup_removed_at: None,
+    };
+    let err = resolve_removal_verification_reference(&row, None)
+        .expect_err("a RetainUntil row needs an override");
+    assert!(matches!(
+        err,
+        StoreError::RotationRefused(crate::errors::RotationRefusal::VerificationReferenceRequired)
+    ));
+    let reference = resolve_removal_verification_reference(&row, Some("checked by hand"))
+        .expect("resolve with an override");
+    assert_eq!(reference, "checked by hand");
+}
+
+#[tokio::test]
+async fn mark_backup_removed_refuses_when_no_row() {
+    let db = fresh_db();
+    let result = db
+        .with_conn(move |c| mark_backup_removed_within_tx(c, chrono::Utc::now()))
+        .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::NoRow
+        ))
+    ));
+}
+
+#[tokio::test]
+async fn mark_backup_removed_sets_the_timestamp_and_names_the_rotation() {
+    let db = fresh_db();
+    seed(&db, "r-remove", remove_after_verified()).await;
+
+    let removal = db
+        .with_conn(move |c| mark_backup_removed_within_tx(c, chrono::Utc::now()))
+        .await
+        .expect("mark removed");
+    assert_eq!(removal.rotation_id, "r-remove");
+
+    let row = db
+        .with_conn(read_within_tx)
+        .await
+        .expect("read")
+        .expect("row");
+    assert!(row.backup_removed_at.is_some());
+}
+
+#[tokio::test]
+async fn renew_refuses_when_no_row() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    let result = db
+        .with_conn(move |c| {
+            renew_backup_within_tx(c, now + chrono::TimeDelta::days(30), "ops-team", now)
+        })
+        .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::NoRow
+        ))
+    ));
+}
+
+#[tokio::test]
+async fn renew_refuses_for_remove_after_verified() {
+    let db = fresh_db();
+    seed(&db, "r-renew-wrong-kind", remove_after_verified()).await;
+    let now = chrono::Utc::now();
+    let result = db
+        .with_conn(move |c| {
+            renew_backup_within_tx(c, now + chrono::TimeDelta::days(30), "ops-team", now)
+        })
+        .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::RenewalRequiresRetainUntil
+        ))
+    ));
+}
+
+#[tokio::test]
+async fn renew_refuses_when_the_new_review_at_is_not_in_the_future() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    seed(
+        &db,
+        "r-renew-past",
+        retain_until(now + chrono::TimeDelta::days(90)),
+    )
+    .await;
+    let result = db
+        .with_conn(move |c| {
+            renew_backup_within_tx(c, now - chrono::TimeDelta::days(1), "ops-team", now)
+        })
+        .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::RenewalNotInFuture
+        ))
+    ));
+}
+
+#[tokio::test]
+async fn renew_moves_review_at_forward_and_records_the_new_reference() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    seed(
+        &db,
+        "r-renew-ok",
+        retain_until(now + chrono::TimeDelta::days(10)),
+    )
+    .await;
+
+    let new_review_at = now + chrono::TimeDelta::days(100);
+    let renewal = db
+        .with_conn(move |c| renew_backup_within_tx(c, new_review_at, "new-ops-team", now))
+        .await
+        .expect("renew");
+    assert_eq!(renewal.rotation_id, "r-renew-ok");
+
+    let row = db
+        .with_conn(read_within_tx)
+        .await
+        .expect("read")
+        .expect("row");
+    match row.disposition {
+        RotationDisposition::RetainUntil {
+            review_at,
+            custody_reference,
+        } => {
+            assert_eq!(review_at.timestamp(), new_review_at.timestamp());
+            assert_eq!(custody_reference, "new-ops-team");
+        }
+        other => panic!("expected RetainUntil, got {other:?}"),
+    }
+}
+
+// ── overdue_backup_review (RFC 100 `0.94.0` P3 §3) ─────────────────────
+
+#[tokio::test]
+async fn overdue_backup_review_is_none_before_review_at() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    seed(
+        &db,
+        "r-not-overdue",
+        retain_until(now + chrono::TimeDelta::days(1)),
+    )
+    .await;
+    let row = db
+        .with_conn(read_within_tx)
+        .await
+        .expect("read")
+        .expect("row");
+    assert_eq!(overdue_backup_review(&row, now), None);
+}
+
+#[tokio::test]
+async fn overdue_backup_review_is_some_once_review_at_has_passed() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    let review_at = now - chrono::TimeDelta::days(1);
+    seed(&db, "r-overdue", retain_until(review_at)).await;
+    let row = db
+        .with_conn(read_within_tx)
+        .await
+        .expect("read")
+        .expect("row");
+    let found = overdue_backup_review(&row, now).expect("overdue");
+    assert_eq!(found.0.timestamp(), review_at.timestamp());
+    assert_eq!(found.1, "ops-team");
+}
+
+#[tokio::test]
+async fn overdue_backup_review_is_none_for_remove_after_verified() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    seed(&db, "r-remove-kind", remove_after_verified()).await;
+    let row = db
+        .with_conn(read_within_tx)
+        .await
+        .expect("read")
+        .expect("row");
+    assert_eq!(
+        overdue_backup_review(&row, now + chrono::TimeDelta::days(9999)),
+        None
+    );
+}
+
+#[tokio::test]
+async fn overdue_backup_review_is_none_once_removed() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    seed(
+        &db,
+        "r-overdue-removed",
+        retain_until(now - chrono::TimeDelta::days(1)),
+    )
+    .await;
+    db.with_conn(move |c| mark_backup_removed_within_tx(c, now))
+        .await
+        .expect("mark removed");
+    let row = db
+        .with_conn(read_within_tx)
+        .await
+        .expect("read")
+        .expect("row");
+    assert_eq!(overdue_backup_review(&row, now), None);
+}

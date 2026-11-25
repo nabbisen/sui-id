@@ -851,3 +851,232 @@ async fn k05_leaves_the_wal_checkpointed_to_zero_bytes_on_return() {
         "the -wal file must be checkpointed to zero bytes"
     );
 }
+
+// ── K09/K10 — custody of a pre-rotation backup (RFC 100 `0.94.0` P3) ─────
+
+fn retain_until(review_at: chrono::DateTime<Utc>) -> RotationDisposition {
+    RotationDisposition::RetainUntil {
+        review_at,
+        custody_reference: "ops-team".into(),
+    }
+}
+
+/// A rotation taken all the way to `Complete` -- K09/K10 both act on a
+/// finished rotation's own row, never a pending one.
+async fn seed_a_completed_rotation(
+    db: &Database,
+    rotation_id: &str,
+    disposition: RotationDisposition,
+) {
+    seed_a_signing_key(db).await;
+    let new_key = MasterKey::generate();
+    crate::commands::reseal_master_key_for_rotation(
+        db,
+        &new_key,
+        RotationRecord {
+            rotation_id: rotation_id.into(),
+            old_fingerprint: crate::crypto::fingerprint(db.key()),
+            backup_filename: "key.pre-rotation".into(),
+            disposition,
+        },
+    )
+    .await
+    .expect("reseal for rotation");
+    crate::commands::complete_master_key_rotation(db, rotation_id.into())
+        .await
+        .expect("complete")
+        .expect("something changed");
+}
+
+#[tokio::test]
+async fn k09_removes_a_remove_after_verified_backup_and_appends_exactly_one_audit_row() {
+    let db = fresh_db();
+    seed_a_completed_rotation(&db, "r-k09-1", remove_after_verified()).await;
+    let before = audit_rows(&db).await;
+
+    crate::commands::remove_master_key_backup(&db, "verified-by-test".into(), "1000:alice".into())
+        .await
+        .expect("remove");
+
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("admin.master_key.backup_removed")
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    let row = row_for(&db).await.expect("row");
+    assert!(row.backup_removed_at.is_some());
+    record_exactly_once_coverage("K09");
+}
+
+#[tokio::test]
+async fn k09_refuses_when_no_row() {
+    let db = fresh_db();
+    let before = audit_rows(&db).await;
+    let result =
+        crate::commands::remove_master_key_backup(&db, "verified-by-test".into(), "0:root".into())
+            .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::NoRow
+        ))
+    ));
+    assert_eq!(audit_rows(&db).await, before, "no audit row");
+}
+
+#[tokio::test]
+async fn k09_a_failure_before_the_append_rolls_back_the_removal() {
+    let db = fresh_db();
+    seed_a_completed_rotation(&db, "r-k09-failpoint", remove_after_verified()).await;
+    let before_audit = audit_rows(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result =
+        crate::commands::remove_master_key_backup(&db, "verified-by-test".into(), "0:root".into())
+            .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    assert_eq!(audit_rows(&db).await, before_audit, "no audit row");
+    let row = row_for(&db).await.expect("row");
+    assert!(
+        row.backup_removed_at.is_none(),
+        "the row must not have been marked removed"
+    );
+    record_rollback_coverage("K09");
+}
+
+#[tokio::test]
+async fn k10_renews_a_retain_until_backup_and_appends_exactly_one_audit_row() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    seed_a_completed_rotation(
+        &db,
+        "r-k10-1",
+        retain_until(now + chrono::TimeDelta::days(10)),
+    )
+    .await;
+    let before = audit_rows(&db).await;
+
+    let new_review_at = now + chrono::TimeDelta::days(200);
+    crate::commands::renew_master_key_backup(&db, new_review_at, "new-ops-team".into())
+        .await
+        .expect("renew");
+
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("admin.master_key.backup_renewed")
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    let row = row_for(&db).await.expect("row");
+    match row.disposition {
+        RotationDisposition::RetainUntil {
+            review_at,
+            custody_reference,
+        } => {
+            assert_eq!(review_at.timestamp(), new_review_at.timestamp());
+            assert_eq!(custody_reference, "new-ops-team");
+        }
+        other => panic!("expected RetainUntil, got {other:?}"),
+    }
+    record_exactly_once_coverage("K10");
+}
+
+#[tokio::test]
+async fn k10_refuses_when_no_row() {
+    let db = fresh_db();
+    let before = audit_rows(&db).await;
+    let result = crate::commands::renew_master_key_backup(
+        &db,
+        chrono::Utc::now() + chrono::TimeDelta::days(30),
+        "ops-team".into(),
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::NoRow
+        ))
+    ));
+    assert_eq!(audit_rows(&db).await, before, "no audit row");
+}
+
+#[tokio::test]
+async fn k10_refuses_for_remove_after_verified_and_changes_nothing() {
+    let db = fresh_db();
+    seed_a_completed_rotation(&db, "r-k10-wrong-kind", remove_after_verified()).await;
+    let before = audit_rows(&db).await;
+    let result = crate::commands::renew_master_key_backup(
+        &db,
+        chrono::Utc::now() + chrono::TimeDelta::days(30),
+        "ops-team".into(),
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::RenewalRequiresRetainUntil
+        ))
+    ));
+    assert_eq!(audit_rows(&db).await, before, "no audit row");
+}
+
+#[tokio::test]
+async fn k10_refuses_when_the_new_review_at_is_not_in_the_future_and_changes_nothing() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    seed_a_completed_rotation(
+        &db,
+        "r-k10-past",
+        retain_until(now + chrono::TimeDelta::days(10)),
+    )
+    .await;
+    let before = audit_rows(&db).await;
+    let result = crate::commands::renew_master_key_backup(
+        &db,
+        now - chrono::TimeDelta::days(1),
+        "ops-team".into(),
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::RotationRefused(
+            crate::errors::RotationRefusal::RenewalNotInFuture
+        ))
+    ));
+    assert_eq!(audit_rows(&db).await, before, "no audit row");
+}
+
+#[tokio::test]
+async fn k10_a_failure_before_the_append_rolls_back_the_renewal() {
+    let db = fresh_db();
+    let now = chrono::Utc::now();
+    seed_a_completed_rotation(
+        &db,
+        "r-k10-failpoint",
+        retain_until(now + chrono::TimeDelta::days(10)),
+    )
+    .await;
+    let before_audit = audit_rows(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = crate::commands::renew_master_key_backup(
+        &db,
+        now + chrono::TimeDelta::days(200),
+        "new-ops-team".into(),
+    )
+    .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    assert_eq!(audit_rows(&db).await, before_audit, "no audit row");
+    let row = row_for(&db).await.expect("row");
+    match row.disposition {
+        RotationDisposition::RetainUntil {
+            custody_reference, ..
+        } => assert_eq!(
+            custody_reference, "ops-team",
+            "the renewal must not have committed"
+        ),
+        other => panic!("expected RetainUntil, got {other:?}"),
+    }
+    record_rollback_coverage("K10");
+}
