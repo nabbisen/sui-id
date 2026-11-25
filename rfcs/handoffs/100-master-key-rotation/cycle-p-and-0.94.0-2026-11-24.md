@@ -53,6 +53,10 @@
 > - **P5 landed 2026-11-25** (`a3e8dfc`). The password minimum can be
 >   raised, never lowered. The review restored setup's too-short refusal,
 >   which the typed error had turned into a generic failure.
+> - **P8 landed 2026-11-26** (`31106bf`). Introspection answers inactive for a
+>   disabled or deleted user's token, as userinfo does. It was a held
+>   security fix, published with the fix
+>   ([dispatch](../152-what-a-relying-party-can-rely-on/0.94.0-p8-introspection-agrees-with-userinfo-2026-11-25.md)).
 >
 > ## Whose turn it is: **the implementation role's**, on P6.
 

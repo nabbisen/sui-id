@@ -87,6 +87,14 @@ The decision is recorded as an amendment, with the prototype's measurements.
    crosses**. SQLite stays on rusqlite and behaves byte for byte as today. This stage also enumerates row 4's sites and row 9's
    in-process state. **It changes no behaviour, and it is the largest stage.**
 
+   **Two further items for this stage, added 2026-11-26** (RFC 119's
+   [host setup design](../handoffs/119-embedding-contract/host-setup-design-2026-11-26.md), §2 and §3):
+   - **Unique table names.** Every table gets one fixed prefix, `sui_id_`, built into its name, through one migration that
+     renames the 31 tables. It is not configurable. Only `sui_meta` is namespaced today, and names like `users` and `sessions`
+     collide in a database shared with a host. PostgreSQL also gets a schema of sui-id's own.
+   - **The liveness guard is taken by the store's own `open`**, keyed on the database rather than the key file, so every
+     opener holds it without being told to (row 8).
+
    **It is not the ROADMAP's store-boundary RFC, and the two must be designed together.** That RFC (unscheduled, no number)
    puts a trait between `sui-id-core` and `sui-id-store`, for embedding. This stage puts the line lower, between the
    store's commands and the SQL a driver runs. **The lower line is the one that keeps every §2 guarantee implemented once.**

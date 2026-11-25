@@ -38,6 +38,12 @@ authentication module's obligations are exactly the ones whose breach produces
 no error. It is why D4 exists, and it is the argument for moving more into the
 module than a minimal boundary would suggest.
 
+## Documents
+
+| Document | Contents |
+|---|---|
+| [`host-setup-design-2026-11-26.md`](host-setup-design-2026-11-26.md) | **How a host sets up an embedded sui-id**: the narrowed surface (§0), one handle opened with every decision named, the database a host names and the module opens, unique `sui_id_` table names, the master key, migrations, the request context that carries H1–H4 and H6 as types, and contract V2. A design for review; nothing is built |
+
 ## What is still missing from this draft
 
 1. **The enumeration is incomplete** (RFC 119 D7). Three behaviours were
@@ -50,7 +56,13 @@ module than a minimal boundary would suggest.
 3. ~~The three open questions~~ **Answered 2026-11-01** (RFC 119, *Answers*).
    What the host gets when it declares under H3 that it cannot supply the
    address is **not yet defined**: a question from a prospective host,
-   2026-11-25, and a clause for D7.
+   2026-11-25, and a clause for D7. The host setup design proposes one (§8).
+4. **Three items for D7's enumeration, none in the three-row table**:
+   - **master-key custody** (resolution, the startup check, recovery, rotation and the liveness lock) is all service-side,
+     found by a prospective host, 2026-11-26;
+   - **the published surface**: `sui-id-store`'s repositories and raw connections are public, so a host can write without the
+     audit row (host setup design, §0);
+   - **the setup decisions themselves** (host setup design, §1–§12).
 
 ## Order
 
