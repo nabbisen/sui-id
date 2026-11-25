@@ -81,6 +81,19 @@ The criteria, in order:
 
 The decision is recorded as an amendment, with the prototype's measurements.
 
+### §4a — breadth: a capability list, one suite, named support levels (added 2026-11-26)
+
+The refresh adopts the breadth model of RFC 119's [host setup design](../handoffs/119-embedding-contract/host-setup-design-2026-11-26.md), §15, which records the direction it answers:
+- **an engine is eligible** only if it has multi-statement ACID transactions, a usable row or advisory lock, enforced
+  `CHECK`s or an equivalent, read-only transactions, and byte-exact binary storage;
+- **the engine layer is a short list** (SQL from one definition where possible, a lock, a read-only transaction, migrations,
+  commit-failure injection);
+- **one conformance suite** of §2's guarantees decides support;
+- **support is binary and named**: Supported (in CI, suite green) or refused at startup by name. There is no "experimental"
+  level.
+
+**A storage trait implemented by the host is rejected**, because it would delegate the guarantees, each silently.
+
 ### §5 — stages
 
 1. **The store, database-neutral.** Commands and repositories become typed operations behind an interface **no driver type

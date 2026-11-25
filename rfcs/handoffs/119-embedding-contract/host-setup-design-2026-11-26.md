@@ -342,11 +342,72 @@ The service starts three things beside its listener (`cli/handlers.rs`, `runtime
    | **D. No administration in the module**: administrators use sui-id's own console or CLI against the same database | a sui-id person | works | **Available beside A, not instead of it.** It keeps sui-id's tested pages, but the host's own UI cannot manage users. Running the console needs the service alongside, which the liveness guard allows (a second shared holder) |
 
    **Recommended: A for people, B narrowly for automation, D as an option.** C is rejected.
+   **Accepted**, `@nabbisen`, 2026-11-26: *"Your recommendation is accepted."*
 4. **One SQLite file.** `@nabbisen`: *"It seems what we have to consider. Why is there such strange limitation ?"* **It was
    the architect's conservative default, not a principle.** §2 now supports it, with no setting for it at all: the host gives
    connection information and the module adds its tables there. The four facts that blocked it each have a remedy, and the one
    real cost (one writer per SQLite file) is stated.
 
+5. **Wide database support.** `@nabbisen`, 2026-11-26: *"In my mental model, we should not force SQLite limitation.
+   Instead, we should provide wide support about database kinds. Any good and considerate solution(s) ?"* The architect's
+   proposal is §15.
+
 **Still open, for the review:** whether N1's rename runs in RFC 009 stage 1, as proposed, or on its own; and whether
 the PostgreSQL schema name should ever be the host's to choose. The architect's view is no, for N1's reason: a name that can
 differ per deployment is one a tool or a guide can get wrong.
+
+## 15 — wide database support, without delegating the guarantees
+
+**The goal**, in `@nabbisen`'s words: not to force SQLite's limitations, and to support many kinds of database. **The
+constraint** is the philosophy's first half. Every guarantee in RFC 009's §2 (the audit row atomic with its effect, the
+chain that never forks, read-only handles, the floor checks in the schema) must hold on each kind. A kind on which one
+silently fails is worse than no support for it.
+
+**The options:**
+
+| | How breadth is reached | What holds the guarantees | Verdict |
+|---|---|---|---|
+| **A. A backend per engine**, in sui-id | sui-id implements each engine | sui-id, proven per engine by one shared conformance suite in CI | **Recommended**, as the only way a guarantee is sui-id's own on every kind |
+| **B. A storage trait the host implements** for its own database, any kind including document stores | unlimited | **each host's adapter**: atomicity, locking, the audit chain | **Rejected.** Every one of those fails silently when wrong, and RFC 119's D4 forbids delegating a silent failure. A conformance suite could probe an adapter, but not prove its transaction semantics |
+| **C. One generic SQL layer** (an ORM's "any" driver) | whatever the library supports | the library's lowest common denominator, which hides exactly the differences the guarantees rest on (isolation, locking) | **Rejected as the mechanism.** A query builder is useful *inside* A (below) |
+| **D. sui-id's own database of a supported kind, beside the host's** | every host, whatever it runs | sui-id, as in A | **Kept, as the fallback that turns no host away** |
+| **E. sui-id as a separate service** | every host | sui-id | exists today; planeter's choice |
+
+**The proposal is A with D. It reaches breadth through four parts.**
+
+1. **A stated capability list decides which kinds can be supported at all.** It is a principle, not a list of favourites. A
+   database engine can host sui-id natively only if it has:
+   - multi-statement ACID transactions;
+   - a lock usable for the audit chain's head and the liveness guard (a row lock or an advisory lock);
+   - enforced `CHECK` constraints, or an equivalent the schema can state;
+   - read-only transactions;
+   - byte-exact binary storage for sealed columns.
+
+   SQLite, PostgreSQL, MariaDB and MySQL (whose `CHECK`s are enforced from 8.0.16) appear to meet it. SQL Server and others
+   may: **each is measured when it is proposed, never assumed.** A document store does not, so it gets D. That is the honest
+   boundary, and it is a property of the engine, not a limitation sui-id chose.
+2. **The engine layer is small, so each new kind is cheap.** Shared code keeps every guarantee's logic: Class A, the chain,
+   the registry. An engine supplies only:
+   - its SQL, generated where possible by one query builder from one definition (`sea-query` is a candidate that targets
+     SQLite, PostgreSQL and MySQL; RFC 009's §4 criteria decide it);
+   - its lock primitive;
+   - its read-only transaction;
+   - its migrations;
+   - its way to make a real commit fail, for the rollback evidence.
+
+   That is RFC 009's stage 1 seam, sized so the engine part stays a short list.
+3. **One conformance suite** carries RFC 009's eleven guarantees and runs against every engine in CI. **An engine is
+   supported exactly when it passes.** Adding a kind is then a mechanical route anyone can follow, including a contributor:
+   - implement the short list;
+   - add a CI service;
+   - pass the suite;
+   - add the threat-model boundary.
+4. **Support levels have names, so nobody misreads them.**
+   - **Supported**: in CI, suite green, every guarantee proven.
+   - **Not supported**: `open` refuses the engine by name, and says to use D.
+
+   There is **no "experimental" or "best effort" level**. A guarantee that might hold is a guarantee an operator cannot rely
+   on, which half 2 forbids.
+
+**The order follows RFC 009**: SQLite, then PostgreSQL, then MariaDB/MySQL, then by demand (SQL Server is the likeliest next).
+Each kind is one stage, and each stage needs the freeze exception.
