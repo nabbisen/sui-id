@@ -1209,6 +1209,19 @@ event = ["admin.setup.completed"]
 descriptor = ["S10_COMPLETED"]
 
 [[command]]
+id = "S11"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
+owner = "Change the minimum password length"
+rationale = "`settings.password_min_len.changed` with required `old`/`new`; the *Authentication* settings tab's save calls it (RFC 151), `system_principal: forbidden`, actor required. Refuses outside [PASSWORD_MIN_LEN_FLOOR, PASSWORD_MIN_LEN_CEILING] (12-128) before the transaction opens, independent of migration 0055's own `CHECK`."
+mutation_surface = "`server_settings::update_password_min_len_within_tx` (via `commands::change_password_min_len`)"
+files = ["crates/sui-id-store/src/repos/server_settings.rs"]
+test_id = "`s11_change_password_min_len_appends_exactly_one_audit_row`, `s11_refuses_11_and_129_and_accepts_12_and_128`"
+event = ["settings.password_min_len.changed"]
+descriptor = ["S11_CHANGED"]
+
+[[command]]
 id = "K01"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy

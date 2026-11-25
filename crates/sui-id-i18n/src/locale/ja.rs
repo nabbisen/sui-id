@@ -44,6 +44,18 @@ pub static STRINGS_JA: Strings = Strings {
 
     // Settings: Auth extensions (RFC 051)
     settings_auth_min_length_value: |n| format!("{n} 文字"),
+    settings_auth_min_length_hint: |floor| {
+        format!(
+            "すべての新しいパスワード（再設定、変更、リカバリーリンク）に適用されます。既存のパスワードは\
+         そのまま使用でき、次回の変更時に新しい最小値を満たします。{floor} 未満には設定できません。"
+        )
+    },
+    settings_auth_min_length_dev_note: |dev_floor| {
+        format!("開発モードでは、この設定にかかわらず {dev_floor} 文字が使用されます。")
+    },
+    settings_auth_min_length_flash_invalid: |floor, ceiling| {
+        format!("最小値は {floor} 文字から {ceiling} 文字の間で指定してください。")
+    },
     settings_auth_recovery_codes_label: "リカバリーコード（登録ごと）",
     settings_auth_recovery_codes_value: |n| format!("{n} 件"),
     settings_auth_mfa_note_prefix: "ユーザー個別に有効化します。詳細は ",
@@ -185,7 +197,7 @@ pub static STRINGS_JA: Strings = Strings {
     setup_admin_email_hint: "通知やパスワードリセットに使用します。後から変更できます。",
     setup_admin_display_label: "表示名(任意)",
     setup_admin_password_label: "パスワード",
-    setup_admin_password_hint: "12 文字以上",
+    setup_admin_password_hint: |n| format!("{n} 文字以上"),
     setup_admin_confirm_label: "パスワード(確認)",
     setup_admin_submit: "管理者を作成",
     setup_done_title: "セットアップ完了",
@@ -311,7 +323,7 @@ pub static STRINGS_JA: Strings = Strings {
     reset_password_title: "パスワードの再設定",
     reset_password_lede: "新しいパスワードを 2 回入力してください。",
     reset_password_new_label: "新しいパスワード",
-    reset_password_new_hint: "12 文字以上",
+    reset_password_new_hint: |n| format!("{n} 文字以上"),
     reset_password_token_label: "リセットコード",
     reset_password_token_hint: "この欄が空の場合は、メールに記載されたリセットコードを貼り付けてください。",
     reset_password_confirm_label: "確認のためもう一度",
@@ -327,6 +339,8 @@ pub static STRINGS_JA: Strings = Strings {
     reset_done_second_factor_after: " まで一時停止されています。このリセットではその停止は解除されません。",
     password_mismatch_flash: "パスワードと確認用パスワードが一致しません。",
     reset_password_failed_flash: "パスワードの再設定に失敗しました。もう一度お試しください。",
+    password_too_short_flash: |n| format!("パスワードは {n} 文字以上にしてください。"),
+    password_too_long_flash: |n| format!("パスワードが長すぎます（最大 {n} 文字）。"),
     back_to_login: "ログインに戻る",
 
     // Settings hub
@@ -365,7 +379,9 @@ pub static STRINGS_JA: Strings = Strings {
     password_change_lede: "現在のパスワードと、新しいパスワードを 2 回入力してください。",
     password_change_current_label: "現在のパスワード",
     password_change_new_label: "新しいパスワード",
-    password_change_new_hint: "12 文字以上。短く複雑なパスワードよりも、長くランダムなフレーズの方が安全です。",
+    password_change_new_hint: |n| {
+        format!("{n} 文字以上。短く複雑なパスワードよりも、長くランダムなフレーズの方が安全です。")
+    },
     password_change_confirm_label: "新しいパスワード(確認)",
     password_change_revoke_others_label: "パスワード変更後、他のブラウザ/アプリをサインアウトする",
     password_change_revoke_others_hint: "推奨。既存のセッションやリフレッシュトークンが無効化され、新しいパスワードでの再サインインが必要になります。",

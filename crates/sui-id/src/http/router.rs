@@ -311,6 +311,10 @@ pub fn build_router(app: AppState) -> Router {
             get(crate::handlers::settings::authentication_get),
         )
         .route(
+            "/admin/settings/authentication/password-min-len",
+            post(crate::handlers::settings::password_min_len_post),
+        )
+        .route(
             "/admin/settings/logs",
             get(crate::handlers::settings::logs_get),
         )

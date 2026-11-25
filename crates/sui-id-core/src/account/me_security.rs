@@ -55,8 +55,11 @@ pub struct PasswordChangeReport {
 ///   not verify against the stored hash. Same error variant the
 ///   regular login path uses, which keeps callers' error mapping
 ///   simple.
-/// - [`CoreError::BadRequest`] if `new_password` violates the
-///   password policy (length, etc.).
+/// - [`CoreError::PasswordTooShort`]/[`CoreError::PasswordTooLong`] if
+///   `new_password` violates the length policy (RFC 151); typed, not
+///   [`CoreError::BadRequest`], so a caller can localize the message
+///   with the actual length that was checked against.
+/// - [`CoreError::BadRequest`] for the breach-password (HIBP) refusal.
 /// - storage / hashing failures bubble up as [`CoreError::Internal`]
 ///   or [`CoreError::Password`].
 #[allow(clippy::too_many_arguments)]

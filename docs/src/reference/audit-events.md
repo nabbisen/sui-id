@@ -289,6 +289,7 @@ transaction as the change it records.
 | `settings.idle_timeout.changed` | — | An administrator set the idle-session-timeout value from the admin settings page. Attributes: `old`, `new` (seconds). Written with the change, in one transaction. |
 | `settings.max_sessions.changed` | — | An administrator set the concurrent-session cap from the admin settings page. Attributes: `old`, `new`. Written with the change, in one transaction. |
 | `settings.metrics_token.rotated` | — | The `/metrics` endpoint's bearer token was rotated via the CLI (`sui-id admin rotate-metrics-token`). No attributes — neither the new nor the old token hash is recorded. Written with the change, in one transaction. |
+| `settings.password_min_len.changed` | — | An administrator set the minimum new-password character count, from the *Authentication* settings tab. Attributes: `old`, `new`. Refused outside 12-128 before the transaction opens. Written with the change, in one transaction. |
 
 ## Pending settings change events (RFC 090)
 

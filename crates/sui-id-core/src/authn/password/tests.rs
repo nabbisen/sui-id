@@ -62,7 +62,7 @@ async fn the_semaphore_never_grants_more_than_its_derived_bound_at_once() {
 fn policy_rejects_short_passwords_at_standard_level() {
     let min = SecurityLevel::Standard.password_min_len();
     let r = check_password_policy("short", min);
-    assert!(matches!(r, Err(CoreError::BadRequest(_))));
+    assert!(matches!(r, Err(CoreError::PasswordTooShort { .. })));
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn policy_accepts_dev_password_at_development_level() {
 fn policy_rejects_too_short_even_at_development_level() {
     let min = SecurityLevel::Development.password_min_len();
     let r = check_password_policy("short", min);
-    assert!(matches!(r, Err(CoreError::BadRequest(_))));
+    assert!(matches!(r, Err(CoreError::PasswordTooShort { .. })));
 }
 
 /// Standard-level must reject a Development-only password.
@@ -100,7 +100,32 @@ fn policy_rejects_too_short_even_at_development_level() {
 fn standard_rejects_development_password() {
     let min = SecurityLevel::Standard.password_min_len();
     let r = check_password_policy("changeme", min); // 8 chars < 12
-    assert!(matches!(r, Err(CoreError::BadRequest(_))));
+    assert!(matches!(r, Err(CoreError::PasswordTooShort { .. })));
+}
+
+/// RFC 151 §3: the refusal carries the actual minimum, not just a
+/// variant tag -- an HTTP handler reads this to localize the message.
+#[test]
+fn the_too_short_refusal_carries_the_minimum_it_was_checked_against() {
+    let r = check_password_policy("short", 16);
+    match r {
+        Err(CoreError::PasswordTooShort { min_len }) => assert_eq!(min_len, 16),
+        other => panic!("expected PasswordTooShort{{ min_len: 16 }}, got {other:?}"),
+    }
+}
+
+#[test]
+fn policy_rejects_a_password_over_the_256_character_ceiling() {
+    let r = check_password_policy(&"a".repeat(257), 12);
+    assert!(matches!(
+        r,
+        Err(CoreError::PasswordTooLong { max_len: 256 })
+    ));
+}
+
+#[test]
+fn policy_accepts_a_password_exactly_at_the_256_character_ceiling() {
+    check_password_policy(&"a".repeat(256), 12).expect("exactly 256 is accepted");
 }
 
 // ---------- property-based tests (v0.13.0) ----------

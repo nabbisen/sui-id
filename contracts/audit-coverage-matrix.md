@@ -477,6 +477,7 @@ setup wizard too).
 | `settings.idle_timeout.changed` | The idle-session-timeout value was changed, from the admin settings page (command `S03`) | admin user id | — | `old`, `new` (both required) | A |
 | `settings.max_sessions.changed` | The concurrent-session cap was changed, from the admin settings page (command `S04`) | admin user id | — | `old`, `new` (both required) | A |
 | `settings.metrics_token.rotated` | The `/metrics` endpoint's bearer token was rotated, from the CLI only (command `S05`) | — (no authenticated actor; CLI, master-key authority) | — | none — neither the new nor the old hash may be recorded | A |
+| `settings.password_min_len.changed` | The minimum new-password character count was changed, from the *Authentication* settings tab (command `S11`, RFC 151) | admin user id | — | `old`, `new` (both required) | A |
 
 ### Self-service settings (`auth.smtp_config.*`)
 

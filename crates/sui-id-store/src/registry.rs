@@ -500,6 +500,10 @@ pub enum AuditEventKind {
     /// `settings.max_sessions.changed` — RFC 094 M2b stage 3, S04. Same
     /// "named but never emitted" shape as `SettingsIdleTimeoutChanged`.
     SettingsMaxSessionsChanged,
+    /// `settings.password_min_len.changed` — RFC 151, S11. The minimum
+    /// character count a new password must meet; stricter-only, never
+    /// below `commands::PASSWORD_MIN_LEN_FLOOR`.
+    SettingsPasswordMinLenChanged,
     /// `settings.metrics_token.rotated` — RFC 094 M2b stage 3, S05. Same
     /// "named but never emitted" shape; its only caller is the CLI
     /// (`sui-id admin rotate-metrics-token`), which has no authenticated

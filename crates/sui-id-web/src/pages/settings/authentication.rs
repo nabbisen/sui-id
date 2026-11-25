@@ -4,7 +4,17 @@ use super::*;
 use crate::layout::{Chrome, Shell};
 
 pub struct SettingsAuthenticationData {
+    /// The *stored* `server_settings.password_min_len` -- the value
+    /// this tab's own form edits. Not the value a password is
+    /// actually checked against in dev mode (always 8 there,
+    /// RFC 151 §2); `is_dev_mode` below is what says so.
     pub password_min_length: usize,
+    pub password_min_length_floor: usize,
+    pub password_min_length_ceiling: usize,
+    pub is_dev_mode: bool,
+    /// Dev mode's own fixed minimum (8) -- computed by the caller,
+    /// which depends on `sui-id-core`; this crate does not.
+    pub password_min_length_dev_floor: usize,
     pub password_argon2id: String,
     pub totp_enabled_per_user: bool,
     pub webauthn_enabled_per_user: bool,
@@ -44,6 +54,10 @@ pub fn render_settings_authentication(
         let t = lang.strings();
         let SettingsAuthenticationData {
             password_min_length,
+            password_min_length_floor,
+            password_min_length_ceiling,
+            is_dev_mode,
+            password_min_length_dev_floor,
             password_argon2id,
             totp_enabled_per_user,
             webauthn_enabled_per_user,
@@ -54,9 +68,49 @@ pub fn render_settings_authentication(
             refresh_token_lifetime_secs,
             refresh_rotation,
             refresh_theft_detection,
-            can_write: _can_write,
+            can_write,
             username,
         } = data;
+        let csrf_for_min_length = csrf_token.clone();
+        let min_length_row = if can_write {
+            view! {
+                <form method="post" action="/admin/settings/authentication/password-min-len" class="stack">
+                    <input type="hidden" name="_csrf" value=csrf_for_min_length />
+                    <div class="field">
+                        <label for="password-min-len" class="field__label">
+                            {t.settings_auth_min_length_label}
+                        </label>
+                        <input id="password-min-len" name="password_min_len" type="number"
+                               min=password_min_length_floor.to_string()
+                               max=password_min_length_ceiling.to_string()
+                               value=password_min_length.to_string() />
+                        <span class="field__hint">
+                            {(t.settings_auth_min_length_hint)(password_min_length_floor)}
+                        </span>
+                        {is_dev_mode.then(|| view! {
+                            <p class="muted mt-2-mb-0">
+                                {(t.settings_auth_min_length_dev_note)(password_min_length_dev_floor)}
+                            </p>
+                        })}
+                    </div>
+                    <div>
+                        <button type="submit">{t.button_save}</button>
+                    </div>
+                </form>
+            }
+            .into_any()
+        } else {
+            view! {
+                <div class="table-wrap">
+                    <table>
+                        <tbody>
+                            {kv_text(t.settings_auth_min_length_label, (t.settings_auth_min_length_value)(password_min_length))}
+                        </tbody>
+                    </table>
+                </div>
+            }
+            .into_any()
+        };
         view! {
             <Shell title=t.settings_title_authentication.to_string() nav=Chrome::Console{username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
@@ -72,10 +126,10 @@ pub fn render_settings_authentication(
 
                 <div class="card">
                     <h3 class="card__title">{t.settings_auth_password_section}</h3>
+                    {min_length_row}
                     <div class="table-wrap">
                         <table>
                             <tbody>
-                                {kv_text(t.settings_auth_min_length_label, (t.settings_auth_min_length_value)(password_min_length))}
                                 {kv_text(t.settings_auth_hash_algorithm_label, password_argon2id)}
                             </tbody>
                         </table>

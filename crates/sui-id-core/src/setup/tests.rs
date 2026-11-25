@@ -199,7 +199,7 @@ async fn headless_setup_enforces_standard_password_policy() {
 
     // 8 chars passes Development but must fail here: setup is always Standard.
     let r = create_initial_admin_headless(&db, &clock, "first-admin", "changeme", None, None).await;
-    assert!(matches!(r, Err(CoreError::BadRequest(_))));
+    assert!(matches!(r, Err(CoreError::PasswordTooShort { .. })));
     assert!(!state::is_initialized(&db).expect("state read"));
 }
 

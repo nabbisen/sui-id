@@ -303,6 +303,10 @@ pub struct PasswordChangeData {
     /// caller hands it in so a re-render after a validation error
     /// keeps the user's previous choice.
     pub revoke_others_default: bool,
+    /// RFC 151 §3: the minimum this request's `handlers::
+    /// password_min_len` returned -- 8 in dev mode, else the current
+    /// setting.
+    pub password_min_length: usize,
 }
 
 pub fn render_password_change(
@@ -317,6 +321,7 @@ pub fn render_password_change(
             username,
             role,
             revoke_others_default,
+            password_min_length,
         } = data;
         let revoke_attr = if revoke_others_default {
             Some("")
@@ -353,14 +358,14 @@ pub fn render_password_change(
                         <div class="field">
                             <label for="new_password" class="field__label">{t.password_change_new_label}</label>
                             <input type="password" id="new_password" name="new_password"
-                                   required autocomplete="new-password" minlength="12" />
-                            <span class="field__hint">{t.password_change_new_hint}</span>
+                                   required autocomplete="new-password" minlength=password_min_length.to_string() />
+                            <span class="field__hint">{(t.password_change_new_hint)(password_min_length)}</span>
                         </div>
 
                         <div class="field">
                             <label for="confirm_password" class="field__label">{t.password_change_confirm_label}</label>
                             <input type="password" id="confirm_password" name="confirm_password"
-                                   required autocomplete="new-password" minlength="12"
+                                   required autocomplete="new-password" minlength=password_min_length.to_string()
                                    data-confirms="new_password"
                                    aria-describedby="confirm-password-match-status" />
                             {password_match_status(t, "confirm-password-match-status")}
@@ -515,6 +520,7 @@ pub fn render_reset_password(
     csrf_token: String,
     flash: Option<Flash>,
     lang: sui_id_i18n::Locale,
+    password_min_length: usize,
 ) -> String {
     render(move || {
         let t = lang.strings();
@@ -539,14 +545,14 @@ pub fn render_reset_password(
                     <div class="field">
                         <label for="password" class="field__label">{t.reset_password_new_label}</label>
                         <input id="password" name="password" type="password"
-                               required=true minlength="12"
+                               required=true minlength=password_min_length.to_string()
                                autocomplete="new-password" autofocus=true />
-                        <span class="field__hint">{t.reset_password_new_hint}</span>
+                        <span class="field__hint">{(t.reset_password_new_hint)(password_min_length)}</span>
                     </div>
                     <div class="field">
                         <label for="confirm_password" class="field__label">{t.reset_password_confirm_label}</label>
                         <input id="confirm_password" name="confirm_password" type="password"
-                               required=true minlength="12"
+                               required=true minlength=password_min_length.to_string()
                                autocomplete="new-password"
                                data-confirms="password"
                                aria-describedby="confirm-password-match-status" />

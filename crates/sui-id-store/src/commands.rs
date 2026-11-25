@@ -5810,6 +5810,104 @@ pub async fn complete_initial_setup(
     .await
 }
 
+// ── S11 — change the minimum password length ────────────────────────────
+//
+// RFC 151. In S03/S04's own shape. Administrator-only, so a weaker
+// minimum can never come from an actor with no accountable identity.
+
+/// RFC 151 Decision 1: today's shipped minimum, and the floor this
+/// setting can never go below -- the point of the RFC is that sui-id
+/// must never become weaker than it ships. The HTTP handler, the
+/// settings page's own `min`/`max` attributes, and every sentence that
+/// states the range derive from this and [`PASSWORD_MIN_LEN_CEILING`];
+/// migration 0055's own `CHECK` cannot derive from a Rust constant, so
+/// a store test pins its two literals against these instead.
+pub const PASSWORD_MIN_LEN_FLOOR: i64 = 12;
+
+/// RFC 151 Decision 1: a ceiling against a mistyped value that would
+/// lock every user out of ever choosing a password that meets it.
+pub const PASSWORD_MIN_LEN_CEILING: i64 = 128;
+
+static S11_CHANGED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsPasswordMinLenChanged,
+    name: "settings.password_min_len.changed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "old",
+            description: "the previous minimum password length",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new",
+            description: "the new minimum password length",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// S11 — change the minimum new-password character count.
+    /// Administrator action through `&AdminActor`.
+    command S11 = "S11" {
+        system_principal: forbidden;
+        enum S11Event {
+            Changed { old: i64, new: i64 } => &S11_CHANGED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S11> for S11Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Changed { old, new } = self;
+        AuditAttributes::builder()
+            .attribute("old", old.to_string())
+            .attribute("new", new.to_string())
+            .build()
+    }
+}
+
+/// Run S11 (change the minimum password length). Refuses outside
+/// `[PASSWORD_MIN_LEN_FLOOR, PASSWORD_MIN_LEN_CEILING]` *before* the
+/// transaction opens, so the floor holds even if migration 0055's own
+/// `CHECK` were somehow missing (RFC 151 Decision 1: "enforced in two
+/// places"). Submitting the current value again still appends a row
+/// (`old == new`), the same as S03/S04 — there is no short-circuit for
+/// a no-op submission in this seam.
+pub async fn change_password_min_len(
+    db: &crate::Database,
+    admin: UserId,
+    min_len: i64,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<(i64, i64)>> {
+    if !(PASSWORD_MIN_LEN_FLOOR..=PASSWORD_MIN_LEN_CEILING).contains(&min_len) {
+        return Err(StoreError::PasswordMinLenOutOfRange {
+            floor: PASSWORD_MIN_LEN_FLOOR,
+            ceiling: PASSWORD_MIN_LEN_CEILING,
+        });
+    }
+    let context = AuthorizedCommandContext::<S11>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S11>| {
+        let old = crate::repos::server_settings::update_password_min_len_within_tx(
+            tx.tx(),
+            min_len,
+            now,
+        )?;
+        Ok(((old, min_len), S11Event::Changed { old, new: min_len }))
+    })
+    .await
+}
+
 // ── C05 — disable client ─────────────────────────────────────────────────
 //
 // RFC 094 M2b wave 4 stage 1. Two writes, one transaction: the client's

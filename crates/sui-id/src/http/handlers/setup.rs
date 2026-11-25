@@ -474,6 +474,13 @@ fn trimmed_or_none(s: &str) -> Option<&str> {
 }
 
 fn friendly_error_text(e: &CoreError, lang: sui_id_i18n::Locale) -> String {
+    // RFC 151 (P5 review): the length refusals are typed now. Without
+    // this they fell through to `setup_generic_failure`, and the first
+    // administrator's creator was no longer told the password was too
+    // short.
+    if let Some(text) = crate::handlers::password_length_refusal(e, lang) {
+        return text;
+    }
     let t = lang.strings();
     match e {
         CoreError::AlreadyInitialized => t.setup_already_initialized.into(),

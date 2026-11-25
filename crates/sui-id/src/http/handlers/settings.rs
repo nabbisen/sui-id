@@ -233,9 +233,37 @@ pub async fn authentication_get(
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    let data = authentication_data(&app, actor.can_write(), username).await?;
+    let token = csrf::ensure_token(&jar);
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let html = sui_id_web::render_settings_authentication(data, None, token.clone(), lang);
+    let resp = Html(html).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
+}
+
+/// The *Authentication* tab's data, for its `GET` and for a refused save
+/// (P5 review: one builder, so the two renders cannot drift).
+async fn authentication_data(
+    app: &crate::state::AppState,
+    can_write: bool,
+    username: String,
+) -> Result<sui_id_web::SettingsAuthenticationData, HttpError> {
     let cfg = app.config.as_ref();
-    let data = sui_id_web::SettingsAuthenticationData {
-        password_min_length: app.security_level().password_min_len(),
+    let server_settings = sui_id_store::repos::server_settings::get(&app.db)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    // RFC 151 §4's scan allows `SecurityLevel::password_min_len()` only
+    // at setup, dev mode's seeding, and `handlers::password_min_len`'s
+    // own dev branch, so dev mode's value is read through that function.
+    let effective = crate::handlers::password_min_len(app)
+        .await
+        .map_err(HttpError::html)?;
+    Ok(sui_id_web::SettingsAuthenticationData {
+        password_min_length: server_settings.password_min_len as usize,
+        password_min_length_floor: sui_id_store::commands::PASSWORD_MIN_LEN_FLOOR as usize,
+        password_min_length_ceiling: sui_id_store::commands::PASSWORD_MIN_LEN_CEILING as usize,
+        is_dev_mode: app.is_dev_mode,
+        password_min_length_dev_floor: effective,
         password_argon2id: "Argon2id".into(),
         totp_enabled_per_user: true,
         webauthn_enabled_per_user: true,
@@ -246,14 +274,72 @@ pub async fn authentication_get(
         refresh_token_lifetime_secs: cfg.tokens.refresh_lifetime_secs,
         refresh_rotation: true,
         refresh_theft_detection: true,
-        can_write: actor.can_write(),
+        can_write,
         username,
-    };
-    let token = csrf::ensure_token(&jar);
+    })
+}
+
+/// POST /admin/settings/authentication/password-min-len
+///
+/// Update `server_settings.password_min_len` (RFC 151). Administrator
+/// only (`CurrentAdmin`, not `CurrentAdminOrAuditor`): an auditor's own
+/// POST is refused by the extractor before this body runs, the same
+/// gate `idle_timeout_post`/`max_sessions_post` already use.
+#[derive(Debug, serde::Deserialize)]
+pub struct PasswordMinLenForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+    /// Taken as text, not a typed integer: a non-numeric value must
+    /// re-render the tab with a plain flash, never axum's own 422 for
+    /// a form field it could not parse.
+    pub password_min_len: String,
+}
+
+pub async fn password_min_len_post(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id, _, username): CurrentAdmin,
+    jar: CookieJar,
+    axum::Form(form): axum::Form<PasswordMinLenForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
-    let html = sui_id_web::render_settings_authentication(data, None, token.clone(), lang);
-    let resp = Html(html).into_response();
-    Ok(with_csrf_cookie(resp, &app, &token))
+
+    let parsed = form.password_min_len.trim().parse::<i64>().ok();
+    let outcome = match parsed {
+        Some(n) => {
+            let now = app.clock.now();
+            sui_id_store::commands::change_password_min_len(&app.db, admin_id, n, now)
+                .await
+                .map(|_| ())
+        }
+        None => Err(sui_id_store::StoreError::PasswordMinLenOutOfRange {
+            floor: sui_id_store::commands::PASSWORD_MIN_LEN_FLOOR,
+            ceiling: sui_id_store::commands::PASSWORD_MIN_LEN_CEILING,
+        }),
+    };
+
+    match outcome {
+        Ok(()) => {
+            Ok(axum::response::Redirect::to("/admin/settings/authentication").into_response())
+        }
+        Err(sui_id_store::StoreError::PasswordMinLenOutOfRange { floor, ceiling }) => {
+            let t = lang.strings();
+            let data = authentication_data(&app, true, username).await?;
+            let flash = Some(sui_id_web::Flash {
+                kind: sui_id_web::FlashKind::Error,
+                text: (t.settings_auth_min_length_flash_invalid)(floor as usize, ceiling as usize),
+            });
+            let token = csrf::ensure_token(&jar);
+            let html = sui_id_web::render_settings_authentication(data, flash, token.clone(), lang);
+            Ok(with_csrf_cookie(
+                (axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response(),
+                &app,
+                &token,
+            ))
+        }
+        Err(e) => Err(HttpError::html(CoreError::from(e))),
+    }
 }
 
 // ---------- ログ ----------

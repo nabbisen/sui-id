@@ -47,6 +47,18 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
 
     // Settings: Auth extensions (RFC 051)
     settings_auth_min_length_value: |n| format!("{n} 个字符"),
+    settings_auth_min_length_hint: |floor| {
+        format!(
+            "适用于每个新密码：重置、修改、恢复链接。现有密码仍然可以使用，并在下次修改时满足新的最小值。\
+         不能设置为低于 {floor}。"
+        )
+    },
+    settings_auth_min_length_dev_note: |dev_floor| {
+        format!("开发模式下始终使用 {dev_floor} 个字符，与此设置无关。")
+    },
+    settings_auth_min_length_flash_invalid: |floor, ceiling| {
+        format!("最小长度必须在 {floor} 到 {ceiling} 个字符之间。")
+    },
     settings_auth_recovery_codes_label: "恢复码（每次注册）",
     settings_auth_recovery_codes_value: |n| format!("{n} 个"),
     settings_auth_mfa_note_prefix: "按用户启用。详情请参见 ",
@@ -188,7 +200,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     setup_admin_email_hint: "用于通知和密码重置，可以稍后更改。",
     setup_admin_display_label: "显示名称（可选）",
     setup_admin_password_label: "密码",
-    setup_admin_password_hint: "12 个字符或以上",
+    setup_admin_password_hint: |n| format!("{n} 个字符或以上"),
     setup_admin_confirm_label: "确认密码",
     setup_admin_submit: "创建管理员",
     setup_done_title: "设置完成",
@@ -314,7 +326,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     reset_password_title: "重置密码",
     reset_password_lede: "请输入两次新密码。",
     reset_password_new_label: "新密码",
-    reset_password_new_hint: "12 个字符或以上",
+    reset_password_new_hint: |n| format!("{n} 个字符或以上"),
     reset_password_token_label: "重置码",
     reset_password_token_hint: "如果此栏为空，请粘贴邮件中的重置码。",
     reset_password_confirm_label: "确认密码",
@@ -330,6 +342,8 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     reset_done_second_factor_after: "。此次重置不会解除该暂停。",
     password_mismatch_flash: "密码与确认密码不一致。",
     reset_password_failed_flash: "密码重置失败，请重试。",
+    password_too_short_flash: |n| format!("密码必须至少为 {n} 个字符。"),
+    password_too_long_flash: |n| format!("密码过长（最多 {n} 个字符）。"),
     back_to_login: "返回登录",
 
     // Settings hub
@@ -368,7 +382,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     password_change_lede: "请输入当前密码以及两次新密码。",
     password_change_current_label: "当前密码",
     password_change_new_label: "新密码",
-    password_change_new_hint: "12 个字符或以上。长随机密码短语比短复杂密码更安全。",
+    password_change_new_hint: |n| format!("{n} 个字符或以上。长随机密码短语比短复杂密码更安全。"),
     password_change_confirm_label: "确认新密码",
     password_change_revoke_others_label: "修改密码后退出其他浏览器/应用",
     password_change_revoke_others_hint: "推荐。现有会话和刷新令牌将失效，需用新密码重新登录。",

@@ -967,12 +967,45 @@ pub async fn resolve_admin_locale(
 
 /// Effective minimum password length for the current run mode.
 ///
-/// Delegates to `AppState::security_level().password_min_len()` so
-/// handler code stays concise and consistent with other level-driven
-/// thresholds.
-#[inline]
-pub fn password_min_len(app: &crate::state::AppState) -> usize {
-    app.security_level().password_min_len()
+/// RFC 151: in dev mode, always 8 (`SecurityLevel::Development`,
+/// unchanged). Otherwise reads `server_settings.password_min_len` --
+/// the value an administrator can raise from the *Authentication*
+/// settings tab. **A read failure refuses the password change; it
+/// never falls back to the Standard default (12)**, which would be
+/// weaker than a minimum an administrator had already raised, and a
+/// fallback silently lowering it is exactly what this RFC exists to
+/// rule out.
+pub async fn password_min_len(
+    app: &crate::state::AppState,
+) -> sui_id_core::errors::CoreResult<usize> {
+    if app.is_dev_mode {
+        return Ok(sui_id_core::security::SecurityLevel::Development.password_min_len());
+    }
+    let settings = sui_id_store::repos::server_settings::get(&app.db)
+        .await
+        .map_err(sui_id_core::errors::CoreError::from)?;
+    Ok(settings.password_min_len as usize)
+}
+
+/// RFC 151: the length refusal a page shows, in the page's language and
+/// naming the bound it was checked against, or `None` if `e` is not a
+/// length refusal. **The one mapping** the reset page, the self-service
+/// change and setup all use (P5 review: setup had none, and its first
+/// administrator's creator was told only that setup failed).
+pub fn password_length_refusal(
+    e: &sui_id_core::errors::CoreError,
+    lang: sui_id_i18n::Locale,
+) -> Option<String> {
+    let t = lang.strings();
+    match e {
+        sui_id_core::errors::CoreError::PasswordTooShort { min_len } => {
+            Some((t.password_too_short_flash)(*min_len))
+        }
+        sui_id_core::errors::CoreError::PasswordTooLong { max_len } => {
+            Some((t.password_too_long_flash)(*max_len))
+        }
+        _ => None,
+    }
 }
 
 /// Verify the audit-log chain's most recent `limit` rows and return the

@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its own review date is reported, repeatedly, at every start and
   beside `admin master-key rotate --check`'s own precondition lines,
   until it is renewed or removed. Never removed automatically.
+- **The password minimum can be raised** from the *Authentication*
+  settings tab (never below 12, never above 128; dev mode keeps 8
+  regardless). Applies to every new password — a reset, a self-service
+  change, an admin recovery link — never to passwords that already
+  exist. Audited as `settings.password_min_len.changed`.
 
 ### Changed
 
@@ -47,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   another rotation — instead of completing beside it and silently
   leaving later-written rows sealed under the key the rotation just
   replaced, unreadable after the next restart.
+- **The password-policy refusal was always in English**, regardless of
+  the page's own language, and always named the same length even where
+  a different minimum actually applied (setup vs. dev mode vs. the
+  configured minimum). Both the reset and self-service change pages
+  now state the minimum that was actually checked against, in the
+  page's own language.
 
 ### Removed
 

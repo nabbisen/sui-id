@@ -154,7 +154,10 @@ async fn weak_new_password_is_rejected_after_current_is_verified() {
         crate::security::SecurityLevel::Standard.password_min_len(),
     )
     .await;
-    assert!(matches!(r, Err(CoreError::BadRequest(_))), "{r:?}");
+    assert!(
+        matches!(r, Err(CoreError::PasswordTooShort { .. })),
+        "{r:?}"
+    );
     // Stored hash unchanged — failure must not partially apply.
     let stored = credentials::get(&db, uid)
         .await

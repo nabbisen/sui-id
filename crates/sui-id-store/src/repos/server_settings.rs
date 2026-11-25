@@ -37,14 +37,15 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ServerSettingsRow> {
         idle_session_timeout_secs: row.get(3)?,
         max_concurrent_sessions: row.get(4)?,
         metrics_token_hash: row.get(5)?,
-        created_at: row.get::<_, DateTime<Utc>>(6)?,
-        updated_at: row.get::<_, DateTime<Utc>>(7)?,
+        password_min_len: row.get(6)?,
+        created_at: row.get::<_, DateTime<Utc>>(7)?,
+        updated_at: row.get::<_, DateTime<Utc>>(8)?,
     })
 }
 
 const SELECT_COLUMNS: &str = "id, default_lang, hibp_mode, \
                               idle_session_timeout_secs, max_concurrent_sessions, \
-                              metrics_token_hash, \
+                              metrics_token_hash, password_min_len, \
                               created_at, updated_at";
 
 /// Fetch the singleton server-settings row. Migration 0016 inserts
@@ -224,6 +225,28 @@ pub async fn update_max_concurrent_sessions(
 ) -> StoreResult<()> {
     db.with_tx(move |tx| update_max_concurrent_sessions_within_tx(tx, cap, now).map(|_| ()))
         .await
+}
+
+/// Update the minimum new-password character count (RFC 151), inside
+/// the caller's transaction. Returns the old value. The floor and
+/// ceiling (`commands::PASSWORD_MIN_LEN_FLOOR`/`_CEILING`) are the
+/// command layer's to enforce before this ever runs, so the floor
+/// holds even if this row's own `CHECK` (migration 0055) were missing
+/// — this function itself validates nothing.
+pub fn update_password_min_len_within_tx(
+    conn: &rusqlite::Connection,
+    min_len: i64,
+    now: DateTime<Utc>,
+) -> StoreResult<i64> {
+    let old = get_within_tx(conn)?.password_min_len;
+    let n = conn.execute(
+        "UPDATE server_settings SET password_min_len = ?1, updated_at = ?2 WHERE id = ?3",
+        params![min_len, now, SINGLETON_ID],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(old)
 }
 
 /// Store the hashed bearer token for the `/metrics` endpoint (RFC 006),

@@ -247,6 +247,16 @@ const NOT_A_SECRET: &[(&str, &str, &str)] = &[
         "FederationProviderConfig",
         "client_secret_env",
     ),
+    // RFC 151: a minimum *length*, not a password — held as `String`
+    // (not `i64`) deliberately, so a non-numeric submission reaches
+    // the handler's own friendly refusal instead of axum's bare 422.
+    // The name matches `is_secret_name`'s "password" substring, not
+    // what it holds.
+    (
+        "sui-id/src/http/handlers/settings.rs",
+        "PasswordMinLenForm",
+        "password_min_len",
+    ),
 ];
 
 fn is_secret_name(name: &str) -> bool {

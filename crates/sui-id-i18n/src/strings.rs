@@ -59,8 +59,18 @@ pub struct Strings {
     pub fmt_lifetime_hours: fn(i64, i64) -> String,
     pub fmt_lifetime_minutes: fn(i64, i64) -> String,
 
-    // ---- Settings: Auth extensions (RFC 051) ----
+    // ---- Settings: Auth extensions (RFC 051; editable, RFC 151) ----
     pub settings_auth_min_length_value: fn(usize) -> String,
+    /// RFC 151 §3: always shown under the minimum-length field,
+    /// administrator or auditor alike. Takes the floor (`12`), not a
+    /// runtime value -- it states a fixed property of the setting, not
+    /// its current value.
+    pub settings_auth_min_length_hint: fn(usize) -> String,
+    /// Shown only in dev mode, beneath the hint above. Takes dev
+    /// mode's own fixed minimum (`8`).
+    pub settings_auth_min_length_dev_note: fn(usize) -> String,
+    /// A refused save's flash, re-rendering the tab. `(floor, ceiling)`.
+    pub settings_auth_min_length_flash_invalid: fn(usize, usize) -> String,
     pub settings_auth_recovery_codes_label: &'static str,
     pub settings_auth_recovery_codes_value: fn(usize) -> String,
     pub settings_auth_mfa_note_prefix: &'static str,
@@ -290,7 +300,9 @@ pub struct Strings {
     pub setup_admin_email_hint: &'static str,
     pub setup_admin_display_label: &'static str,
     pub setup_admin_password_label: &'static str,
-    pub setup_admin_password_hint: &'static str,
+    /// RFC 151 §3: takes the minimum (the floor at setup time, always
+    /// 12) as an argument -- no translation writes the number itself.
+    pub setup_admin_password_hint: fn(usize) -> String,
     pub setup_admin_confirm_label: &'static str,
     pub setup_admin_submit: &'static str,
     pub setup_done_title: &'static str,
@@ -448,7 +460,10 @@ pub struct Strings {
     pub reset_password_title: &'static str,
     pub reset_password_lede: &'static str,
     pub reset_password_new_label: &'static str,
-    pub reset_password_new_hint: &'static str,
+    /// RFC 151 §3: takes the minimum this request's `handlers::
+    /// password_min_len` returned -- 8 in dev mode, else the current
+    /// setting. No translation writes the number itself.
+    pub reset_password_new_hint: fn(usize) -> String,
     /// RFC 103 D10: label of the reset-code field on `/reset-password`. The
     /// page's script fills and hides it from the link's fragment; without
     /// JavaScript the user pastes the code from the email.
@@ -474,6 +489,13 @@ pub struct Strings {
     pub reset_done_second_factor_after: &'static str,
     pub password_mismatch_flash: &'static str,
     pub reset_password_failed_flash: &'static str,
+    /// RFC 151 §3: the policy refusal, naming the minimum that was
+    /// actually checked against (`CoreError::PasswordTooShort`).
+    pub password_too_short_flash: fn(usize) -> String,
+    /// The fixed 256-character ceiling's own refusal
+    /// (`CoreError::PasswordTooLong`) -- not a setting, so not
+    /// parameterized; only localized.
+    pub password_too_long_flash: fn(usize) -> String,
     /// Common navigational link from forgot-password / reset-password
     /// flows back to the login screen. Reused across multiple
     /// auth-flow views.
@@ -517,8 +539,10 @@ pub struct Strings {
     pub password_change_current_label: &'static str,
     pub password_change_new_label: &'static str,
     /// Hint shown under the new-password input. Reminds the user
-    /// that a long passphrase beats a short complicated string.
-    pub password_change_new_hint: &'static str,
+    /// that a long passphrase beats a short complicated string. RFC
+    /// 151 §3: takes the minimum this request's `handlers::
+    /// password_min_len` returned.
+    pub password_change_new_hint: fn(usize) -> String,
     pub password_change_confirm_label: &'static str,
     pub password_change_revoke_others_label: &'static str,
     /// Hint shown under the "sign out other sessions" checkbox.

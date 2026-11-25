@@ -556,7 +556,14 @@ fn derive_ranges_matches_the_accepted_stage1_table() {
         // RFC 100 `0.94.0` P3 (migration 0054): extends it again, to
         // 54. A single nullable `ADD COLUMN` on the same excluded,
         // unseeded `master_key_rotation` -- same mechanical move.
-        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 54],
+        // RFC 151 (migration 0055): extends it again, to 55. One
+        // `ADD COLUMN` on `server_settings`, `NOT NULL DEFAULT 12`
+        // with a `CHECK` over that column alone -- the same "neither
+        // opens a new boundary" shape 0050's own nine columns already
+        // established, on a table every existing row already has
+        // (the singleton), so the default satisfies every row and the
+        // check is self-referential, not a property of prior data.
+        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 55],
         "range ends changed -- full ranges: {ranges:#?}"
     );
 

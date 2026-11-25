@@ -26,12 +26,16 @@ pub async fn password_change_get(
     let user = users::get(&app.db, user_id)
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let min_len = crate::handlers::password_min_len(&app)
+        .await
+        .map_err(HttpError::html)?;
     let token = csrf::ensure_token(&jar);
     let html = sui_id_web::render_password_change(
         sui_id_web::PasswordChangeData {
             username: user.username,
             role: user.role,
             revoke_others_default: true,
+            password_min_length: min_len,
         },
         None,
         token.clone(),
@@ -48,11 +52,14 @@ pub async fn password_change_post(
         session_id: _session_id,
     }: SessionContext,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
-    crate::handlers::RequestLocale(_lang): crate::handlers::RequestLocale,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<PasswordChangeForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    let min_len = crate::handlers::password_min_len(&app)
+        .await
+        .map_err(HttpError::html)?;
 
     // Order of checks:
     //
@@ -109,7 +116,7 @@ pub async fn password_change_post(
     )
     .into_self();
 
-    let report = sui_id_core::me_security::change_password_self(
+    let change_result = sui_id_core::me_security::change_password_self(
         &app.db,
         &app.clock,
         Some(app.hibp_client.as_ref()),
@@ -119,10 +126,44 @@ pub async fn password_change_post(
         form.new_password.expose_secret(),
         Some(keep),
         revoke_others,
-        crate::handlers::password_min_len(&app),
+        min_len,
     )
-    .await
-    .map_err(HttpError::html)?;
+    .await;
+    let report = match change_result {
+        Ok(report) => report,
+        // RFC 151 §3: re-show the form naming the actual minimum,
+        // the same as the password-reset page does for the same
+        // refusal — not a generic error page, which told nothing
+        // about what to do differently.
+        Err(e) => {
+            let Some(flash_text) = crate::handlers::password_length_refusal(&e, lang) else {
+                return Err(HttpError::html(e));
+            };
+            let user = users::get(&app.db, user_id)
+                .await
+                .map_err(|e| HttpError::html(CoreError::from(e)))?;
+            let token = csrf::ensure_token(&jar);
+            let html = sui_id_web::render_password_change(
+                sui_id_web::PasswordChangeData {
+                    username: user.username,
+                    role: user.role,
+                    revoke_others_default: revoke_others,
+                    password_min_length: min_len,
+                },
+                Some(sui_id_web::Flash {
+                    kind: sui_id_web::FlashKind::Warn,
+                    text: flash_text,
+                }),
+                token.clone(),
+                lang,
+            );
+            return Ok(with_csrf_cookie(
+                (axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response(),
+                &app,
+                &token,
+            ));
+        }
+    };
 
     let _ = report; // counts are in the audit event already; nothing to surface
 

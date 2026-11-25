@@ -35,6 +35,15 @@ pub enum StoreError {
     #[error("data integrity violation: {0}")]
     Integrity(String),
 
+    /// RFC 151: S11's own pre-transaction range check
+    /// (`commands::PASSWORD_MIN_LEN_FLOOR`/`_CEILING`) — the command's
+    /// own half of the stricter-only floor, independent of migration
+    /// 0055's `CHECK`. Typed, not a bare [`StoreError::Integrity`]
+    /// string, so the HTTP layer can localize the refusal with the
+    /// actual `floor`/`ceiling` instead of echoing English text.
+    #[error("password minimum must be between {floor} and {ceiling}")]
+    PasswordMinLenOutOfRange { floor: i64, ceiling: i64 },
+
     #[error("serialization error")]
     Serde(#[from] serde_json::Error),
 

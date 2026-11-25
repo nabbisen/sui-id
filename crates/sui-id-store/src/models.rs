@@ -897,6 +897,13 @@ pub struct ServerSettingsRow {
     /// path is not available until the operator runs
     /// `sui-id admin rotate-metrics-token`.
     pub metrics_token_hash: Option<String>,
+    /// RFC 151: the minimum character count a *new* password must
+    /// meet (a reset, a self-service change, or an administrator's
+    /// recovery link) — never below [`crate::commands::PASSWORD_MIN_LEN_FLOOR`].
+    /// Existing passwords are not re-checked. Setup's first
+    /// administrator and dev mode's seeded users do not read this row
+    /// (migration 0055's own doc comment).
+    pub password_min_len: i64,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

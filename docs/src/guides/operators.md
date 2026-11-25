@@ -1708,10 +1708,13 @@ The flow is:
 4. Verify the supplied current password against the stored hash.
    On mismatch the change is refused with `InvalidCredentials` —
    the same error the regular login path raises.
-5. Apply the new-password policy: at least 12 characters, at most
-   256. The current password is verified *before* the policy check,
-   so the endpoint cannot be used to test whether a string would be an
-   acceptable password through differing error messages.
+5. Apply the new-password policy: at least the configured minimum
+   (12 by default, raisable — see
+   [Password minimum length](#password-minimum-length) — never below
+   12, never above 128), at most 256. The current password is verified
+   *before* the policy check, so the endpoint cannot be used to test
+   whether a string would be an acceptable password through differing
+   error messages.
 6. Hash and persist.
 7. If the "sign out other sessions" box is checked, revoke every
    other session for this user and revoke every active refresh
@@ -1736,6 +1739,23 @@ product stored one and documented it, but nothing ever read it, so it
 was removed (RFC 115). A password an administrator did not choose is
 now the only kind: accounts are created without one, and their holder
 sets it through a recovery link.
+
+### Password minimum length
+
+An administrator can raise the minimum password length from the
+*Authentication* tab under *Settings*, between 12 and 128 characters
+inclusive — it can never be set below 12, and an auditor sees the
+current value but no form to change it. The default is 12.
+
+This minimum applies to every **new** password — a reset, a
+self-service change, an admin-issued recovery link — in whichever
+language the page is shown in. It does not apply retroactively: a
+password that already satisfies a lower, earlier minimum keeps
+working, and is only held to the new minimum the next time it's
+changed. Dev mode (`--dev`) always uses 8 regardless of this setting.
+
+Raising it is recorded as a `settings.password_min_len.changed`
+audit event naming the old and new values.
 
 ### Audit trail
 

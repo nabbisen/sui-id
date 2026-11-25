@@ -313,6 +313,15 @@ fn safe_user_message(err: &CoreError) -> String {
         CoreError::NotFound => "The requested resource does not exist.".into(),
         CoreError::Conflict(msg) => msg.clone(),
         CoreError::BadRequest(msg) => msg.clone(),
+        // RFC 151: this generic, English-only path is a fallback for
+        // any caller that does not localize the error itself (the
+        // reset/self-service-change handlers do, via their own flash).
+        CoreError::PasswordTooShort { min_len } => {
+            format!("Password must be at least {min_len} characters.")
+        }
+        CoreError::PasswordTooLong { max_len } => {
+            format!("Password must be at most {max_len} characters.")
+        }
         CoreError::NotInitialized => "This server has not been initialized yet.".into(),
         CoreError::AlreadyInitialized => "This server is already initialized.".into(),
         CoreError::Protocol { description, .. } => description.clone(),

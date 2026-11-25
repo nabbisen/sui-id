@@ -223,6 +223,95 @@ async fn s04_injected_failure_before_append_rolls_back_the_change() {
     record_rollback_coverage("S04");
 }
 
+// ── S11 — change the minimum password length (RFC 151) ───────────────────
+
+#[tokio::test]
+async fn s11_change_password_min_len_appends_exactly_one_audit_row() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    let before = audit_rows(&db).await;
+
+    let audited = crate::commands::change_password_min_len(&db, admin, 16, Utc::now())
+        .await
+        .expect("change password min len");
+    assert_eq!(audited.into_inner(), (12, 16));
+
+    let settings = crate::repos::server_settings::get(&db)
+        .await
+        .expect("get settings");
+    assert_eq!(settings.password_min_len, 16);
+
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("settings.password_min_len.changed")
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("S11");
+}
+
+#[tokio::test]
+async fn s11_injected_failure_before_append_rolls_back_the_change() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    let before_min = crate::repos::server_settings::get(&db)
+        .await
+        .expect("get settings")
+        .password_min_len;
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = crate::commands::change_password_min_len(&db, admin, 16, Utc::now()).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let after_min = crate::repos::server_settings::get(&db)
+        .await
+        .expect("get settings")
+        .password_min_len;
+    assert_eq!(after_min, before_min, "the setting must not have changed");
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("S11");
+}
+
+/// RFC 151 Decision 1 / §4: the command's own half of the stricter-only
+/// floor, independent of migration 0055's `CHECK` — refuses *before*
+/// opening a transaction, so nothing is written and no audit row
+/// appears. **Mutation**: lowering `PASSWORD_MIN_LEN_FLOOR` to 8 would
+/// make `11` pass this check (still failing the `CHECK`, so the
+/// store-level test in `tests_rfc151.rs` is the one that would then
+/// catch it) — the two are deliberately independent per-layer guards,
+/// not one checked twice.
+#[tokio::test]
+async fn s11_refuses_11_and_129_and_accepts_12_and_128() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+
+    for bad in [11, 129] {
+        let before = audit_rows(&db).await;
+        let result = crate::commands::change_password_min_len(&db, admin, bad, Utc::now()).await;
+        let err = match result {
+            Ok(_) => panic!("{bad} must be refused"),
+            Err(e) => e,
+        };
+        assert!(
+            matches!(
+                err,
+                StoreError::PasswordMinLenOutOfRange {
+                    floor: 12,
+                    ceiling: 128
+                }
+            ),
+            "{bad}: {err:?}"
+        );
+        assert_eq!(audit_rows(&db).await, before, "{bad}: nothing written");
+    }
+
+    for good in [12, 128] {
+        crate::commands::change_password_min_len(&db, admin, good, Utc::now())
+            .await
+            .unwrap_or_else(|e| panic!("{good} must be accepted: {e}"));
+    }
+}
+
 // ── S05 — rotate metrics token ────────────────────────────────────────────
 //
 // No admin actor: the only real caller is the CLI, which opens the

@@ -44,6 +44,19 @@ pub static STRINGS_EN: Strings = Strings {
 
     // Settings: Auth extensions (RFC 051)
     settings_auth_min_length_value: |n| format!("{n} characters"),
+    settings_auth_min_length_hint: |floor| {
+        format!(
+            "Applies to every new password: a reset, a change, a recovery link. Existing \
+         passwords keep working, and meet the new minimum at their next change. It \
+         cannot be set below {floor}."
+        )
+    },
+    settings_auth_min_length_dev_note: |dev_floor| {
+        format!("Dev mode uses {dev_floor} characters, whatever this says.")
+    },
+    settings_auth_min_length_flash_invalid: |floor, ceiling| {
+        format!("The minimum must be between {floor} and {ceiling} characters.")
+    },
     settings_auth_recovery_codes_label: "Recovery codes (per enrollment)",
     settings_auth_recovery_codes_value: |n| format!("{n} codes"),
     settings_auth_mfa_note_prefix: "Enabled per user. See ",
@@ -185,7 +198,7 @@ pub static STRINGS_EN: Strings = Strings {
     setup_admin_email_hint: "Used for notifications and password resets. You can change it later.",
     setup_admin_display_label: "Display name (optional)",
     setup_admin_password_label: "Password",
-    setup_admin_password_hint: "12 characters or more",
+    setup_admin_password_hint: |n| format!("At least {n} characters."),
     setup_admin_confirm_label: "Password (confirm)",
     setup_admin_submit: "Create administrator",
     setup_done_title: "Setup complete",
@@ -311,7 +324,7 @@ pub static STRINGS_EN: Strings = Strings {
     reset_password_title: "Reset your password",
     reset_password_lede: "Enter your new password twice.",
     reset_password_new_label: "New password",
-    reset_password_new_hint: "12 characters or more",
+    reset_password_new_hint: |n| format!("At least {n} characters."),
     reset_password_token_label: "Reset code",
     reset_password_token_hint: "Paste the reset code from the email if this field is empty.",
     reset_password_confirm_label: "Confirm again",
@@ -327,6 +340,8 @@ pub static STRINGS_EN: Strings = Strings {
     reset_done_second_factor_after: ". This reset does not change that.",
     password_mismatch_flash: "The password and the confirmation do not match.",
     reset_password_failed_flash: "Password reset failed. Please try again.",
+    password_too_short_flash: |n| format!("The password must be at least {n} characters."),
+    password_too_long_flash: |n| format!("The password is too long: at most {n} characters."),
     back_to_login: "Back to log in",
 
     // Settings hub
@@ -365,7 +380,12 @@ pub static STRINGS_EN: Strings = Strings {
     password_change_lede: "Enter your current password, and the new password twice.",
     password_change_current_label: "Current password",
     password_change_new_label: "New password",
-    password_change_new_hint: "12 characters or more. A long random passphrase is safer than a short complicated one.",
+    password_change_new_hint: |n| {
+        format!(
+            "At least {n} characters. A long random passphrase is safer than a short \
+         complicated one."
+        )
+    },
     password_change_confirm_label: "New password (confirm)",
     password_change_revoke_others_label: "Sign out other browsers / apps after changing the password",
     password_change_revoke_others_hint: "Recommended. Existing sessions and refresh tokens are invalidated; you will need to sign in again with the new password.",

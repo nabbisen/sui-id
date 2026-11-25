@@ -26,6 +26,18 @@ pub enum CoreError {
     #[error("invalid request: {0}")]
     BadRequest(String),
 
+    /// RFC 151: a new password shorter than the configured minimum.
+    /// Typed (not [`CoreError::BadRequest`]) so an HTTP handler can
+    /// localize the message with the actual `min_len` instead of
+    /// echoing an English sentence verbatim in every language.
+    #[error("password must be at least {min_len} characters")]
+    PasswordTooShort { min_len: usize },
+
+    /// RFC 151: a new password longer than the fixed ceiling. Typed for
+    /// the same reason as [`CoreError::PasswordTooShort`].
+    #[error("password is unreasonably long (max {max_len})")]
+    PasswordTooLong { max_len: usize },
+
     #[error("system not yet initialized")]
     NotInitialized,
 
@@ -104,7 +116,9 @@ impl CoreError {
             Self::Forbidden => ApiErrorCode::Forbidden,
             Self::NotFound => ApiErrorCode::NotFound,
             Self::Conflict(_) => ApiErrorCode::Conflict,
-            Self::BadRequest(_) => ApiErrorCode::BadRequest,
+            Self::BadRequest(_) | Self::PasswordTooShort { .. } | Self::PasswordTooLong { .. } => {
+                ApiErrorCode::BadRequest
+            }
             Self::NotInitialized | Self::AlreadyInitialized => ApiErrorCode::InvalidState,
             Self::Protocol { .. } => ApiErrorCode::Protocol,
             Self::Store(sui_id_store::StoreError::NotFound) => ApiErrorCode::NotFound,

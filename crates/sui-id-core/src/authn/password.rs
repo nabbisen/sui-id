@@ -118,16 +118,18 @@ fn verify_password_sync(password: &str, stored_phc: &str) -> CoreResult<()> {
 /// `min_len` comes from `SecurityLevel::password_min_len()` — 12 for
 /// production, 8 in `--dev` mode. Core functions receive the value
 /// from their callers so this function stays unaware of the run mode.
+/// The longest password accepted. Fixed, not a setting; every sentence
+/// that states it takes it from here (RFC 151, P5 review).
+pub const PASSWORD_MAX_LEN: usize = 256;
+
 pub fn check_password_policy(password: &str, min_len: usize) -> CoreResult<()> {
     if password.chars().count() < min_len {
-        return Err(CoreError::BadRequest(format!(
-            "password must be at least {min_len} characters long"
-        )));
+        return Err(CoreError::PasswordTooShort { min_len });
     }
-    if password.chars().count() > 256 {
-        return Err(CoreError::BadRequest(
-            "password is unreasonably long (max 256)".into(),
-        ));
+    if password.chars().count() > PASSWORD_MAX_LEN {
+        return Err(CoreError::PasswordTooLong {
+            max_len: PASSWORD_MAX_LEN,
+        });
     }
     Ok(())
 }

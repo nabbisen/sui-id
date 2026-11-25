@@ -150,7 +150,10 @@ pub async fn reset_password_get(
         let html = sui_id_web::render_reset_password_invalid(lang);
         return Ok(with_csrf_cookie(Html(html).into_response(), &app, &token));
     }
-    let html = sui_id_web::render_reset_password(String::new(), token.clone(), None, lang);
+    let min_len = crate::handlers::password_min_len(&app)
+        .await
+        .map_err(HttpError::html)?;
+    let html = sui_id_web::render_reset_password(String::new(), token.clone(), None, lang, min_len);
     Ok(with_csrf_cookie(Html(html).into_response(), &app, &token))
 }
 
@@ -177,6 +180,9 @@ pub async fn reset_password_post(
     // No SMTP requirement here either: see `reset_password_get`.
     crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let t = lang.strings();
+    let min_len = crate::handlers::password_min_len(&app)
+        .await
+        .map_err(HttpError::html)?;
 
     if form.password.expose_secret() != form.confirm_password.expose_secret() {
         let token = csrf::ensure_token(&jar);
@@ -189,6 +195,7 @@ pub async fn reset_password_post(
             token.clone(),
             Some(flash),
             lang,
+            min_len,
         );
         return Ok(with_csrf_cookie(
             (axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response(),
@@ -213,7 +220,7 @@ pub async fn reset_password_post(
         form.token.expose_secret(),
         form.password.expose_secret(),
         Some(&ip_str),
-        crate::handlers::password_min_len(&app),
+        min_len,
     )
     .await
     {
@@ -241,7 +248,11 @@ pub async fn reset_password_post(
         // Password-policy and breach refusals happen before the token is
         // looked up, so the link is still good: re-show the form with the
         // reason and let the user choose another password.
-        Err(other @ CoreError::BadRequest(_)) => {
+        Err(
+            other @ (CoreError::BadRequest(_)
+            | CoreError::PasswordTooShort { .. }
+            | CoreError::PasswordTooLong { .. }),
+        ) => {
             let token = csrf::ensure_token(&jar);
             let flash = Flash {
                 kind: FlashKind::Warn,
@@ -252,6 +263,7 @@ pub async fn reset_password_post(
                 token.clone(),
                 Some(flash),
                 lang,
+                min_len,
             );
             Ok(with_csrf_cookie(
                 (axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response(),
@@ -287,6 +299,12 @@ pub async fn reset_password_post(
 }
 
 fn friendly(e: &CoreError, lang: sui_id_i18n::Locale) -> String {
+    // RFC 151 §3: localized, naming the bound that was checked against.
+    // (`BadRequest`'s echo below is still English, for the
+    // breach-password refusal; out of RFC 151's scope.)
+    if let Some(text) = crate::handlers::password_length_refusal(e, lang) {
+        return text;
+    }
     let t = lang.strings();
     match e {
         CoreError::BadRequest(msg) => msg.clone(),
