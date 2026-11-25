@@ -30,12 +30,16 @@
 >   The review found that a second rotation, with the last backup still
 >   kept, failed part-way, after which every start refused. Now refused
 >   before anything is created.
-> - **P3 dispatched 2026-11-24**: [dispatch](0.94.0-p3-custody-and-the-operators-word-2026-11-24.md).
->   Custody (`backup remove`, `backup renew`, the overdue finding), and the
->   operator documentation, with the "not yet crash-safe" warning replaced
->   by the recovery procedure.
+> - **P3 landed 2026-11-25** (`2660276`, CI 28/28): [dispatch](0.94.0-p3-custody-and-the-operators-word-2026-11-24.md).
+>   Custody and the operator's guide. Stage 7's warning is replaced by the
+>   recovery procedure.
+> - **The release-binary drill ran 2026-11-25**: [record](m2c-release-binary-drill-2026-11-25.md).
+>   Three abort points; the shipped binary recovered each as the table
+>   requires.
+> - **P4, M2c's closure assessment, written 2026-11-25**: [assessment](m2c-closure-assessment-2026-11-25.md).
 >
-> ## Whose turn it is: **the implementation role's**, on P3.
+> ## Whose turn it is: **the owner's**, as M2c's independent closure reviewer (P4).
+> P5 (RFC 151) and P6 (RFC 097 stage 1) can be dispatched meanwhile.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).
