@@ -52,6 +52,96 @@ fn simulated_lock_exclusive_models_the_same_contention() {
         .expect("released: a later attempt succeeds");
 }
 
+// ── RFC 100 `0.94.0` P7 §1: shared mode -- a server (or any other CLI
+// command that opens the database) holds it shared for its whole life;
+// a rotation's own exclusive attempt refuses against any shared holder,
+// any number of shared holders coexist, and a shared attempt refuses
+// only against an exclusive holder. ──────────────────────────────────
+
+#[test]
+fn real_two_shared_holders_coexist() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let lock_path = dir.path().join("t.key.rotation-lock");
+
+    let first = Real
+        .lock_shared("first", &lock_path, false)
+        .expect("the first shared holder takes it");
+    let second = Real
+        .lock_shared("second", &lock_path, false)
+        .expect("a second shared holder coexists with the first");
+    drop(first);
+    drop(second);
+}
+
+#[test]
+fn real_lock_exclusive_refuses_while_a_shared_holder_exists() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let lock_path = dir.path().join("t.key.rotation-lock");
+
+    let shared = Real
+        .lock_shared("open_checked", &lock_path, false)
+        .expect("a server (or any open_checked caller) holds it shared");
+    let err = Real
+        .lock_exclusive("rotate", &lock_path, false)
+        .err()
+        .expect("a rotation must refuse while sui-id has the database open");
+    assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+
+    drop(shared);
+    Real.lock_exclusive("rotate-again", &lock_path, false)
+        .expect("released: the rotation now proceeds");
+}
+
+#[test]
+fn real_lock_shared_refuses_only_while_an_exclusive_holder_exists() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let lock_path = dir.path().join("t.key.rotation-lock");
+
+    let exclusive = Real
+        .lock_exclusive("rotate", &lock_path, false)
+        .expect("a rotation takes it exclusive");
+    let err = Real
+        .lock_shared("open_checked", &lock_path, false)
+        .err()
+        .expect("starting sui-id while a rotation is running must refuse");
+    assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+
+    drop(exclusive);
+    Real.lock_shared("open_checked-again", &lock_path, false)
+        .expect("released: opening the database now proceeds");
+}
+
+#[test]
+fn simulated_shared_and_exclusive_model_the_same_rules() {
+    use simulated::Simulated;
+    let path = std::path::PathBuf::from("/virtual/t.key.rotation-lock");
+    let sim = Simulated::new(&[]);
+
+    let first_shared = sim
+        .lock_shared("first", &path, false)
+        .expect("a shared holder takes it");
+    let second_shared = sim
+        .lock_shared("second", &path, false)
+        .expect("a second shared holder coexists");
+    let exclusive_err = sim
+        .lock_exclusive("rotate", &path, false)
+        .err()
+        .expect("exclusive must refuse against any shared holder");
+    assert_eq!(exclusive_err.kind(), std::io::ErrorKind::WouldBlock);
+
+    drop(first_shared);
+    drop(second_shared);
+    let exclusive = sim
+        .lock_exclusive("rotate-again", &path, false)
+        .expect("released: exclusive now succeeds");
+    let shared_err = sim
+        .lock_shared("open_checked", &path, false)
+        .err()
+        .expect("shared must refuse against the exclusive holder");
+    assert_eq!(shared_err.kind(), std::io::ErrorKind::WouldBlock);
+    drop(exclusive);
+}
+
 // ── RFC 100 stage 3: `create_dir`/`remove_dir`, the workspace's own lock ────
 
 #[test]

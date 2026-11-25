@@ -88,13 +88,33 @@ pub trait KeyFileOps {
         point: &str,
         path: &Path,
         blocking: bool,
-    ) -> io::Result<Box<dyn LockGuard + '_>>;
+    ) -> io::Result<Box<dyn LockGuard>>;
+    /// RFC 100 `0.94.0` P7 §1: the same lock, held non-exclusively --
+    /// every process with the database open (the server, for its whole
+    /// life; every CLI command that goes through
+    /// [`crate::database::open_checked`]) holds this for as long as it
+    /// has the database open, so a rotation's own [`KeyFileOps::lock_exclusive`]
+    /// (non-blocking) refuses while any of them are running, and two
+    /// shared holders coexist freely. Same contract otherwise:
+    /// `WouldBlock` only against a held exclusive lock, released on the
+    /// guard's `Drop`.
+    fn lock_shared(
+        &self,
+        point: &str,
+        path: &Path,
+        blocking: bool,
+    ) -> io::Result<Box<dyn LockGuard>>;
 }
 
-/// What [`KeyFileOps::lock_exclusive`] returns: nothing to call, only to
-/// hold and eventually drop. Every implementation's own guard releases
-/// the lock on [`Drop`].
-pub trait LockGuard {}
+/// What [`KeyFileOps::lock_exclusive`]/[`KeyFileOps::lock_shared`] return:
+/// nothing to call, only to hold and eventually drop. Every
+/// implementation's own guard releases the lock on [`Drop`]. No lifetime
+/// tied to the adapter that created it -- a caller that holds the
+/// database open for its own entire lifetime (RFC 100 `0.94.0` P7 §1)
+/// stores this guard alongside it, long after the adapter value itself
+/// may have gone out of scope; `Send + Sync` so it can live inside
+/// application state shared across async handlers.
+pub trait LockGuard: Send + Sync {}
 
 /// Production. The only implementation a release build links.
 pub struct Real;
@@ -187,16 +207,9 @@ impl KeyFileOps for Real {
         _point: &str,
         path: &Path,
         blocking: bool,
-    ) -> io::Result<Box<dyn LockGuard + '_>> {
+    ) -> io::Result<Box<dyn LockGuard>> {
         use rustix::fs::FlockOperation;
-        use std::fs::OpenOptions;
-        use std::os::unix::fs::OpenOptionsExt;
-        let file = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .mode(0o600)
-            .open(path)?;
+        let file = open_lock_file(path)?;
         let op = if blocking {
             FlockOperation::LockExclusive
         } else {
@@ -205,6 +218,36 @@ impl KeyFileOps for Real {
         rustix::fs::flock(&file, op).map_err(io::Error::from)?;
         Ok(Box::new(RealLockGuard(file)))
     }
+
+    fn lock_shared(
+        &self,
+        _point: &str,
+        path: &Path,
+        blocking: bool,
+    ) -> io::Result<Box<dyn LockGuard>> {
+        use rustix::fs::FlockOperation;
+        let file = open_lock_file(path)?;
+        let op = if blocking {
+            FlockOperation::LockShared
+        } else {
+            FlockOperation::NonBlockingLockShared
+        };
+        rustix::fs::flock(&file, op).map_err(io::Error::from)?;
+        Ok(Box::new(RealLockGuard(file)))
+    }
+}
+
+/// `path` (`RotationPaths::lock`), created if absent, owner-only. The one
+/// place both [`Real::lock_exclusive`] and [`Real::lock_shared`] open it.
+fn open_lock_file(path: &Path) -> io::Result<std::fs::File> {
+    use std::fs::OpenOptions;
+    use std::os::unix::fs::OpenOptionsExt;
+    OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .mode(0o600)
+        .open(path)
 }
 
 /// Held only so its `Drop` closes the file descriptor, which is what
@@ -389,17 +432,31 @@ pub mod failpoint {
             point: &str,
             path: &Path,
             blocking: bool,
-        ) -> io::Result<Box<dyn LockGuard + '_>> {
+        ) -> io::Result<Box<dyn LockGuard>> {
             match self.fire(point) {
                 Some(Action::Abort) => std::process::abort(),
                 Some(_) => Err(denied(point)),
                 None => Real.lock_exclusive(point, path, blocking),
             }
         }
+
+        fn lock_shared(
+            &self,
+            point: &str,
+            path: &Path,
+            blocking: bool,
+        ) -> io::Result<Box<dyn LockGuard>> {
+            match self.fire(point) {
+                Some(Action::Abort) => std::process::abort(),
+                Some(_) => Err(denied(point)),
+                None => Real.lock_shared(point, path, blocking),
+            }
+        }
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 #[path = "key_adapter/simulated.rs"]
 pub mod simulated;
 

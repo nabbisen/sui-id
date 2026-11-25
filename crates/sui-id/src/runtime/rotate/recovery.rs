@@ -89,20 +89,35 @@ fn fail_closed(paths: &RotationPaths, detail: &str) -> anyhow::Error {
 /// preparation workspace. Every file operation goes through `adapter`.
 /// Any failed check fails closed: nothing is changed, and the error
 /// names what was found and which check failed.
+///
+/// `caller_holds_exclusive_lock` (RFC 100 `0.94.0` P7 §1): `true` only
+/// for rotation's own pre-flight pass, which by then already holds
+/// [`RotationPaths::lock`] exclusively -- `flock` locks belong to the
+/// open file, so a second `open` of the same path in the same process
+/// would conflict with the first rather than recognize it. Every other
+/// caller (recovery run on its own, or through
+/// [`crate::database::open_checked`]) passes `false`, and this takes
+/// the lock itself, shared, non-blocking, for the span of this
+/// function -- a rotation running in another process holds it
+/// exclusively, and recovery must not clean (or otherwise touch) a
+/// workspace that process still owns.
 pub fn recover(
     adapter: &dyn KeyFileOps,
     key_file: &std::path::Path,
     db_path: &std::path::Path,
+    caller_holds_exclusive_lock: bool,
 ) -> anyhow::Result<Recovered> {
     let paths = RotationPaths::for_key_file(key_file);
 
-    // RFC 100 `0.94.0` P2 §1: the liveness lock, taken non-blocking
-    // before anything else is even looked at -- a rotation running in
-    // another process holds it, and recovery must not clean (or
-    // otherwise touch) a workspace that process still owns. Held only
-    // for the span of this function; released on return by the guard's
-    // own `Drop`.
-    let _lock = crate::rotate::preconditions::take_rotation_lock(adapter, &paths, "recovery.lock")?;
+    let _lock = if caller_holds_exclusive_lock {
+        None
+    } else {
+        Some(crate::rotate::preconditions::take_database_lock(
+            adapter,
+            &paths,
+            "recovery.lock",
+        )?)
+    };
 
     // Row 1: no workspace at all.
     let workspace_meta = match adapter.metadata("recovery.workspace", &paths.workspace) {
@@ -838,8 +853,9 @@ pub fn recover_and_report(
     adapter: &dyn KeyFileOps,
     key_file: &std::path::Path,
     db_path: &std::path::Path,
+    caller_holds_exclusive_lock: bool,
 ) -> anyhow::Result<Recovered> {
-    let recovered = recover(adapter, key_file, db_path)?;
+    let recovered = recover(adapter, key_file, db_path, caller_holds_exclusive_lock)?;
     for line in report(&recovered) {
         tracing::warn!("{line}");
         eprintln!("{line}");

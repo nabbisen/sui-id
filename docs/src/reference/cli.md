@@ -218,12 +218,12 @@ Environment:
 Example:
 
 ```sh
-sui-id admin master-key rotate --generate-new-key --yes --remove-backup-after-verified --verification-reference "checked 2026-11-24"
+sui-id admin master-key rotate --generate-new-key --yes --discard-backup-once-verified --verification-reference "checked 2026-11-24"
 ```
 
 ### `sui-id admin master-key backup remove` {#admin-master-key-backup-remove}
 
-Remove the pre-rotation backup
+Remove the kept old key
 
 ```text
 sui-id admin master-key backup remove [OPTIONS]

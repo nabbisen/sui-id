@@ -134,13 +134,16 @@ non-secret identifier, never the key itself:
 ### Rotating the master key
 
 `sui-id admin master-key rotate` re-seals every encrypted column under a new
-32-byte XChaCha20-Poly1305 master key. Since RFC 100 (`0.94.0`), the
-whole protocol — staging the new key, re-sealing, activating it, and
-custody of the old one — is crash-safe end to end. A failure or power
-loss at any point either changes nothing, or is finished or undone at
-the next start. If what it left does not check out, sui-id refuses to
-start and changes nothing, rather than guess (see "Recovering an
-interrupted rotation" below). Use it when:
+32-byte XChaCha20-Poly1305 master key. Since `0.94.0`, the whole protocol
+— staging the new key, re-sealing, activating it, and custody of the old
+one — is crash-safe end to end. A failure or power loss at any point
+either changes nothing, or is finished or undone at the next start. If
+what it left does not check out, sui-id refuses to start and changes
+nothing, rather than guess (see "Recovering an interrupted rotation"
+below). It also refuses outright, before touching anything, while
+sui-id is already running against the same database — the server, or
+any other sui-id command — not only while another rotation is: stop
+the server first. Use it when:
 
 - the existing key may have been exposed (laptop stolen, file leaked,
   contractor offboarded, etc);
@@ -150,7 +153,18 @@ interrupted rotation" below). Use it when:
 
 **The CLI runs offline.** Stop the server before invoking it. Hot
 rotation isn't supported — see the v0.26.0 CHANGELOG entry for the
-rationale.
+rationale. Since `0.94.0`, forgetting is caught: sui-id refuses to
+rotate while anything else has the database open, before it prints
+anything else, and names the lock file (`<key_file>.rotation-lock`) in
+the refusal. That file is permanent and empty, and exists beside every
+key file from the first time anything touches it. Never remove it, even
+while nothing is running: doing so while sui-id *is* running would
+silently drop this guard for whatever is holding it.
+
+**The one thing this guard cannot see is a sui-id older than `0.94.0`.**
+Older versions take no lock. So upgrade every sui-id process that uses
+this database (the server, and any scripts or timers that run `sui-id`
+commands) before you rotate with `0.94.0` or later.
 
 **Rotation refuses if the current key came from `SUI_ID_MASTER_KEY`**
 (`0.91.0`). Rotation always writes the new key to the key *file* — if the
@@ -170,7 +184,7 @@ of the kept backup" below. Choose exactly one:
   — keep the backup, under your own tracking reference, until that
   date (which must be in the future). Use this when something still
   needs it, e.g. a backup of the database taken before this rotation.
-- `--remove-backup-after-verified --verification-reference <TEXT>`
+- `--discard-backup-once-verified --verification-reference <TEXT>`
   — state, right there, how you'll verify (or already verified) that
   the backup is safe to discard. The backup itself is left in place
   for you to remove afterwards with `backup remove`, once you've
@@ -184,12 +198,13 @@ stray staged key from an interrupted one) is still there, a new
 rotation refuses outright, before touching anything:
 
 ```text
-refusing to rotate: the last rotation's pre-rotation backup is still at
-<key_file>.pre-rotation. It may be the only key that opens a database
-backup taken before that rotation, so a new rotation never replaces it.
-Deal with it under the custody choice you made then: move it to its
-custody location, or remove it once you have verified that nothing
-needs it. Then rotate again.
+refusing to rotate: the last rotation's old key is still kept at
+<key_file>.pre-rotation. It may be the only key that opens a copy of the
+database taken before that rotation, so a new rotation never replaces
+it. Settle it first: move it to its own custody location, remove it
+with `sui-id admin master-key backup remove` once you have verified
+nothing needs it, or, if it is kept until a date, renew that date with
+`sui-id admin master-key backup renew`. Then rotate again.
 ```
 
 **`sui-id admin master-key rotate --check`** reports whether a rotation
@@ -217,7 +232,7 @@ sui-id backup create --to backup-pre-rotation.tar --encrypt
 
 # 3. Run the rotation. By default the CLI mints a fresh key. Here the
 #    old key is verified against that backup and then discarded.
-sui-id admin master-key rotate --remove-backup-after-verified \
+sui-id admin master-key rotate --discard-backup-once-verified \
     --verification-reference "checked against backup-pre-rotation.tar, 2026-11-25"
 
 # 4. Confirm at the prompt: type `yes`. Skip the prompt with --yes
@@ -243,14 +258,15 @@ HSM, a key-management server, or a reproducible derivation):
 ```sh
 # Prepare a base64-encoded 32-byte key in a file:
 sui-id admin master-key rotate --new-key /secure/new-master.key \
-    --remove-backup-after-verified --verification-reference "..."
+    --discard-backup-once-verified --verification-reference "..."
 ```
 
 After rotation:
 
 - The old key is kept at `<key_file>.pre-rotation`, per the custody
-  choice you made. It is **not** auto-deleted — see "Custody of the
-  kept backup" below.
+  choice you made. It is **not** auto-deleted, and the command's own
+  closing line says so and names the next step — see "Custody of the
+  kept backup" below. Until you take it, the next rotation refuses.
 - Three audit rows are appended, for three different facts:
   `admin.master_key.resealed`, inside the transaction that re-sealed
   the six tables, carrying a per-table row count; `admin.master_key.
@@ -284,16 +300,25 @@ until you settle it, one of two ways:
    created it, that it's a regular file with the expected owner and
    mode), unlinks it, and records when, and the OS account that ran the
    command. sui-id does not authenticate that account: it is whatever user
-   the process ran as, recorded as `os_user`, not a verified identity. The
-   confirmation flag is required, and states, explicitly, that you've
-   already verified the backup is retired or re-encrypted and safe to
-   unlink. `--verification-reference` is required only if the backup
-   was kept under `--retain-backup-until` (a `--remove-backup-after-
-   verified` backup already carries the reference you gave at rotation
-   time). **No secure-erasure claim**: this is an ordinary file
-   removal, not a wipe — if the backup needs secure erasure, do that
-   yourself before or instead of running this. Run against a backup
-   that's already gone, it reports that and changes nothing.
+   the process ran as, recorded as `os_user`, not a verified identity.
+
+   **`--confirm-retired-or-reencrypted` is about copies of the
+   *database*, not the key file you're removing.** It states,
+   explicitly, that every copy of the database made *before* the
+   rotation that produced this old key — a filesystem snapshot, a
+   copied `.sqlite` file — has either been retired or re-encrypted
+   under the current (new) key. A `sui-id backup create` tarball is
+   not one of these: it carries its own copy of the master key inside
+   it ("Encrypted backups for off-host transport" below), so it stays
+   readable with its own passphrase regardless of this command, and
+   needs no action here. The confirmation flag is required.
+   `--verification-reference` is required only if the backup was kept
+   under `--retain-backup-until` (a `--discard-backup-once-verified`
+   backup already carries the reference you gave at rotation time).
+   **No secure-erasure claim**: this is an ordinary file removal, not a
+   wipe — if the key file itself needs secure erasure, do that yourself
+   before or instead of running this. Run against a backup that's
+   already gone, it reports that and changes nothing.
 2. **Move the file to wherever you actually keep it in custody**,
    outside the key file's own directory. No command is needed for this
    — sui-id only cares that the fixed path is empty before the next
@@ -304,7 +329,7 @@ until you settle it, one of two ways:
 --custody-reference <TEXT>`** moves a `--retain-backup-until` backup's
 review date forward (the new date must be later than the current one)
 and records the new custody reference. It only applies to that
-disposition — a `--remove-backup-after-verified` backup has no review
+disposition — a `--discard-backup-once-verified` backup has no review
 date to move; renew refuses it.
 
 ### The kept-backup finding

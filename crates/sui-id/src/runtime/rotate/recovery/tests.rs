@@ -189,7 +189,7 @@ async fn row1_no_workspace_recovers_to_nothing_and_simulated_records_no_operatio
         f.key_path.clone(),
         format!("{}\n", f.old_key.to_base64()).into_bytes(),
     )]);
-    let result = recover(&sim, &f.key_path, &f.db_path).expect("recover");
+    let result = recover(&sim, &f.key_path, &f.db_path, false).expect("recover");
     assert_eq!(result, Recovered::Nothing);
     // RFC 100 `0.94.0` P2 §1: the one operation every `recover` call
     // now performs first, even on the trivial row-1 path -- taking (and,
@@ -223,7 +223,7 @@ async fn recovery_refuses_while_the_lock_is_held_by_another_process_and_changes_
         .expect("take the lock as if another process held it");
 
     let before = f.remaining_artifacts();
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(
         format!("{err:#}").contains("running in another process"),
         "{err:#}"
@@ -236,7 +236,7 @@ async fn recovery_refuses_while_the_lock_is_held_by_another_process_and_changes_
 
     drop(held);
     // Released: an ordinary recovery now proceeds (row 1, nothing to do).
-    let result = recover(&Real, &f.key_path, &f.db_path).expect("recover after release");
+    let result = recover(&Real, &f.key_path, &f.db_path, false).expect("recover after release");
     assert_eq!(result, Recovered::Nothing);
 }
 
@@ -259,7 +259,7 @@ async fn row2_cleans_every_subset_of_partial_intent_temporaries() {
             std::fs::write(f.paths.workspace.join(name), b"partial, unpublished").expect("write");
         }
 
-        let result = recover(&Real, &f.key_path, &f.db_path).expect("recover");
+        let result = recover(&Real, &f.key_path, &f.db_path, false).expect("recover");
         let Recovered::Cleaned { removed, .. } = result else {
             panic!("expected Cleaned for {files:?}")
         };
@@ -288,7 +288,7 @@ async fn row2_an_unrecognized_file_fails_closed_and_changes_nothing() {
         .expect("mkdir");
     std::fs::write(f.paths.workspace.join("notes.txt"), b"hi").expect("write");
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("unexpected entry"), "{err:#}");
     assert!(f.paths.workspace.join("notes.txt").exists());
 }
@@ -303,7 +303,7 @@ async fn row2_a_subdirectory_fails_closed() {
     std::fs::write(f.paths.workspace.join("intent.write"), b"x").expect("write");
     std::fs::create_dir(f.paths.workspace.join("sub")).expect("subdir");
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     // Refused by the plain-file check, which runs before any name check.
     assert!(
         format!("{err:#}").contains("symlink or a directory"),
@@ -322,7 +322,7 @@ async fn row2_a_symlink_named_intent_write_fails_closed() {
     std::os::unix::fs::symlink(&f.key_path, f.paths.workspace.join("intent.write"))
         .expect("symlink");
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("symlink"), "{err:#}");
     assert!(f.paths.workspace.join("intent.write").exists());
 }
@@ -336,7 +336,7 @@ async fn workspace_as_a_symlink_fails_closed() {
     std::fs::create_dir(&elsewhere).expect("elsewhere");
     std::os::unix::fs::symlink(&elsewhere, &f.paths.workspace).expect("symlink");
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("symlink"), "{err:#}");
 }
 
@@ -348,7 +348,7 @@ async fn workspace_with_the_wrong_mode_fails_closed() {
         .create(&f.paths.workspace)
         .expect("mkdir");
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("0700"), "{err:#}");
 }
 
@@ -423,8 +423,16 @@ impl KeyFileOps for WrongOwner<'_> {
         p: &str,
         path: &std::path::Path,
         blocking: bool,
-    ) -> std::io::Result<Box<dyn crate::key_adapter::LockGuard + '_>> {
+    ) -> std::io::Result<Box<dyn crate::key_adapter::LockGuard>> {
         self.inner.lock_exclusive(p, path, blocking)
+    }
+    fn lock_shared(
+        &self,
+        p: &str,
+        path: &std::path::Path,
+        blocking: bool,
+    ) -> std::io::Result<Box<dyn crate::key_adapter::LockGuard>> {
+        self.inner.lock_shared(p, path, blocking)
     }
 }
 
@@ -442,7 +450,7 @@ async fn workspace_owned_by_another_uid_fails_closed() {
         uid: real_uid.wrapping_add(1),
     };
 
-    let err = recover(&faked, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&faked, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("not the uid"), "{err:#}");
     assert!(f.paths.workspace.exists());
 }
@@ -462,7 +470,7 @@ async fn rows_3_to_7_each_clean_to_row_1_and_the_database_still_opens_with_the_a
         let f = Fixture::bare().await;
         f.prepare_to(state);
 
-        let result = recover(&Real, &f.key_path, &f.db_path).expect("recover");
+        let result = recover(&Real, &f.key_path, &f.db_path, false).expect("recover");
         assert!(
             matches!(result, Recovered::Cleaned { .. }),
             "state {state:?}: {result:?}"
@@ -486,7 +494,7 @@ async fn a_backup_sealed_under_the_wrong_key_fails_closed_and_changes_nothing() 
     let before = f.remaining_artifacts();
     write_key_at(&f.paths.backup, &MasterKey::generate(), 0o600);
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("fingerprint"), "{err:#}");
     // Every artifact from before the tamper is still exactly there
     // (the tamper itself changed `backup`'s content, not its presence).
@@ -501,7 +509,7 @@ async fn a_next_key_sealed_under_the_wrong_key_fails_closed() {
     f.prepare_to(JournalState::NextPublished);
     write_key_at(&f.paths.next, &MasterKey::generate(), 0o600);
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("fingerprint"), "{err:#}");
     assert!(f.paths.workspace.exists());
 }
@@ -513,7 +521,7 @@ async fn a_next_key_that_is_a_symlink_fails_closed() {
     std::fs::remove_file(&f.paths.next).expect("remove next");
     std::os::unix::fs::symlink(&f.key_path, &f.paths.next).expect("symlink");
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("symlink"), "{err:#}");
     assert!(f.paths.workspace.exists());
 }
@@ -538,7 +546,7 @@ async fn a_journal_binding_a_different_workspace_fails_closed() {
     )
     .expect("write_intent");
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("does not match"), "{err:#}");
     assert!(f.paths.workspace.exists());
 }
@@ -557,7 +565,7 @@ async fn a_tampered_journal_fails_closed() {
     bytes[pos] ^= 1;
     std::fs::write(&published, &bytes).expect("write tampered");
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(f.paths.workspace.exists());
     let _ = err;
 }
@@ -571,7 +579,7 @@ async fn a_journal_sealed_under_keys_that_do_not_include_the_active_one_fails_cl
     journal::write_intent(&Real, &f.paths.workspace, body, &unrelated_old, &f.new_key)
         .expect("write_intent");
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("neither role"), "{err:#}");
 }
 
@@ -598,7 +606,7 @@ async fn role_new_with_the_active_key_fails_closed() {
     let body = journal::sample_body(&key_path, &paths.workspace, &old_key, &new_key);
     journal::write_intent(&Real, &paths.workspace, body, &old_key, &new_key).expect("write_intent");
 
-    let err = recover(&Real, &key_path, &db_path).expect_err("must fail closed");
+    let err = recover(&Real, &key_path, &db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("new"), "{err:#}");
     assert!(paths.workspace.exists());
 }
@@ -719,7 +727,7 @@ async fn check_every_point_recovers(
             }
             let db_path = sentinel_db(base, old_key).await;
 
-            match recover(&Real, &key_path, &db_path) {
+            match recover(&Real, &key_path, &db_path, false) {
                 Ok(_) => {
                     assert!(
                         !workspace.exists(),
@@ -781,7 +789,7 @@ async fn recovery_survives_a_crash_from(state: JournalState) {
     // records crash points -- seeding a disk is not what this test
     // means to crash-inject).
     let before = sim.points().len();
-    let result = recover(&sim, &f.key_path, &f.db_path);
+    let result = recover(&sim, &f.key_path, &f.db_path, false);
     assert!(
         matches!(result, Ok(Recovered::Cleaned { .. })),
         "{state:?}: {result:?}"
@@ -807,7 +815,7 @@ async fn recovery_survives_a_crash_from(state: JournalState) {
                 continue;
             }
             let db_path = sentinel_db(base, &f.old_key).await;
-            if let Err(e) = recover(&Real, &key_path, &db_path) {
+            if let Err(e) = recover(&Real, &key_path, &db_path, false) {
                 panic!(
                     "{state:?}, {}: a re-run after a crash mid-cleanup must finish the job: {e:#}",
                     point.label
@@ -872,7 +880,7 @@ async fn row2_with_a_stray_next_or_backup_fails_closed_and_keeps_it() {
         write_key_at(stray, &f.new_key, 0o600);
         let before = std::fs::read(stray).expect("read stray");
 
-        let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+        let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
         assert!(
             format!("{err:#}").contains("no rotation journal was ever published"),
             "{which}: {err:#}"
@@ -896,7 +904,7 @@ async fn a_directory_named_like_a_bound_temporary_fails_closed_before_any_remova
     std::fs::create_dir(&f.paths.next_temp).expect("a directory named next.write");
     let before = f.remaining_artifacts();
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(
         format!("{err:#}").contains("symlink or a directory"),
         "{err:#}"
@@ -929,7 +937,7 @@ async fn a_refusal_detail_starts_a_sentence() {
     write_key_at(&f.paths.backup, &MasterKey::generate(), 0o600);
     let err = format!(
         "{:#}",
-        recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed")
+        recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed")
     );
     assert!(err.contains("check out. The pre-rotation backup"), "{err}");
     assert!(err.contains("it should be"), "{err}");
@@ -999,7 +1007,7 @@ async fn row8_activates_the_next_key_and_needs_completion() {
     // The active key file still holds `old_key` (`bare()`'s own setup):
     // K08 ran, but activation has not -- exactly row 8.
 
-    let result = recover(&Real, &f.key_path, &f.db_path).expect("recover");
+    let result = recover(&Real, &f.key_path, &f.db_path, false).expect("recover");
     match result {
         Recovered::NeedsCompletion {
             rotation_id,
@@ -1035,7 +1043,7 @@ async fn row9_needs_completion_without_activating_again() {
     seed_db_committed(&f, SAMPLE_ROTATION_ID).await;
     write_key_at(&f.key_path, &f.new_key, 0o600); // activation already done, in an earlier run
 
-    let result = recover(&Real, &f.key_path, &f.db_path).expect("recover");
+    let result = recover(&Real, &f.key_path, &f.db_path, false).expect("recover");
     match result {
         Recovered::NeedsCompletion {
             rotation_id,
@@ -1059,7 +1067,7 @@ async fn row10_only_cleans_the_stale_workspace() {
     write_key_at(&f.key_path, &f.new_key, 0o600);
     mark_row_complete(&f, SAMPLE_ROTATION_ID).await;
 
-    let result = recover(&Real, &f.key_path, &f.db_path).expect("recover");
+    let result = recover(&Real, &f.key_path, &f.db_path, false).expect("recover");
     match result {
         Recovered::Cleaned {
             active_fingerprint, ..
@@ -1092,7 +1100,7 @@ async fn row8_without_next_fails_closed() {
     std::fs::remove_file(&f.paths.next).expect("remove next");
     let before = f.remaining_artifacts();
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("does not open"), "{err:#}");
     assert_eq!(f.remaining_artifacts(), before, "nothing removed");
 }
@@ -1105,7 +1113,7 @@ async fn row8_a_next_of_the_wrong_key_fails_closed() {
     write_key_at(&f.paths.next, &MasterKey::generate(), 0o600);
     let before = f.remaining_artifacts();
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("does not open"), "{err:#}");
     assert_eq!(f.remaining_artifacts(), before, "nothing removed");
 }
@@ -1120,7 +1128,7 @@ async fn row9_a_row_rotation_id_mismatch_fails_closed() {
     write_key_at(&f.key_path, &f.new_key, 0o600);
     let before = f.remaining_artifacts();
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("different rotation"), "{err:#}");
     assert_eq!(f.remaining_artifacts(), before, "nothing removed");
 }
@@ -1137,7 +1145,7 @@ async fn complete_row_with_the_active_key_still_old_fails_closed() {
     mark_row_complete(&f, SAMPLE_ROTATION_ID).await;
     // The active key file was never swapped to `new_key`.
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(
         format!("{err:#}").contains("activation and completion disagree"),
         "{err:#}"
@@ -1172,7 +1180,7 @@ async fn row8_activation_is_crash_safe_under_power_loss() {
     seed_dir_from_real(&sim, &f.paths.workspace);
 
     let before = sim.points().len();
-    let result = recover(&sim, &f.key_path, &f.db_path);
+    let result = recover(&sim, &f.key_path, &f.db_path, false);
     assert!(
         matches!(
             result,
@@ -1219,7 +1227,7 @@ async fn row8_activation_is_crash_safe_under_power_loss() {
                 "{}: the active key file must never go missing during activation",
                 point.label
             );
-            match recover(&Real, &key_path, &f.db_path) {
+            match recover(&Real, &key_path, &f.db_path, false) {
                 Ok(Recovered::NeedsCompletion { .. }) => {}
                 Ok(other) => panic!("{}: expected NeedsCompletion, got {other:?}", point.label),
                 Err(e) => panic!(
@@ -1258,7 +1266,7 @@ async fn row8_a_next_whose_fingerprint_the_journal_and_row_do_not_name_fails_clo
     }
     let before = f.remaining_artifacts();
 
-    let err = recover(&Real, &f.key_path, &f.db_path).expect_err("must fail closed");
+    let err = recover(&Real, &f.key_path, &f.db_path, false).expect_err("must fail closed");
     assert!(format!("{err:#}").contains("fingerprint"), "{err:#}");
     assert_eq!(
         f.remaining_artifacts(),

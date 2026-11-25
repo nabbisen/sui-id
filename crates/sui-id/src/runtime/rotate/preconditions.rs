@@ -82,25 +82,25 @@ impl RotationPaths {
     }
 }
 
-/// RFC 100 `0.94.0` P2 §1: take [`RotationPaths::lock`] non-blocking, for
-/// both sides that must never run concurrently -- a live rotation
-/// (`point` = `"rotate.lock"`) and recovery (`"recovery.lock"`). On
+/// RFC 100 `0.94.0` P2 §1 (P7 §1: exclusive only, against any holder --
+/// a running server, another sui-id command, or another rotation): take
+/// [`RotationPaths::lock`] exclusive, non-blocking -- a rotation's own
+/// acquisition, before anything else it does. On
 /// [`std::io::ErrorKind::WouldBlock`], names the file and changes
 /// nothing; any other failure (the file could not be created at all) is
 /// reported as such instead of being confused with contention.
-pub fn take_rotation_lock<'a>(
-    adapter: &'a dyn crate::key_adapter::KeyFileOps,
+pub fn take_rotation_lock(
+    adapter: &dyn crate::key_adapter::KeyFileOps,
     paths: &RotationPaths,
     point: &str,
-) -> anyhow::Result<Box<dyn crate::key_adapter::LockGuard + 'a>> {
+) -> anyhow::Result<Box<dyn crate::key_adapter::LockGuard>> {
     adapter
         .lock_exclusive(point, &paths.lock, false)
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::WouldBlock {
                 anyhow::anyhow!(
-                    "refusing: a key rotation is running in another process (the lock at {} is \
-                     held). Nothing was changed; wait for it to finish, or investigate if \
-                     nothing is actually running.",
+                    "refusing to rotate: sui-id is running -- the server, or another sui-id \
+                     command -- and has this database open ({}). Stop it, then rotate.",
                     paths.lock.display()
                 )
             } else {
@@ -110,6 +110,35 @@ pub fn take_rotation_lock<'a>(
                 ))
             }
         })
+}
+
+/// RFC 100 `0.94.0` P7 §1: the same lock, held shared, non-blocking --
+/// every process that merely has the database open: recovery's own
+/// brief pass (`point` = `"recovery.lock"`), and
+/// [`crate::database::open_checked`] for as long as it keeps the
+/// database open (`"database.open_checked.lock"`). Any number of shared
+/// holders coexist; this refuses only against a rotation's own
+/// exclusive hold.
+pub fn take_database_lock(
+    adapter: &dyn crate::key_adapter::KeyFileOps,
+    paths: &RotationPaths,
+    point: &str,
+) -> anyhow::Result<Box<dyn crate::key_adapter::LockGuard>> {
+    adapter.lock_shared(point, &paths.lock, false).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::WouldBlock {
+            anyhow::anyhow!(
+                "refusing: a key rotation is running in another process (the lock at {} is \
+                 held exclusively). Nothing was changed; wait for it to finish, then try \
+                 again.",
+                paths.lock.display()
+            )
+        } else {
+            anyhow::Error::new(e).context(format!(
+                "taking the database lock at {}",
+                paths.lock.display()
+            ))
+        }
+    })
 }
 
 /// `<key_file>.rotation-work` — stage 3's workspace, now one call into
@@ -303,11 +332,12 @@ fn leftover_workspace_text(workspace_path: &Path) -> String {
 
 fn retained_backup_text(backup_path: &Path) -> String {
     format!(
-        "refusing to rotate: the last rotation's pre-rotation backup is still at {}. \
-        It may be the only key that opens a database backup taken before that \
-        rotation, so a new rotation never replaces it. Deal with it under the \
-        custody choice you made then: move it to its custody location, or remove \
-        it once you have verified that nothing needs it. Then rotate again.",
+        "refusing to rotate: the last rotation's old key is still kept at {}. It may be \
+        the only key that opens a copy of the database taken before that rotation, so a \
+        new rotation never replaces it. Settle it first: move it to its own custody \
+        location, remove it with `sui-id admin master-key backup remove` once you have \
+        verified nothing needs it, or, if it is kept until a date, renew that date with \
+        `sui-id admin master-key backup renew`. Then rotate again.",
         backup_path.display()
     )
 }

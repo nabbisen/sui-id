@@ -307,13 +307,13 @@ enum AdminCommand {
         yes: bool,
         #[arg(long)]
         check: bool,
-        #[arg(long, value_name = "RFC3339_INSTANT", conflicts_with_all = ["remove_backup_after_verified", "verification_reference"])]
+        #[arg(long, value_name = "RFC3339_INSTANT", conflicts_with_all = ["discard_backup_once_verified", "verification_reference"])]
         retain_backup_until: Option<String>,
         #[arg(long, value_name = "TEXT", requires = "retain_backup_until")]
         custody_reference: Option<String>,
         #[arg(long, conflicts_with_all = ["retain_backup_until", "custody_reference"])]
-        remove_backup_after_verified: bool,
-        #[arg(long, value_name = "TEXT", requires = "remove_backup_after_verified")]
+        discard_backup_once_verified: bool,
+        #[arg(long, value_name = "TEXT", requires = "discard_backup_once_verified")]
         verification_reference: Option<String>,
     },
     #[command(hide = true)]
@@ -399,30 +399,32 @@ enum AdminMasterKeyCommand {
         /// Check whether a rotation could start, and change nothing.
         #[arg(long)]
         check: bool,
-        /// RFC 100 old-key custody: keep the pre-rotation backup of the
-        /// old key until this RFC 3339 instant (must be in the future),
-        /// under --custody-reference. Exactly one of this or
-        /// --remove-backup-after-verified is required (--check needs
+        /// Keep the old key (as a backup, at a fixed path beside the
+        /// key file) until this RFC 3339 instant (must be in the
+        /// future), under --custody-reference. Exactly one of this or
+        /// --discard-backup-once-verified is required (--check needs
         /// neither).
-        #[arg(long, value_name = "RFC3339_INSTANT", conflicts_with_all = ["remove_backup_after_verified", "verification_reference"])]
+        #[arg(long, value_name = "RFC3339_INSTANT", conflicts_with_all = ["discard_backup_once_verified", "verification_reference"])]
         retain_backup_until: Option<String>,
-        /// Who is accountable for reviewing the retained backup (RFC
-        /// 100 old-key custody) -- required with --retain-backup-until.
+        /// Who is accountable for reviewing the retained backup --
+        /// required with --retain-backup-until.
         #[arg(long, value_name = "TEXT", requires = "retain_backup_until")]
         custody_reference: Option<String>,
-        /// RFC 100 old-key custody: remove the pre-rotation backup of
-        /// the old key once verified, citing --verification-reference.
-        /// Exactly one of this or --retain-backup-until is required
-        /// (--check needs neither).
+        /// Keep the old key (as a backup, at a fixed path beside the
+        /// key file) until you have checked that no copy of the
+        /// database made before this rotation still needs it, citing
+        /// --verification-reference, then remove it with `backup
+        /// remove`. This flag does not itself remove anything. Exactly
+        /// one of this or --retain-backup-until is required (--check
+        /// needs neither).
         #[arg(long, conflicts_with_all = ["retain_backup_until", "custody_reference"])]
-        remove_backup_after_verified: bool,
-        /// How the backup was verified (RFC 100 old-key custody) --
-        /// required with --remove-backup-after-verified.
-        #[arg(long, value_name = "TEXT", requires = "remove_backup_after_verified")]
+        discard_backup_once_verified: bool,
+        /// How you verified it -- required with
+        /// --discard-backup-once-verified.
+        #[arg(long, value_name = "TEXT", requires = "discard_backup_once_verified")]
         verification_reference: Option<String>,
     },
-    /// Custody of the pre-rotation backup a completed rotation kept
-    /// (RFC 100 old-key custody).
+    /// Custody of the old key a completed rotation kept as a backup.
     Backup(AdminMasterKeyBackupArgs),
 }
 
@@ -434,19 +436,24 @@ struct AdminMasterKeyBackupArgs {
 
 #[derive(Subcommand, Debug)]
 enum AdminMasterKeyBackupCommand {
-    /// Remove the pre-rotation backup, once it is retired or
-    /// re-encrypted. RFC 100: no secure-erasure claim -- this is an
-    /// ordinary unlink.
-    #[command(about = "Remove the pre-rotation backup")]
+    /// Remove the kept old key, once every copy of the database made
+    /// before that rotation -- a filesystem snapshot, a copied `.sqlite`
+    /// file; not a `backup create` tarball, which carries its own key --
+    /// is retired or re-encrypted under the current key. No
+    /// secure-erasure claim: this is an ordinary unlink.
+    #[command(about = "Remove the kept old key")]
     Remove {
-        /// States, explicitly, that the backup is retired or
-        /// re-encrypted and safe to unlink. Required.
+        /// States, explicitly, that every copy of the database made
+        /// before the rotation that kept this key -- not a `backup
+        /// create` tarball, which carries its own key and needs no
+        /// action here -- is retired or re-encrypted under the current
+        /// key, so this old key is safe to remove. Required.
         #[arg(long)]
         confirm_retired_or_reencrypted: bool,
         /// How it was verified. Required when the backup's own
         /// disposition is --retain-backup-until (that disposition
         /// carries no reference of its own to reuse); ignored for
-        /// --remove-backup-after-verified, which already has one.
+        /// --discard-backup-once-verified, which already has one.
         #[arg(long, value_name = "TEXT")]
         verification_reference: Option<String>,
     },
@@ -761,7 +768,7 @@ async fn dispatch_admin(
                 check,
                 retain_backup_until,
                 custody_reference,
-                remove_backup_after_verified,
+                discard_backup_once_verified,
                 verification_reference,
             } => {
                 handlers::run_admin_rotate_key(
@@ -774,7 +781,7 @@ async fn dispatch_admin(
                     handlers::CustodyChoiceArgs {
                         retain_backup_until,
                         custody_reference,
-                        remove_backup_after_verified,
+                        discard_backup_once_verified,
                         verification_reference,
                     },
                 )
@@ -844,7 +851,7 @@ async fn dispatch_admin(
             check,
             retain_backup_until,
             custody_reference,
-            remove_backup_after_verified,
+            discard_backup_once_verified,
             verification_reference,
         } => {
             alias_notice("admin rotate-key", "admin master-key rotate");
@@ -858,7 +865,7 @@ async fn dispatch_admin(
                 handlers::CustodyChoiceArgs {
                     retain_backup_until,
                     custody_reference,
-                    remove_backup_after_verified,
+                    discard_backup_once_verified,
                     verification_reference,
                 },
             )

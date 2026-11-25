@@ -17,10 +17,10 @@
 //! [`super::tests`]/[`super::tests::stage0`].
 
 use super::{KeyFileMetadata, KeyFileOps, LockGuard};
-use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 type Ino = usize;
 
@@ -170,12 +170,28 @@ struct Inner {
     /// that is not currently live" from "an ordinary top-level path,"
     /// which is never in this set.
     managed_dirs: BTreeSet<PathBuf>,
-    /// RFC 100 `0.94.0` P2 §1: paths this run currently holds
-    /// [`KeyFileOps::lock_exclusive`] on. Not a crash-point concern (the
-    /// lock is never part of the enumerated preparation/activation
-    /// points) -- only a liveness one: a second [`lock_exclusive`] call
-    /// on the same path, before the first guard drops, must see it held.
-    locked: BTreeSet<PathBuf>,
+    /// RFC 100 `0.94.0` P2 §1 (shared mode added P7 §1): every path this
+    /// run currently holds [`KeyFileOps::lock_exclusive`]/
+    /// [`KeyFileOps::lock_shared`] on, and how. Not a crash-point concern
+    /// (the lock is never part of the enumerated preparation/activation
+    /// points) -- only a liveness one: a conflicting lock call on the
+    /// same path, before every existing guard on it drops, must refuse.
+    locked: BTreeMap<PathBuf, LockState>,
+}
+
+/// One path's current holders: any number of shared, or exactly one
+/// exclusive -- never both, the same mutual exclusion `flock(2)` gives
+/// [`super::Real`].
+#[derive(Default)]
+struct LockState {
+    shared: u32,
+    exclusive: bool,
+}
+
+#[derive(Clone, Copy)]
+enum LockMode {
+    Shared,
+    Exclusive,
 }
 
 /// Records every key-file operation issued through it during one real
@@ -185,7 +201,7 @@ struct Inner {
 /// pending until a power loss could lose them, exactly like an unsynced
 /// directory entry.
 pub struct Simulated {
-    inner: RefCell<Inner>,
+    inner: Arc<Mutex<Inner>>,
 }
 
 impl Simulated {
@@ -206,7 +222,7 @@ impl Simulated {
             next += 1;
         }
         Simulated {
-            inner: RefCell::new(Inner {
+            inner: Arc::new(Mutex::new(Inner {
                 durable: d.clone(),
                 view: d,
                 pending_entries: vec![],
@@ -214,13 +230,13 @@ impl Simulated {
                 next_ino: next,
                 points: vec![],
                 managed_dirs: BTreeSet::new(),
-                locked: BTreeSet::new(),
-            }),
+                locked: BTreeMap::new(),
+            })),
         }
     }
 
     fn point(&self, label: &str) {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         let durable = inner.durable.clone();
         let pending_entries = inner.pending_entries.clone();
         let pending_data = inner.pending_data.clone();
@@ -235,14 +251,21 @@ impl Simulated {
     }
 
     fn ino_of(&self, path: &Path) -> Option<Ino> {
-        self.inner.borrow().view.entries.get(path).copied()
+        self.inner
+            .lock()
+            .expect("single-threaded test harness")
+            .view
+            .entries
+            .get(path)
+            .copied()
     }
 
     /// Every crash point recorded so far, with the two state-producing
     /// models the design names: `power_loss_states` and `kill_state`.
     pub fn points(&self) -> Vec<RecordedPoint> {
         self.inner
-            .borrow()
+            .lock()
+            .expect("single-threaded test harness")
             .points
             .iter()
             .map(|p| RecordedPoint {
@@ -260,10 +283,52 @@ impl Simulated {
     pub fn finish(&self) {
         self.point("after the last op");
     }
+
+    /// RFC 100 `0.94.0` P7 §1: the same mutual exclusion `flock(2)`
+    /// gives [`super::Real`] -- any number of shared holders, or exactly
+    /// one exclusive, never both.
+    fn take_lock(
+        &self,
+        point: &str,
+        path: &Path,
+        blocking: bool,
+        mode: LockMode,
+    ) -> io::Result<Box<dyn LockGuard>> {
+        self.point(&format!("before {point}"));
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
+        let state = inner.locked.entry(path.to_path_buf()).or_default();
+        let conflicts = match mode {
+            LockMode::Exclusive => state.exclusive || state.shared > 0,
+            LockMode::Shared => state.exclusive,
+        };
+        if conflicts {
+            if blocking {
+                // A real `flock(2)` would block until the other holder
+                // releases it; `Simulated` drives one deterministic,
+                // single-threaded run, so a blocking call that would
+                // actually have to wait here is a test harness bug, not
+                // a state to model -- refuse rather than hang.
+                return Err(io::Error::other(
+                    "Simulated cannot block on a lock already held in this run",
+                ));
+            }
+            return Err(io::Error::from(io::ErrorKind::WouldBlock));
+        }
+        match mode {
+            LockMode::Exclusive => state.exclusive = true,
+            LockMode::Shared => state.shared += 1,
+        }
+        drop(inner);
+        Ok(Box::new(SimulatedLockGuard {
+            inner: self.inner.clone(),
+            path: path.to_path_buf(),
+            mode,
+        }))
+    }
 }
 
 /// A snapshot handed out of [`Simulated`] for enumeration, decoupled from
-/// the `RefCell` borrow.
+/// the inner `Mutex` guard.
 pub struct RecordedPoint {
     pub label: String,
     durable: Disk,
@@ -375,7 +440,7 @@ impl RecordedPoint {
 impl KeyFileOps for Simulated {
     fn create_new(&self, point: &str, path: &Path) -> io::Result<()> {
         self.point(&format!("before {point}"));
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         if inner.view.entries.contains_key(path) {
             return Err(io::Error::new(io::ErrorKind::AlreadyExists, "create_new"));
         }
@@ -395,7 +460,7 @@ impl KeyFileOps for Simulated {
         let ino = self
             .ino_of(path)
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "write_all"))?;
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         inner.view.apply(&Op::Write {
             ino,
             data: data.to_vec(),
@@ -409,7 +474,7 @@ impl KeyFileOps for Simulated {
         let ino = self
             .ino_of(path)
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "sync_file"))?;
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         if let Some(d) = inner.pending_data.remove(&ino) {
             inner.durable.apply(&Op::Write { ino, data: d });
         }
@@ -423,7 +488,7 @@ impl KeyFileOps for Simulated {
             from: from.to_path_buf(),
             to: to.to_path_buf(),
         };
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         inner.view.apply(&op);
         inner.pending_entries.push(op);
         Ok(())
@@ -431,7 +496,7 @@ impl KeyFileOps for Simulated {
 
     fn publish_no_replace(&self, point: &str, from: &Path, to: &Path) -> io::Result<()> {
         self.point(&format!("before {point}"));
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         if inner.view.entries.contains_key(to) {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
@@ -453,7 +518,7 @@ impl KeyFileOps for Simulated {
 
     fn sync_dir(&self, point: &str, dir: &Path) -> io::Result<()> {
         self.point(&format!("before {point}"));
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         // RFC 100 stage 3: scoped to `dir` -- syncing the key file's
         // directory must not also durableize an entry pending inside a
         // still-unsynced workspace, and vice versa. `owning_dir` already
@@ -474,7 +539,7 @@ impl KeyFileOps for Simulated {
     }
 
     fn read(&self, _point: &str, path: &Path) -> io::Result<Vec<u8>> {
-        let inner = self.inner.borrow();
+        let inner = self.inner.lock().expect("single-threaded test harness");
         inner
             .view
             .read(path)
@@ -484,7 +549,7 @@ impl KeyFileOps for Simulated {
 
     fn remove(&self, point: &str, path: &Path) -> io::Result<()> {
         self.point(&format!("before {point}"));
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         if !inner.view.entries.contains_key(path) {
             return Err(io::Error::new(io::ErrorKind::NotFound, "remove"));
         }
@@ -495,7 +560,7 @@ impl KeyFileOps for Simulated {
     }
 
     fn metadata(&self, _point: &str, path: &Path) -> io::Result<KeyFileMetadata> {
-        let inner = self.inner.borrow();
+        let inner = self.inner.lock().expect("single-threaded test harness");
         // RFC 100 stage 4: the real current euid, not a fixed `0` --
         // every entry `Simulated` models is one *this* process "created,"
         // same as `Real`'s own `create_new`/`create_dir` would report,
@@ -527,7 +592,7 @@ impl KeyFileOps for Simulated {
     }
 
     fn list_dir(&self, _point: &str, dir: &Path) -> io::Result<Vec<PathBuf>> {
-        let inner = self.inner.borrow();
+        let inner = self.inner.lock().expect("single-threaded test harness");
         if !inner.view.dirs.contains(dir) {
             return Err(io::Error::new(io::ErrorKind::NotFound, "list_dir"));
         }
@@ -551,7 +616,7 @@ impl KeyFileOps for Simulated {
 
     fn create_dir(&self, point: &str, path: &Path) -> io::Result<()> {
         self.point(&format!("before {point}"));
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         if inner.view.dirs.contains(path) || inner.view.entries.contains_key(path) {
             return Err(io::Error::new(io::ErrorKind::AlreadyExists, "create_dir"));
         }
@@ -564,7 +629,7 @@ impl KeyFileOps for Simulated {
 
     fn remove_dir(&self, point: &str, path: &Path) -> io::Result<()> {
         self.point(&format!("before {point}"));
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         if !inner.view.dirs.contains(path) {
             return Err(io::Error::new(io::ErrorKind::NotFound, "remove_dir"));
         }
@@ -587,7 +652,7 @@ impl KeyFileOps for Simulated {
     fn db_committed(&self, label: &str) {
         self.point(&format!("before db_committed {label}"));
         let op = Op::Marker(label.to_owned());
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         inner.view.apply(&op);
         inner.pending_entries.push(op);
     }
@@ -596,7 +661,7 @@ impl KeyFileOps for Simulated {
     /// becomes durable.
     fn db_durable(&self, label: &str) {
         self.point(&format!("before db_durable {label}"));
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
         let (markers, rest): (Vec<Op>, Vec<Op>) = inner
             .pending_entries
             .drain(..)
@@ -612,45 +677,48 @@ impl KeyFileOps for Simulated {
         point: &str,
         path: &Path,
         blocking: bool,
-    ) -> io::Result<Box<dyn LockGuard + '_>> {
-        self.point(&format!("before {point}"));
-        let mut inner = self.inner.borrow_mut();
-        if inner.locked.contains(path) {
-            if blocking {
-                // A real `flock(2)` would block until the other holder
-                // releases it; `Simulated` drives one deterministic,
-                // single-threaded run, so a blocking call that would
-                // actually have to wait here is a test harness bug, not
-                // a state to model -- refuse rather than hang.
-                return Err(io::Error::other(
-                    "Simulated cannot block on a lock already held in this run",
-                ));
-            }
-            return Err(io::Error::from(io::ErrorKind::WouldBlock));
-        }
-        inner.locked.insert(path.to_path_buf());
-        Ok(Box::new(SimulatedLockGuard {
-            sim: self,
-            path: path.to_path_buf(),
-        }))
+    ) -> io::Result<Box<dyn LockGuard>> {
+        self.take_lock(point, path, blocking, LockMode::Exclusive)
+    }
+
+    fn lock_shared(
+        &self,
+        point: &str,
+        path: &Path,
+        blocking: bool,
+    ) -> io::Result<Box<dyn LockGuard>> {
+        self.take_lock(point, path, blocking, LockMode::Shared)
     }
 }
 
-/// Releases its path from [`Inner::locked`] on drop -- modeling exactly
+/// Releases its hold from [`Inner::locked`] on drop -- modeling exactly
 /// what a real `flock` does when the holding process exits, including
 /// via an `Err` propagating out of the real rotation/recovery code this
 /// adapter drives (normal Rust unwinding through a local guard, no
-/// actual process exit needed to reproduce the effect).
-struct SimulatedLockGuard<'a> {
-    sim: &'a Simulated,
+/// actual process exit needed to reproduce the effect). Owns a clone of
+/// the shared `Arc`, not a borrow of [`Simulated`] itself -- so it can
+/// outlive the adapter value that created it, the same as [`super::Real`]'s
+/// own guard outlives the open file handle that returned it.
+struct SimulatedLockGuard {
+    inner: Arc<Mutex<Inner>>,
     path: PathBuf,
+    mode: LockMode,
 }
 
-impl LockGuard for SimulatedLockGuard<'_> {}
+impl LockGuard for SimulatedLockGuard {}
 
-impl Drop for SimulatedLockGuard<'_> {
+impl Drop for SimulatedLockGuard {
     fn drop(&mut self) {
-        self.sim.inner.borrow_mut().locked.remove(&self.path);
+        let mut inner = self.inner.lock().expect("single-threaded test harness");
+        if let Some(state) = inner.locked.get_mut(&self.path) {
+            match self.mode {
+                LockMode::Exclusive => state.exclusive = false,
+                LockMode::Shared => state.shared = state.shared.saturating_sub(1),
+            }
+            if !state.exclusive && state.shared == 0 {
+                inner.locked.remove(&self.path);
+            }
+        }
     }
 }
 

@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`admin master-key rotate` now requires an old-key custody choice**:
   `--retain-backup-until <RFC3339_INSTANT> --custody-reference <TEXT>`,
-  or `--remove-backup-after-verified --verification-reference <TEXT>`.
+  or `--discard-backup-once-verified --verification-reference <TEXT>`.
   `--check` needs neither. Rotation is now journaled end to end: every
   step is recorded before it runs, and a crash part-way is completed or
   undone automatically, at the next start or rotation attempt.
@@ -34,6 +34,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   backup, and what an interrupted rotation leaves — and now documents
   the whole protocol as crash-safe, replacing the earlier "not yet
   crash-safe" warning.
+- **`--remove-backup-after-verified` is renamed to
+  `--discard-backup-once-verified`.** The old name read as though it
+  removed the backup itself; it only states how you'll verify it, and
+  `backup remove` is still the command that actually removes it. No
+  alias — nothing shipped under the old name.
+
+### Fixed
+
+- **A rotation now refuses while sui-id is already running against the
+  same database** — the server, or any other sui-id command, not only
+  another rotation — instead of completing beside it and silently
+  leaving later-written rows sealed under the key the rotation just
+  replaced, unreadable after the next restart.
 
 ### Removed
 

@@ -22,6 +22,12 @@ pub struct Startup {
     /// Must be kept alive for as long as the process runs; dropping it
     /// flushes and joins the writer. Stored here so `main` can hold it.
     pub _log_guard: Option<tracing_appender::non_blocking::WorkerGuard>,
+    /// RFC 100 `0.94.0` P7 §1: the database lock, held shared for as
+    /// long as the server has `state.db` open -- which is to say, for
+    /// as long as this value lives. Dropping `Startup` early would drop
+    /// this early too, so `main` must hold it for the process's whole
+    /// life, the same as `_log_guard`.
+    pub _db_lock: Box<dyn crate::key_adapter::LockGuard>,
 }
 
 static INIT_TRACING: Once = Once::new();
@@ -176,7 +182,7 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
     {
         std::fs::create_dir_all(parent).ok();
     }
-    let (db, key_origin) =
+    let (db, key_origin, db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, backup).await?;
     match key_origin {
         KeyOrigin::Env => {
@@ -387,6 +393,7 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
         state,
         listen_addr,
         _log_guard: log_guard,
+        _db_lock: db_lock,
     })
 }
 

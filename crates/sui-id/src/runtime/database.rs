@@ -209,13 +209,31 @@ pub async fn open_checked(
     path: &Path,
     key_file: &Path,
     backup: PreMigrationBackup,
-) -> anyhow::Result<(Database, crate::keyring::KeyOrigin)> {
+) -> anyhow::Result<(
+    Database,
+    crate::keyring::KeyOrigin,
+    Box<dyn crate::key_adapter::LockGuard>,
+)> {
     // RFC 100 stage 4: recover a leftover rotation preparation workspace
     // before anything else -- including `resolve_checked`, which a
     // leftover `.new`-style precondition does not cover (that is
     // rotation's own concern; a *workspace*, this module's).
     let adapter = crate::key_adapter::default_adapter();
-    let recovered = crate::rotate::recovery::recover_and_report(adapter.as_ref(), key_file, path)?;
+    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(key_file);
+    let recovered =
+        crate::rotate::recovery::recover_and_report(adapter.as_ref(), key_file, path, false)?;
+
+    // RFC 100 `0.94.0` P7 §1: held shared for as long as the returned
+    // `Database` is open -- the caller keeps this guard alive alongside
+    // it (never drops it early), so a rotation's own exclusive attempt
+    // refuses while this process has the database open at all, the same
+    // as a running server. Taken before the database is actually
+    // opened, closing the window a race there would otherwise leave.
+    let db_lock = crate::rotate::preconditions::take_database_lock(
+        adapter.as_ref(),
+        &paths,
+        "database.open_checked.lock",
+    )?;
 
     let resolved = crate::keyring::resolve_checked(key_file, path)?;
     let db = open(path, resolved.key, backup)?;
@@ -242,7 +260,6 @@ pub async fn open_checked(
                 ));
             }
         }
-        let paths = crate::rotate::preconditions::RotationPaths::for_key_file(key_file);
         let removed = crate::rotate::recovery::clean_workspace(adapter.as_ref(), &paths, false)
             .context("cleaning the rotation workspace after completing it at start")?;
         for line in crate::rotate::recovery::report(&crate::rotate::recovery::Recovered::Cleaned {
@@ -254,7 +271,7 @@ pub async fn open_checked(
         }
     }
 
-    Ok((db, resolved.origin))
+    Ok((db, resolved.origin, db_lock))
 }
 
 /// A size for an operator-facing line. sui-id databases are often smaller

@@ -272,7 +272,7 @@ fn both_refusal_variants_and_every_opener_share_exit_code_65() {
                 "admin",
                 "master-key",
                 "rotate",
-                "--remove-backup-after-verified",
+                "--discard-backup-once-verified",
                 "--verification-reference",
                 "r112-test",
                 "--config",

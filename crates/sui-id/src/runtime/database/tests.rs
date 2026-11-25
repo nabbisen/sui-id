@@ -197,7 +197,7 @@ async fn a_missing_key_file_over_a_never_sealed_database_generates_one() {
     let db_path = dir.path().join("t.sqlite");
     let key_file = dir.path().join("t.key"); // never created
 
-    let (db, origin) =
+    let (db, origin, _lock) =
         crate::database::open_checked(&db_path, &key_file, PreMigrationBackup::Declined)
             .await
             .expect("a never-sealed database with no key must generate one");
@@ -218,7 +218,7 @@ async fn upgrade_sealed_rows_the_key_opens_verifies_then_writes_the_sentinel() {
     seed_sealed_signing_key(&db_path, &key);
     write_key_file_for_test(&key_file, &key);
 
-    let (db, origin) =
+    let (db, origin, _lock) =
         crate::database::open_checked(&db_path, &key_file, PreMigrationBackup::Declined)
             .await
             .expect("the right key must verify against the one sealed row and proceed");
@@ -246,6 +246,90 @@ async fn upgrade_sealed_rows_the_key_does_not_open_refuses() {
         .map(|_| ())
         .expect_err("the wrong key over an unverified upgrade must refuse");
     assert!(err.downcast_ref::<DatabaseRefused>().is_some());
+}
+
+// ── RFC 100 `0.94.0` P7 §1: `open_checked` holds the database lock
+// shared for as long as its caller keeps the returned guard alive --
+// proved against the real lock file, not `Simulated`, since the
+// property under test is exactly what the three-element return value
+// itself gives a caller the means to do. ────────────────────────────
+
+#[tokio::test]
+async fn open_checked_holds_the_lock_shared_so_a_rotation_refuses_while_it_is_held() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("t.sqlite");
+    let key_file = dir.path().join("t.key"); // never created: generates one
+
+    let (_db, _origin, db_lock) =
+        crate::database::open_checked(&db_path, &key_file, PreMigrationBackup::Declined)
+            .await
+            .expect("open");
+
+    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(&key_file);
+    let result = crate::rotate::preconditions::take_rotation_lock(
+        &crate::key_adapter::Real,
+        &paths,
+        "rotate.lock",
+    );
+    assert!(
+        result.is_err(),
+        "a rotation must refuse while open_checked's own caller has the database open"
+    );
+    let err = result.err().expect("checked above");
+    assert!(err.to_string().contains("sui-id is running"), "{err:#}");
+
+    // Two ordinary `open_checked` callers (two CLI commands, or a
+    // command beside a running server) coexist: both locks are shared.
+    let (_db2, _origin2, db_lock2) =
+        crate::database::open_checked(&db_path, &key_file, PreMigrationBackup::Declined)
+            .await
+            .expect("a second open_checked caller coexists with the first");
+
+    drop(db_lock);
+    drop(db_lock2);
+    crate::rotate::preconditions::take_rotation_lock(
+        &crate::key_adapter::Real,
+        &paths,
+        "rotate.lock",
+    )
+    .expect("released: the rotation now proceeds");
+}
+
+/// The other direction of the same property: `open_checked` (through
+/// recovery's own shared, non-blocking take) refuses while a rotation
+/// holds the lock exclusively -- the dispatch's own "recovery still
+/// refuses while a rotation holds the lock exclusive," exercised
+/// through the real, whole `open_checked` path, not `recover` alone.
+#[tokio::test]
+async fn open_checked_refuses_while_a_rotation_holds_the_lock_exclusively() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("t.sqlite");
+    let key_file = dir.path().join("t.key");
+
+    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(&key_file);
+    let rotation_lock = crate::rotate::preconditions::take_rotation_lock(
+        &crate::key_adapter::Real,
+        &paths,
+        "rotate.lock",
+    )
+    .expect("models a live rotation holding the lock exclusively");
+
+    let err = crate::database::open_checked(&db_path, &key_file, PreMigrationBackup::Declined)
+        .await
+        .map(|_| ())
+        .expect_err("an ordinary open must refuse while a rotation is running");
+    assert!(
+        err.to_string().contains("a key rotation is running"),
+        "{err:#}"
+    );
+    assert!(!db_path.exists(), "nothing was created");
+    assert!(!key_file.exists(), "nothing was created");
+
+    drop(rotation_lock);
+    let (_db, _origin, _lock) =
+        crate::database::open_checked(&db_path, &key_file, PreMigrationBackup::Declined)
+            .await
+            .expect("released: the open now proceeds");
 }
 
 #[tokio::test]
@@ -276,7 +360,7 @@ async fn migrating_up_from_0_92_0_creates_both_tables_and_writes_the_sentinel_un
     }
     write_key_file_for_test(&key_file, &key);
 
-    let (db, _origin) =
+    let (db, _origin, _lock) =
         crate::database::open_checked(&db_path, &key_file, PreMigrationBackup::Declined)
             .await
             .expect("migrating up from 0.92.0 with the right key must succeed");
@@ -447,7 +531,7 @@ async fn open_checked_completes_a_pending_rotation_and_cleans_the_workspace_befo
     let (db_path, key_path, new_key) = seed_row9(dir.path()).await;
     let paths = crate::rotate::preconditions::RotationPaths::for_key_file(&key_path);
 
-    let (db, _origin) =
+    let (db, _origin, _lock) =
         crate::database::open_checked(&db_path, &key_path, PreMigrationBackup::Declined)
             .await
             .expect("open_checked must complete the rotation and succeed");

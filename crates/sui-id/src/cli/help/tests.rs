@@ -124,6 +124,49 @@ fn overview_lines_are_at_most_80_columns_and_the_purpose_column_aligns() {
     }
 }
 
+/// `true` for "RFC " followed by 1-3 digits not themselves followed by
+/// a further digit -- this project's own RFCs (currently up to 149),
+/// never a public standard an operator is expected to know, such as
+/// "RFC 3339" or "RFC 6749" (always 4 digits in anything cited here).
+fn names_an_internal_rfc(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while let Some(pos) = text[i..].find("RFC ") {
+        let start = i + pos + 4;
+        let digits = bytes[start..]
+            .iter()
+            .take_while(|b| b.is_ascii_digit())
+            .count();
+        if (1..=3).contains(&digits) {
+            return true;
+        }
+        i = start;
+    }
+    false
+}
+
+/// RFC 100 `0.94.0` P7 §2: an operator reading `--help` does not know
+/// what an RFC number means. This renders every leaf's full `--help`
+/// text, exactly as `sui-id help <command>` and `<command> --help`
+/// would, and fails on the literal jargon rather than on any specific
+/// wording -- a new flag or command that names one is caught here
+/// without this test needing to change. Code comments keep their RFC
+/// references; this only ever renders help text.
+#[test]
+fn no_leafs_help_text_names_an_internal_rfc() {
+    let root = command_tree();
+    for path in visible_leaf_paths() {
+        let path: Vec<String> = path.split(' ').map(str::to_owned).collect();
+        let cmd = resolve(&root, &path).expect("a leaf path from the registry itself resolves");
+        let detail = render_detail(cmd, &path);
+        assert!(
+            !names_an_internal_rfc(&detail),
+            "`{}`'s help names an internal RFC -- say what is meant instead:\n{detail}",
+            path.join(" ")
+        );
+    }
+}
+
 #[test]
 fn help_for_a_known_leaf_resolves_and_names_its_own_options() {
     let root = command_tree();

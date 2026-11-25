@@ -237,7 +237,7 @@ async fn assert_required_outcome(
     db_path: &Path,
     reseal_durable: bool,
 ) {
-    let result = recovery::recover(&Real, key_file, db_path);
+    let result = recovery::recover(&Real, key_file, db_path, false);
     let recovered = result.unwrap_or_else(|e| {
         panic!("{label}: recovery must never error on a state the rotation itself left: {e:#}")
     });

@@ -530,8 +530,16 @@ impl KeyFileOps for RespellingReads {
         p: &str,
         path: &Path,
         blocking: bool,
-    ) -> std::io::Result<Box<dyn crate::key_adapter::LockGuard + '_>> {
+    ) -> std::io::Result<Box<dyn crate::key_adapter::LockGuard>> {
         Real.lock_exclusive(p, path, blocking)
+    }
+    fn lock_shared(
+        &self,
+        p: &str,
+        path: &Path,
+        blocking: bool,
+    ) -> std::io::Result<Box<dyn crate::key_adapter::LockGuard>> {
+        Real.lock_shared(p, path, blocking)
     }
 }
 

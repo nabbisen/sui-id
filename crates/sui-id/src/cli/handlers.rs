@@ -266,7 +266,7 @@ pub(crate) async fn run_admin_unlock_user(
 ) -> Result<()> {
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) =
+    let (db, _key_origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -297,7 +297,7 @@ pub(crate) async fn run_admin_reset_mfa(
     }
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) =
+    let (db, _key_origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -335,7 +335,7 @@ pub(crate) async fn run_admin_issue_recovery_link(
 ) -> Result<()> {
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) =
+    let (db, _key_origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -385,7 +385,7 @@ pub(crate) async fn run_admin_issue_recovery_link(
 /// runs the identical check after the confirmation prompt, then P5's
 /// filesystem probe, before anything today's sequence does.
 /// The four raw `--retain-backup-until`/`--custody-reference`/
-/// `--remove-backup-after-verified`/`--verification-reference` flags,
+/// `--discard-backup-once-verified`/`--verification-reference` flags,
 /// bundled so `cli.rs`'s two call sites (the noun-first command and the
 /// pre-148 `rotate-key` alias) pass them identically. [`Self::into_disposition`]
 /// is the one place they become a typed
@@ -393,7 +393,7 @@ pub(crate) async fn run_admin_issue_recovery_link(
 pub(crate) struct CustodyChoiceArgs {
     pub(crate) retain_backup_until: Option<String>,
     pub(crate) custody_reference: Option<String>,
-    pub(crate) remove_backup_after_verified: bool,
+    pub(crate) discard_backup_once_verified: bool,
     pub(crate) verification_reference: Option<String>,
 }
 
@@ -413,14 +413,13 @@ impl CustodyChoiceArgs {
             eprintln!(
                 "refusing to rotate: {line}\n\nThe operator must choose exactly one of:\n  \
                  --retain-backup-until <RFC3339_INSTANT> --custody-reference <TEXT>\n  \
-                 --remove-backup-after-verified --verification-reference <TEXT>"
+                 --discard-backup-once-verified --verification-reference <TEXT>"
             );
             std::process::exit(2);
         };
-        match (self.retain_backup_until, self.remove_backup_after_verified) {
+        match (self.retain_backup_until, self.discard_backup_once_verified) {
             (None, false) => usage_error(
-                "no old-key custody choice was given (RFC 100's Old-key custody requires one)"
-                    .to_owned(),
+                "no old-key custody choice was given -- every rotation requires one".to_owned(),
             ),
             (Some(review_at), false) => {
                 let review_at = chrono::DateTime::parse_from_rfc3339(&review_at)
@@ -447,9 +446,9 @@ impl CustodyChoiceArgs {
             }
             (None, true) => {
                 #[allow(clippy::expect_used)]
-                // `requires = "remove_backup_after_verified"` in cli.rs
+                // `requires = "discard_backup_once_verified"` in cli.rs
                 let verification_reference = self.verification_reference.expect(
-                    "clap requires --verification-reference with --remove-backup-after-verified",
+                    "clap requires --verification-reference with --discard-backup-once-verified",
                 );
                 RotationDisposition::RemoveAfterVerified {
                     verification_reference,
@@ -459,7 +458,7 @@ impl CustodyChoiceArgs {
                 // `conflicts_with_all` in cli.rs already refuses this
                 // combination before this function is ever reached.
                 unreachable!(
-                    "clap refuses --retain-backup-until with --remove-backup-after-verified"
+                    "clap refuses --retain-backup-until with --discard-backup-once-verified"
                 )
             }
         }
@@ -486,28 +485,24 @@ pub(crate) async fn run_admin_rotate_key(
     }
     // RFC 100 `0.94.0` P2 §2: resolved before anything else is touched,
     // so a missing or mixed custody choice refuses (exit 2) before the
-    // pre-flight recovery pass below, let alone the lock or the
-    // confirmation prompt.
+    // lock, the confirmation prompt, or the pre-flight recovery pass
+    // below.
     let disposition = custody.into_disposition();
-
-    // RFC 100 stage 4: this command resolves its key through
-    // `keyring::resolve_checked` directly, not `database::open_checked`,
-    // so it calls recovery explicitly -- before anything else, including
-    // the summary below, since it is the command most likely to meet
-    // its own leftover. This is a separate, prior lock acquisition and
-    // release (RFC 100 `0.94.0` P2 §1's own lock, taken non-blocking
-    // inside `recover` itself) -- the rotation attempt below takes its
-    // own, only once this pass has returned.
     let adapter = crate::key_adapter::default_adapter();
-    crate::rotate::recovery::recover_and_report(
-        adapter.as_ref(),
-        &cfg.storage.key_file,
-        &cfg.storage.db_path,
-    )?;
 
     // RFC 112 D5: print a summary and ask for confirmation before the
     // database is even opened, so a refusal is the first thing read.
     crate::database::check(&cfg.storage.db_path)?;
+
+    // RFC 100 `0.94.0` P2 §1, P7 §1: the liveness lock, exclusive against
+    // a running server, any other sui-id command, or another rotation.
+    // Taken non-blocking, and **before the summary** (P7 review), so a
+    // refusal is the first thing read, not something an operator meets
+    // after typing `yes`. It is held through the prompt.
+    let old_path = cfg.storage.key_file.clone();
+    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(&old_path);
+    let _lock =
+        crate::rotate::preconditions::take_rotation_lock(adapter.as_ref(), &paths, "rotate.lock")?;
 
     eprintln!(
         "About to rotate the master key for the database at {}.",
@@ -520,12 +515,12 @@ pub(crate) async fn run_admin_rotate_key(
         eprintln!("New key:      generated by this command");
     }
     eprintln!(
-        "RFC 100: this runs the full journalled rotation protocol. A crash part-way is \
-         completed or undone automatically, at the next start or rotation attempt."
+        "This rotation is crash-safe: an interruption part-way is completed or undone \
+         automatically, at the next start or rotation attempt."
     );
     eprintln!(
-        "Make sure the server is stopped and that you have a fresh \
-        backup of both the DB and the old key file before continuing."
+        "Make sure you have a fresh backup of both the DB and the old key file before \
+         continuing."
     );
 
     if !yes {
@@ -543,15 +538,22 @@ pub(crate) async fn run_admin_rotate_key(
         }
     }
 
-    let old_path = cfg.storage.key_file.clone();
-    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(&old_path);
-
-    // RFC 100 `0.94.0` P2 §1: the liveness lock, before preconditions
-    // or the workspace -- taken non-blocking, so a second rotation
-    // while one is already running is refused immediately, not left to
-    // wait.
-    let _lock =
-        crate::rotate::preconditions::take_rotation_lock(adapter.as_ref(), &paths, "rotate.lock")?;
+    // RFC 100 stage 4 (P7 §1: moved here, under the exclusive lock taken
+    // above, before the summary, closing what would otherwise be a gap
+    // between this pass and the lock): this command resolves its key through
+    // `keyring::resolve_checked` directly, not `database::open_checked`,
+    // so it calls recovery explicitly -- before the precondition check
+    // below, since it is the command most likely to meet its own
+    // leftover, and a leftover recovery would clean must not trip P3's
+    // own refusal first. The lock is already held exclusively, so this
+    // does not take it again (a second `flock` open in this same
+    // process would conflict with the first).
+    crate::rotate::recovery::recover_and_report(
+        adapter.as_ref(),
+        &old_path,
+        &cfg.storage.db_path,
+        true,
+    )?;
 
     // RFC 100 stage 2: P1-P4, gathered -- every failing precondition
     // named, not only the first. Nothing is created, removed or renamed
@@ -599,7 +601,7 @@ pub(crate) async fn run_admin_rotate_key(
         &old_key,
         &new_key,
         &new_key_b64,
-        disposition,
+        disposition.clone(),
         policy,
     )
     .await
@@ -644,10 +646,28 @@ pub(crate) async fn run_admin_rotate_key(
     eprintln!("  smtp_config:                {}", report.smtp_config);
     eprintln!("  total:                      {}", report.total());
     eprintln!();
-    eprintln!(
-        "The pre-rotation backup of the old key is at {}, kept under the bound disposition.",
-        paths.backup.display()
-    );
+    match disposition {
+        sui_id_store::master_key_rotation::RotationDisposition::RemoveAfterVerified { .. } => {
+            eprintln!(
+                "The old key is kept at {}. When you have checked that nothing needs it, run \
+                 `sui-id admin master-key backup remove --confirm-retired-or-reencrypted`. \
+                 Until then, the next rotation refuses.",
+                paths.backup.display()
+            );
+        }
+        sui_id_store::master_key_rotation::RotationDisposition::RetainUntil {
+            review_at,
+            custody_reference,
+        } => {
+            eprintln!(
+                "The old key is kept at {} until {} ({custody_reference}). After that date, \
+                 sui-id warns at every start until you renew or remove it. Until it is gone, \
+                 the next rotation refuses.",
+                paths.backup.display(),
+                review_at.to_rfc3339(),
+            );
+        }
+    }
     eprintln!("New key file written to {}", old_path.display());
     eprintln!();
     eprintln!("Restart the server. The new key is in place.");
@@ -756,13 +776,14 @@ pub(crate) async fn run_admin_backup_remove(
     if !confirm_retired_or_reencrypted {
         bail!(
             "refusing: --confirm-retired-or-reencrypted is required -- state, explicitly, that \
-             the backup is retired or re-encrypted and safe to unlink before this command \
-             unlinks it"
+             every copy of the database made before the rotation that kept this old key (not \
+             a `backup create` tarball, which carries its own key) is retired or re-encrypted, \
+             so this key is safe to remove, before this command unlinks it"
         );
     }
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _origin) =
+    let (db, _origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -810,7 +831,7 @@ pub(crate) async fn run_admin_backup_renew(
         .with_context(|| format!("--until {until:?} is not a valid RFC 3339 instant"))?;
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _origin) =
+    let (db, _origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -844,7 +865,7 @@ pub(crate) async fn run_setup(
 
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) =
+    let (db, _key_origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -949,7 +970,7 @@ pub(crate) async fn run_admin_rotate_metrics_token(
 
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) =
+    let (db, _key_origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -999,7 +1020,7 @@ pub(crate) async fn run_admin_issue_registration_token(
 
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) =
+    let (db, _key_origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -1085,7 +1106,7 @@ pub(crate) async fn run_admin_revoke_registration_token(
 
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) =
+    let (db, _key_origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -1106,7 +1127,7 @@ pub(crate) async fn run_admin_list_registration_tokens(
 ) -> Result<()> {
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) =
+    let (db, _key_origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;
@@ -1314,7 +1335,7 @@ pub(crate) async fn run_admin_legacy_dynamic_candidates(
 ) -> Result<()> {
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
-    let (db, _key_origin) =
+    let (db, _key_origin, _db_lock) =
         crate::database::open_checked(&cfg.storage.db_path, &cfg.storage.key_file, policy)
             .await
             .context("loading master key and opening database")?;

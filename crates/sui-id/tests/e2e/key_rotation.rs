@@ -205,7 +205,7 @@ mod failpoint {
     /// choice now. Every `admin rotate-key`/`admin master-key rotate`
     /// invocation in this module appends these.
     const CUSTODY_ARGS: &[&str] = &[
-        "--remove-backup-after-verified",
+        "--discard-backup-once-verified",
         "--verification-reference",
         "e2e-test",
     ];
@@ -664,7 +664,7 @@ mod live {
                 "master-key",
                 "rotate",
                 "--yes",
-                "--remove-backup-after-verified",
+                "--discard-backup-once-verified",
                 "--verification-reference",
                 "verified-by-test",
                 "--config",
@@ -753,7 +753,7 @@ mod live {
             "master-key",
             "rotate",
             "--yes",
-            "--remove-backup-after-verified",
+            "--discard-backup-once-verified",
             "--verification-reference",
             "first",
             "--config",
@@ -770,7 +770,10 @@ mod live {
             "the second rotation must refuse"
         );
         let err = stderr(&second);
-        assert!(err.contains("pre-rotation backup is still at"), "{err}");
+        assert!(
+            err.contains("the last rotation's old key is still kept at"),
+            "{err}"
+        );
         assert!(!err.contains("Rotation complete"), "{err}");
         assert!(!h.workspace().exists(), "no workspace was created");
         let next = std::path::PathBuf::from(format!("{}.next", h.key().display()));
@@ -834,7 +837,7 @@ mod live {
                 "2099-01-01T00:00:00Z",
                 "--custody-reference",
                 "ops-team",
-                "--remove-backup-after-verified",
+                "--discard-backup-once-verified",
                 "--verification-reference",
                 "verified",
                 "--config",
@@ -898,7 +901,7 @@ mod live {
                 "master-key",
                 "rotate",
                 "--yes",
-                "--remove-backup-after-verified",
+                "--discard-backup-once-verified",
                 "--verification-reference",
                 "x",
                 "--config",
@@ -1293,7 +1296,7 @@ mod custody {
                 "master-key",
                 "rotate",
                 "--yes",
-                "--remove-backup-after-verified",
+                "--discard-backup-once-verified",
                 "--verification-reference",
                 reference,
                 "--config",
@@ -1319,6 +1322,89 @@ mod custody {
     }
     fn far_future() -> String {
         (chrono::Utc::now() + chrono::TimeDelta::days(90)).to_rfc3339()
+    }
+
+    /// RFC 100 `0.94.0` P7 §2: the old flag name is gone, with no
+    /// alias -- clap's own usage error, exit 2, the same as any other
+    /// unrecognized flag.
+    #[test]
+    fn the_old_flag_name_is_a_usage_error_not_an_alias() {
+        let h = Home::new();
+        let cfg = h.config(18930);
+        h.create(&cfg);
+
+        let out = h.run(
+            &[
+                "admin",
+                "master-key",
+                "rotate",
+                "--yes",
+                "--remove-backup-after-verified",
+                "--verification-reference",
+                "x",
+                "--config",
+            ],
+            &cfg,
+        );
+        assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+        assert!(
+            stderr(&out).contains("unexpected argument")
+                || stderr(&out).contains("--remove-backup-after-verified"),
+            "{}",
+            stderr(&out)
+        );
+    }
+
+    /// RFC 100 `0.94.0` P7 §2: the success message, per disposition,
+    /// names the next step and that the next rotation refuses until
+    /// it's taken.
+    #[test]
+    fn the_success_message_names_the_next_step_by_disposition() {
+        let h1 = Home::new();
+        let cfg1 = h1.config(18931);
+        h1.create(&cfg1);
+        let out1 = rotate_remove_after_verified(&h1, &cfg1, "checked-it");
+        assert_eq!(out1.status.code(), Some(0), "{}", stderr(&out1));
+        let err1 = stderr(&out1);
+        assert!(
+            err1.contains("sui-id admin master-key backup remove"),
+            "{err1}"
+        );
+        assert!(err1.contains("the next rotation refuses"), "{err1}");
+
+        let h2 = Home::new();
+        let cfg2 = h2.config(18932);
+        h2.create(&cfg2);
+        let until = far_future();
+        let out2 = rotate_retain_until(&h2, &cfg2, &until, "ops-team");
+        assert_eq!(out2.status.code(), Some(0), "{}", stderr(&out2));
+        let err2 = stderr(&out2);
+        assert!(err2.contains("ops-team"), "{err2}");
+        assert!(err2.contains("sui-id warns at every start"), "{err2}");
+        assert!(err2.contains("the next rotation refuses"), "{err2}");
+    }
+
+    /// RFC 100 `0.94.0` P7 §2: the kept-backup refusal names both
+    /// settling commands, not only one.
+    #[test]
+    fn the_kept_backup_refusal_names_both_settling_commands() {
+        let h = Home::new();
+        let cfg = h.config(18933);
+        h.create(&cfg);
+        let first = rotate_remove_after_verified(&h, &cfg, "first");
+        assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
+
+        let second = rotate_remove_after_verified(&h, &cfg, "second");
+        assert_ne!(second.status.code(), Some(0));
+        let err = stderr(&second);
+        assert!(
+            err.contains("sui-id admin master-key backup remove"),
+            "{err}"
+        );
+        assert!(
+            err.contains("sui-id admin master-key backup renew"),
+            "{err}"
+        );
     }
 
     /// RFC 100 `0.94.0` P3 §5: rotate, settle by removal, rotate again
@@ -1684,5 +1770,229 @@ mod custody {
             });
             buf
         }
+    }
+}
+
+// ---------- RFC 100 `0.94.0` P7 (2026-11-25): a rotation must not run
+// beside a running sui-id ----------
+mod concurrency {
+    use std::io::Read;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Output};
+    use std::time::{Duration, Instant};
+
+    const BIN: &str = env!("CARGO_BIN_EXE_sui-id");
+
+    struct Home {
+        dir: tempfile::TempDir,
+    }
+
+    impl Home {
+        fn new() -> Self {
+            Self {
+                dir: tempfile::tempdir().expect("tempdir"),
+            }
+        }
+        fn db(&self) -> PathBuf {
+            self.dir.path().join("t.sqlite")
+        }
+        fn key(&self) -> PathBuf {
+            self.dir.path().join("t.key")
+        }
+        fn lock(&self) -> PathBuf {
+            self.dir.path().join("t.key.rotation-lock")
+        }
+        fn config(&self, port: u16) -> PathBuf {
+            let sample = Command::new(BIN)
+                .arg("--print-sample-config")
+                .output()
+                .expect("sample");
+            let mut text = String::from_utf8(sample.stdout).expect("utf8");
+            text = text
+                .replace("./sui-id.sqlite", &self.db().display().to_string())
+                .replace("./sui-id.key", &self.key().display().to_string())
+                .replace("127.0.0.1:8801", &format!("127.0.0.1:{port}"));
+            let path = self.dir.path().join("cfg.toml");
+            std::fs::write(&path, text).expect("config");
+            path
+        }
+        fn create(&self, cfg: &Path) {
+            let out = self.run(
+                &["admin", "unlock-user", "--username", "nobody", "--config"],
+                cfg,
+            );
+            assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+            assert!(self.db().exists());
+            assert!(self.key().exists());
+        }
+        fn run(&self, args: &[&str], cfg: &Path) -> Output {
+            Command::new(BIN).args(args).arg(cfg).output().expect("run")
+        }
+        /// Every file under `dir` except the permanent lock file, with
+        /// its contents, independent of `readdir` order -- the lock
+        /// file is the one thing a running server is allowed to have
+        /// created or touched by the time a rotation attempt refuses.
+        fn snapshot_except_lock(&self) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+            let lock = self.lock();
+            std::fs::read_dir(self.dir.path())
+                .expect("read dir")
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| *p != lock)
+                .map(|path| {
+                    let body = std::fs::read(&path).expect("read");
+                    (path, body)
+                })
+                .collect()
+        }
+    }
+
+    fn stderr(o: &Output) -> String {
+        String::from_utf8_lossy(&o.stderr).into_owned()
+    }
+
+    fn rotate_args(reference: &str) -> [&str; 8] {
+        [
+            "admin",
+            "master-key",
+            "rotate",
+            "--yes",
+            "--discard-backup-once-verified",
+            "--verification-reference",
+            reference,
+            "--config",
+        ]
+    }
+
+    fn drain(mut pipe: impl Read + Send + 'static) -> std::sync::Arc<std::sync::Mutex<Vec<u8>>> {
+        let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let shared = buf.clone();
+        std::thread::spawn(move || {
+            let mut chunk = [0u8; 4096];
+            loop {
+                match pipe.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => shared.lock().expect("lock").extend_from_slice(&chunk[..n]),
+                }
+            }
+        });
+        buf
+    }
+
+    /// Spawns `sui-id serve`, waits for it to report itself listening
+    /// (its own stderr line, the real readiness signal -- not a sleep),
+    /// and returns the child plus its drained stderr buffer.
+    /// `std::process::Child` has no `Drop` that kills it -- a test
+    /// that panics before its own explicit `child.kill()` would
+    /// otherwise leave the real server running and the port bound,
+    /// exactly what broke a subsequent run while this test was being
+    /// written. This kills it unconditionally, panic or not.
+    struct KillOnDrop(std::process::Child);
+
+    impl Drop for KillOnDrop {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    fn spawn_listening_server(
+        cfg: &Path,
+    ) -> (KillOnDrop, std::sync::Arc<std::sync::Mutex<Vec<u8>>>) {
+        let mut child = Command::new(BIN)
+            .arg("serve")
+            .arg("--config")
+            .arg(cfg)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn");
+        let out_buf = drain(child.stdout.take().expect("stdout"));
+        let err_buf = drain(child.stderr.take().expect("stderr"));
+
+        let start = Instant::now();
+        loop {
+            if let Some(status) = child.try_wait().expect("wait") {
+                panic!(
+                    "sui-id serve exited early ({status:?}): stdout={} stderr={}",
+                    String::from_utf8_lossy(&out_buf.lock().expect("lock")),
+                    String::from_utf8_lossy(&err_buf.lock().expect("lock")),
+                );
+            }
+            // `tracing::info!`'s own line has no `eprintln!` companion
+            // (unlike an operator-facing `WARN`), so it goes wherever
+            // `tracing_subscriber::fmt()`'s default writer sends it --
+            // stdout -- not necessarily stderr. Check both.
+            let out_text = String::from_utf8_lossy(&out_buf.lock().expect("lock")).into_owned();
+            let err_text = String::from_utf8_lossy(&err_buf.lock().expect("lock")).into_owned();
+            if out_text.contains("sui-id listening") || err_text.contains("sui-id listening") {
+                return (KillOnDrop(child), err_buf);
+            }
+            if start.elapsed() > Duration::from_secs(60) {
+                let _ = child.kill();
+                panic!(
+                    "sui-id serve never reported listening: stdout={out_text} stderr={err_text}"
+                );
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// RFC 100 `0.94.0` P7 §1: the dispatch's own central proof -- a
+    /// rotation beside a running server refuses, changes nothing but
+    /// the permanent lock file, and proceeds once the server stops.
+    #[test]
+    fn a_rotation_refuses_while_a_real_server_runs_and_changes_nothing() {
+        let h = Home::new();
+        let cfg = h.config(18920);
+        h.create(&cfg);
+
+        let (child, _err_buf) = spawn_listening_server(&cfg);
+        // Taken only once the server is up: starting it (WAL/SHM
+        // sidecar files, an opened connection) already changes the
+        // directory on its own, before any rotation is even attempted
+        // -- the property under test is what the *refused rotation*
+        // changes, not what running the server changes.
+        let before = h.snapshot_except_lock();
+
+        let out = h.run(&rotate_args("first"), &cfg);
+        assert_ne!(
+            out.status.code(),
+            Some(0),
+            "a rotation must refuse while the server is running"
+        );
+        let err = stderr(&out);
+        assert!(err.contains("sui-id is running"), "{err}");
+        assert!(!err.contains("Rotation complete"), "{err}");
+        // P7 review: the refusal is the first thing read, not something an
+        // operator meets after the summary and a typed `yes`.
+        assert!(!err.contains("About to rotate"), "{err}");
+
+        let after = h.snapshot_except_lock();
+        assert_eq!(
+            after, before,
+            "byte-identical apart from the lock file, which the snapshot excludes"
+        );
+
+        drop(child);
+
+        // Once the server stops, the rotation proceeds.
+        let out2 = h.run(&rotate_args("second"), &cfg);
+        assert_eq!(out2.status.code(), Some(0), "{}", stderr(&out2));
+    }
+
+    /// RFC 100 `0.94.0` P7 §1: an ordinary command -- one that, like
+    /// the server, only opens the database through `open_checked` --
+    /// coexists with a running server. Both hold the lock shared.
+    #[test]
+    fn an_ordinary_command_coexists_with_a_running_server() {
+        let h = Home::new();
+        let cfg = h.config(18922);
+        h.create(&cfg);
+
+        let (_child, _err_buf) = spawn_listening_server(&cfg);
+
+        let out = h.run(&["admin", "registration-token", "list", "--config"], &cfg);
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     }
 }
