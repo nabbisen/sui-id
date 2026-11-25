@@ -50,8 +50,11 @@
 > - **P5 and P6 dispatched 2026-11-25**: [P5](../151-password-policy-can-be-made-stricter/0.94.0-p5-the-minimum-can-be-raised-2026-11-25.md)
 >   (RFC 151) and [P6](../097-threat-model/0.94.0-p6-the-inventory-and-its-gate-2026-11-25.md)
 >   (RFC 097 stage 1). They are independent; P5 first.
+> - **P5 landed 2026-11-25** (`a3e8dfc`). The password minimum can be
+>   raised, never lowered. The review restored setup's too-short refusal,
+>   which the typed error had turned into a generic failure.
 >
-> ## Whose turn it is: **the implementation role's**, on P5, then P6.
+> ## Whose turn it is: **the implementation role's**, on P6.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).

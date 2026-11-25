@@ -7,4 +7,4 @@ as a freeze exception decided 2026-11-15.
 
 ## What exists
 
-The RFC and its P5 dispatch. Nothing is built yet.
+**Built in `0.94.0` P5** (`a3e8dfc`, 2026-11-25): migration 0055, S11, the *Authentication* tab's field, and the localized hints and refusals. It closes on the RFC's closure prerequisites at `0.94.0`'s cut.
