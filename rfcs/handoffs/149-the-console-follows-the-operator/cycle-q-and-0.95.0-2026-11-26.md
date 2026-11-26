@@ -6,6 +6,9 @@
 
 **Authorized 2026-11-26.** `@nabbisen`, on the split proposed in this plan's first version (`6577468`): *"Yes. Scope them, the
 series, carefully with consideration."* This version is that scoping, from measurements made the same day at `6577468`.
+**The scoping was authorized the same day**, as published at `f0107e1` (`@nabbisen`: *"Authorized."*). That covers the
+stages of §2 and §3, and the choices made in Q2's dispatch. §1's four answers remain proposals. Each is put to him again
+before its stage.
 
 **Authority already given.**
 - **Cycle Q's scope** came from the split of cycle P (`@nabbisen`, 2026-11-24: *"Two releases, M2c first (Recommended)"*).
