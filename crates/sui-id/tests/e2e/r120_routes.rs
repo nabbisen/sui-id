@@ -137,7 +137,7 @@ const EXPECTED_WITHOUT_ACTOR: &[(&str, &str, &str)] = &[
     (
         "GET",
         "/admin/settings",
-        "constant redirect to the first settings tab; reads nothing",
+        "constant redirect to /admin/settings/basic (General); reads nothing",
     ),
     (
         "GET",

@@ -1,7 +1,7 @@
 //! Settings email tab (RFC 065).
 
 use super::*;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 
 pub struct SettingsEmailData {
     pub configured: bool,
@@ -68,17 +68,17 @@ pub fn render_settings_email(
         };
 
         view! {
-            <Shell title=t.settings_email_page_title.to_string() nav=Chrome::Console{username: admin_username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=NavItem::Email.label(t).to_string() nav=Chrome::Console{username: admin_username, item: NavItem::Email} lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
-                        <h1 class="page-header__title">{t.settings_title}</h1>
+                        <p class="page-header__group">{NavItem::Email.group().label(t)}</p>
+                        <h1 class="page-header__title">{NavItem::Email.label(t)}</h1>
                         <p class="page-header__lede">
                             {t.settings_email_lede}
                         </p>
                     </div>
                 </header>
                 {flash_banner(flash)}
-                {settings_tabs(SettingsTab::Email, lang)}
 
                 <div class="card">
                     <h3 class="card__title">{t.settings_email_smtp_section}</h3>

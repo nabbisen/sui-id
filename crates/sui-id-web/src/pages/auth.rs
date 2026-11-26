@@ -240,7 +240,7 @@ pub fn render_mfa_setup(
             role,
         } = data;
         view! {
-            <Shell title=t.mfa_setup_shell_title.to_string() nav=Chrome::for_person(username, role) current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.mfa_setup_shell_title.to_string() nav=Chrome::for_person(username, role) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.mfa_setup_title}</h1>
@@ -330,9 +330,9 @@ pub fn render_password_change(
         };
         let username_for_nav = username.clone();
         view! {
-            // RFC-MI-060: current="me" so the admin nav highlights
-            // "Security". Tab strip added (deferred from RFC-MI-022).
-            <Shell title=t.password_change_title.to_owned() nav=Chrome::for_person(username_for_nav, role) current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            // RFC 149 §1: one of the person's own pages, so no sidebar
+            // item is current. Tab strip added (deferred from RFC-MI-022).
+            <Shell title=t.password_change_title.to_owned() nav=Chrome::for_person(username_for_nav, role) lang=lang csrf_token=csrf_token.clone()>
                 {me_security_tabs(MeTab::Password, lang)}
                 <header class="page-header">
                     <div>
@@ -435,7 +435,7 @@ pub fn render_step_up(
             }
         };
         view! {
-            <Shell title=t.step_up_title.to_string() nav=Chrome::Bare current=None lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.step_up_title.to_string() nav=Chrome::Bare lang=lang csrf_token=csrf_token.clone()>
                 <div class="auth-page">
                     <div class="auth-card">
                         <h1>{t.step_up_title}</h1>

@@ -60,6 +60,7 @@ mod o2b_init_and_first_run;
 mod oidc_flow;
 mod password_change;
 mod password_min_len;
+mod q2_navigation;
 mod r094_cycle_i_u20_revoke_idempotent;
 mod r094_cycle_j_stage10_fix_round_gc;
 mod r094_cycle_j_stage10_r1_must_attempt;

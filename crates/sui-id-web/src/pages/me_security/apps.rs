@@ -107,7 +107,6 @@ pub fn render_me_apps(data: MeAppsData, flash: Option<Flash>, lang: sui_id_i18n:
             <crate::layout::Shell
                 title=t.me_apps_title.to_owned()
                 nav=crate::layout::Chrome::for_person(username, role)
-                current=Some("me".to_string())
                 lang=lang
                 csrf_token=csrf_token.clone()
                 dev_mode=dev_mode>

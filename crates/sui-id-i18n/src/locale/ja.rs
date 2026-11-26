@@ -104,22 +104,22 @@ pub static STRINGS_JA: Strings = Strings {
     nav_logout: "サインアウト",
     a11y_skip_to_main: "メインコンテンツへスキップ",
     nav_aria_main: "メインナビゲーション",
+    nav_group_overview: "概要",
+    nav_group_people: "ユーザー管理",
+    nav_group_applications: "アプリケーション",
+    nav_group_sign_in: "サインイン",
+    nav_group_security: "セキュリティ",
+    nav_group_system: "システム",
+    nav_item_sign_in_settings: "サインイン設定",
+    nav_item_sessions_and_lockout: "セッションとロックアウト",
+    nav_item_about_this_server: "このサーバーについて",
+    nav_menu_toggle: "メニュー",
 
-    // Footer (RFC 050)
-    footer_tagline: "🌱 sui-id · 静かで、凛として、やさしい ID 基盤を。",
-    footer_a11y_group_label: "アクセシビリティ対応",
-    a11y_keyboard: "キーボード対応",
-    a11y_screen_reader: "スクリーンリーダー対応",
-    a11y_contrast: "コントラスト対応",
-
-    // Theme toggle (RFC 050)
+    // Theme toggle (RFC 050; RFC 149 §3: in the account menu)
     theme_toggle_group: "テーマ",
     theme_toggle_light: "ライト",
     theme_toggle_auto: "自動",
     theme_toggle_dark: "ダーク",
-    theme_toggle_light_title: "ライトテーマ",
-    theme_toggle_auto_title: "OS の設定に従う",
-    theme_toggle_dark_title: "ダークテーマ",
 
     // Status words (RFC 052)
     status_active: "有効",
@@ -347,8 +347,6 @@ pub static STRINGS_JA: Strings = Strings {
     settings_title: "設定",
     settings_lede: "現在の有効な設定の確認。",
     settings_tab_basic: "基本",
-    settings_tab_security: "セキュリティ",
-    settings_tab_authentication: "認証",
     settings_tab_logs: "ログ",
     settings_tab_email: "メール",
     settings_tab_other: "その他",
@@ -409,7 +407,6 @@ pub static STRINGS_JA: Strings = Strings {
     me_security_language_saved_banner: "言語設定を保存しました。",
     setup_steps_aria: "セットアップ手順",
     me_security_tabs_aria: "セキュリティ設定タブ",
-    settings_tabs_aria: "設定タブ",
     me_security_password_change_link: "パスワードを変更",
     me_security_sessions_section: "サインイン中の場所",
     me_security_sessions_lede: "1 行が 1 つのブラウザセッションです。Revoke を押すとそのブラウザは即座にサインアウトされます。「current session」とマークされているのは現在使用中のセッションです。",
@@ -676,7 +673,7 @@ pub static STRINGS_JA: Strings = Strings {
     login_title_self_service: "セキュリティ管理にサインイン",
     login_body_self_service: "MFA、パスキー、セッション、パスワードを管理します。",
     login_body_oidc: "sui-id がこのアプリケーションのためにあなたの本人確認を行います。",
-    theme_noscript_note: "テーマはシステム設定に従います。",
+    theme_noscript_note: "テーマは端末の設定に従います。",
     empty_users: "まだユーザーがいません。",
     empty_users_cta: "最初のユーザーを作成",
     empty_clients: "まだアプリケーションが登録されていません。",
@@ -724,6 +721,7 @@ pub static STRINGS_JA: Strings = Strings {
     settings_basic_kv_listen: "Listen address",
     settings_basic_kv_cookie_secure: "Cookie Secure フラグ",
     settings_basic_kv_trusted_proxies: "Trusted proxies",
+    settings_security_lede: "セッション制限、セキュリティヘッダー、CORS。",
     settings_security_session_section: "セッション制限",
     settings_security_session_lede: "アイドルタイムアウトと同時セッション数の上限。どちらも 0 で無効（デフォルト）、運用ポリシーに応じて設定します。",
     settings_security_idle_timeout_label: "アイドルタイムアウト（秒）",
@@ -740,6 +738,7 @@ pub static STRINGS_JA: Strings = Strings {
     settings_security_headers_hint: "管理画面はすべて上記ヘッダーを返します。/oauth2/* 系の公開エンドポイントは仕様上の必要に応じて一部省略します。",
     settings_security_cors_token_label: "Token endpoint の動的許可（登録 redirect_uris の origin）",
     settings_security_cors_public_label: "Discovery / JWKS / userinfo の公開許可（*）",
+    settings_authentication_lede: "パスワードポリシー、多要素認証、OAuth 2.1 / OIDC トークン。",
     settings_auth_password_section: "パスワード",
     settings_auth_mfa_section: "2 段階認証",
     settings_auth_oidc_section: "OIDC / トークン設定",
@@ -771,12 +770,7 @@ pub static STRINGS_JA: Strings = Strings {
     consent_policy_always: "毎回確認",
 
     // 設定: ページタイトル (RFC 039)
-    settings_title_basic: "設定 — 基本",
-    settings_title_security: "設定 — セキュリティ",
-    settings_title_authentication: "設定 — 認証",
-    settings_title_logs: "設定 — ログ",
     settings_title_email: "設定 — メール",
-    settings_title_advanced: "設定 — 詳細",
     // 設定: 認証タブ本文 (RFC 039)
     settings_auth_min_length_label: "最小文字数",
     settings_auth_hash_algorithm_label: "ハッシュアルゴリズム",
@@ -801,7 +795,6 @@ pub static STRINGS_JA: Strings = Strings {
     settings_advanced_key_file_label: "マスターキーファイル",
     settings_advanced_manage_link: "管理 →",
     // 設定: メールタブ本文 (RFC 039)
-    settings_email_page_title: "設定 — メール",
     settings_email_lede: "パスワードリセットや変更通知メールの SMTP 設定。",
     settings_email_smtp_section: "SMTP 接続",
     settings_email_enable_label: "メール送信を有効化",

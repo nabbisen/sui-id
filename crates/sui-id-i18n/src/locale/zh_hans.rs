@@ -107,22 +107,22 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     nav_logout: "退出登录",
     a11y_skip_to_main: "跳转到主要内容",
     nav_aria_main: "主导航",
+    nav_group_overview: "概览",
+    nav_group_people: "用户",
+    nav_group_applications: "应用程序",
+    nav_group_sign_in: "登录",
+    nav_group_security: "安全",
+    nav_group_system: "系统",
+    nav_item_sign_in_settings: "登录设置",
+    nav_item_sessions_and_lockout: "会话与锁定",
+    nav_item_about_this_server: "关于此服务器",
+    nav_menu_toggle: "菜单",
 
-    // Footer (RFC 050)
-    footer_tagline: "🌱 sui-id · 安静、可靠的身份认证基础。",
-    footer_a11y_group_label: "无障碍功能",
-    a11y_keyboard: "支持键盘操作",
-    a11y_screen_reader: "支持屏幕阅读器",
-    a11y_contrast: "支持高对比度",
-
-    // Theme toggle (RFC 050)
+    // Theme toggle (RFC 050; RFC 149 §3: in the account menu)
     theme_toggle_group: "主题",
     theme_toggle_light: "浅色",
     theme_toggle_auto: "自动",
     theme_toggle_dark: "深色",
-    theme_toggle_light_title: "浅色主题",
-    theme_toggle_auto_title: "跟随系统",
-    theme_toggle_dark_title: "深色主题",
 
     // Status words (RFC 052)
     status_active: "启用",
@@ -350,8 +350,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     settings_title: "设置",
     settings_lede: "查看当前有效配置。",
     settings_tab_basic: "基本",
-    settings_tab_security: "安全",
-    settings_tab_authentication: "认证",
     settings_tab_logs: "日志",
     settings_tab_email: "邮件",
     settings_tab_other: "其他",
@@ -410,7 +408,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     me_security_language_saved_banner: "语言偏好已保存。",
     setup_steps_aria: "设置步骤",
     me_security_tabs_aria: "安全选项卡",
-    settings_tabs_aria: "设置选项卡",
     me_security_password_change_link: "修改密码",
     me_security_sessions_section: "登录位置",
     me_security_sessions_lede: "每行代表一个浏览器会话。点击撤销会立即退出该浏览器。标有当前会话的是您正在使用的。",
@@ -675,7 +672,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     login_title_self_service: "登录以管理您的安全设置",
     login_body_self_service: "管理 MFA、通行密钥、会话和密码。",
     login_body_oidc: "sui-id 将为此应用程序验证您的身份。",
-    theme_noscript_note: "主题跟随系统设置。",
+    theme_noscript_note: "主题跟随设备设置。",
     empty_users: "暂无用户。",
     empty_users_cta: "创建第一个用户",
     empty_clients: "暂无已注册的应用程序。",
@@ -722,6 +719,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     settings_basic_kv_listen: "监听地址",
     settings_basic_kv_cookie_secure: "Cookie Secure 标志",
     settings_basic_kv_trusted_proxies: "受信代理",
+    settings_security_lede: "会话限制、安全响应头和 CORS。",
     settings_security_session_section: "会话限制",
     settings_security_session_lede: "空闲超时和每用户并发会话上限，均默认为 0（禁用），按需启用。",
     settings_security_idle_timeout_label: "空闲超时（秒）",
@@ -738,6 +736,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     settings_security_headers_hint: "所有管理页面均返回上述响应头。/oauth2/* 公开端点会按协议要求省略部分头。",
     settings_security_cors_token_label: "Token 端点的动态允许列表（已注册 redirect_uris 的来源）",
     settings_security_cors_public_label: "Discovery / JWKS / userinfo 公开允许（*）",
+    settings_authentication_lede: "密码策略、多因素认证和 OAuth 2.1 / OIDC 令牌。",
     settings_auth_password_section: "密码",
     settings_auth_mfa_section: "双重认证",
     settings_auth_oidc_section: "OIDC / 令牌设置",
@@ -769,12 +768,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     consent_policy_always: "每次询问",
 
     // 设置: 页面标题 (RFC 039)
-    settings_title_basic: "设置 — 基本",
-    settings_title_security: "设置 — 安全",
-    settings_title_authentication: "设置 — 认证",
-    settings_title_logs: "设置 — 日志",
     settings_title_email: "设置 — 邮件",
-    settings_title_advanced: "设置 — 高级",
     // 设置: 认证选项卡正文 (RFC 039)
     settings_auth_min_length_label: "最小长度",
     settings_auth_hash_algorithm_label: "哈希算法",
@@ -799,7 +793,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     settings_advanced_key_file_label: "主密钥文件",
     settings_advanced_manage_link: "管理 →",
     // 设置: 邮件选项卡正文 (RFC 039)
-    settings_email_page_title: "设置 — 邮件",
     settings_email_lede: "用于密码重置和更改通知邮件的 SMTP 设置。",
     settings_email_smtp_section: "SMTP 连接",
     settings_email_enable_label: "启用邮件发送",

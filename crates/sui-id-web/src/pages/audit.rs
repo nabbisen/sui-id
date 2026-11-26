@@ -2,7 +2,7 @@
 
 use super::common::*;
 use crate::components::empty_state;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 use leptos::prelude::*;
 use sui_id_shared::api::AuditLogEntryDto;
 
@@ -101,7 +101,7 @@ pub fn render_audit(
         }
         .into_any();
         view! {
-            <Shell title=t.audit_title.to_string() nav=Chrome::Console{username} current=Some("audit".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.audit_title.to_string() nav=Chrome::Console{username, item: NavItem::AuditLog} dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.audit_title}</h1>

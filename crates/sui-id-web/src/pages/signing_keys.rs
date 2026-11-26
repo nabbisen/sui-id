@@ -2,7 +2,7 @@
 
 use super::common::*;
 use crate::components::empty_state;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 use leptos::prelude::*;
 
 fn signing_key_row_view(
@@ -71,8 +71,7 @@ pub fn render_signing_keys(
         view! {
             <Shell
                 title=t.signing_keys_title.to_string()
-                nav=Chrome::Console{username}
-                current=Some("signing-keys".to_string()) lang=lang
+                nav=Chrome::Console{username, item: NavItem::SigningKeys} lang=lang
                 csrf_token=csrf_token.clone()
             >
                 <header class="page-header">

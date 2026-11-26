@@ -114,7 +114,8 @@ code, .code {
 
 pub const CHROME_LAYOUT_CSS: &str = r#"
 /* ------------------------------------------------------------------ */
-/* Layout chrome (Shell)                                               */
+/* Layout chrome (Shell) — the slim top bar, for Chrome::Account and   */
+/* Chrome::Bare/AuthShell. Chrome::Console's own grid shell is below.  */
 /* ------------------------------------------------------------------ */
 
 .app-header {
@@ -125,6 +126,8 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   align-items: center;
   gap: var(--space-5);
 }
+/* RFC 149 §2: text, not a heading — exactly one <h1> per page, and the
+ * brand is not it. */
 .app-header__brand {
   margin: 0;
   font-size: var(--font-size-h3);
@@ -142,24 +145,8 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   align-items: center;
   gap: var(--space-1);
   flex: 1;
-  /* The row itself never wraps: the links wrap inside .app-nav__links,
-   * so the account menu beside them keeps its place at the right. */
   min-width: 0;
-  flex-wrap: nowrap;
-}
-.app-nav__links {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  /* RFC 144 N2b's walk, 125% browser font size: the links no longer
-   * fit beside the account menu. They wrap onto a further line inside
-   * their own box, so every destination stays visible; the account
-   * menu, a sibling outside this box, stays where it is. (Scrolling
-   * them instead hid Settings off the edge with no sign it was there,
-   * at exactly the font size a reader chose to see more clearly.) */
-  flex: 1;
-  min-width: 0;
-  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .app-nav__link {
   color: var(--fg-muted);
@@ -168,9 +155,6 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   font-size: var(--font-size-body);
   text-decoration: none;
   transition: background 0.12s, color 0.12s;
-  /* v0.48.2 (Bug 8): keep each nav label on one line. Without
-   * this, narrow viewports cause text to wrap inside an item,
-   * turning the nav into a vertical stack rather than a row. */
   white-space: nowrap;
 }
 .app-nav__link:hover {
@@ -178,20 +162,154 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   color: var(--fg-default);
   text-decoration: none;
 }
-.app-nav__link[aria-current="page"] {
-  color: var(--accent-default);
-  background: var(--accent-subtle);
+
+/* ------------------------------------------------------------------ */
+/* RFC 149 §1/§2: the console's grouped sidebar.                       */
+/* ------------------------------------------------------------------ */
+
+/* Breakpoint: 769px, matching the project's existing 768px
+ * tablet/phone boundary (CHROME_RESPONSIVE_CSS below) exactly, so the
+ * sidebar folds at the same point every other narrow-screen
+ * adjustment already does. Narrow-first: the mobile shape is the
+ * default, widened by the min-width query. */
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 100vh;
 }
-/* RFC 144 R5: a tint alone marks the current nav item; under
+.app-shell__body { min-width: 0; }
+.app-sidebar--wide { display: none; }
+.app-sidebar--narrow {
+  display: block;
+  border-bottom: var(--border-width-default) solid var(--border-muted);
+  background: var(--surface-elevated);
+}
+@media (min-width: 769px) {
+  /* 15.5rem is the design review's 248px at the default 16px, and it
+   * grows with the reader's own font size, so its labels still fit. */
+  .app-shell { grid-template-columns: 15.5rem 1fr; }
+  .app-sidebar--wide {
+    display: flex;
+    flex-direction: column;
+    border-right: var(--border-width-default) solid var(--border-muted);
+    background: var(--surface-elevated);
+    padding: var(--space-3) var(--space-2);
+    /* Pinned to the viewport, not to the grid row's own height — a
+     * grid item otherwise stretches to match the main column's full
+     * (possibly page-length) height, and margin-top:auto on
+     * .app-sidebar__account would then pin the account menu to the
+     * BOTTOM OF THE PAGE rather than the bottom of the visible
+     * sidebar. Measured: on a page taller than the viewport, the
+     * account menu sat below the fold entirely. */
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    /* At large font sizes, with the account menu open, the whole
+     * column can be taller than the window: it scrolls, so nothing in
+     * it is ever out of reach. */
+    overflow-y: auto;
+  }
+  .app-sidebar--narrow { display: none; }
+}
+
+.app-sidebar__menu-toggle {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  list-style: none;
+  font-weight: var(--font-weight-medium);
+}
+.app-sidebar__menu-toggle::-webkit-details-marker { display: none; }
+.app-sidebar--narrow[open] .app-sidebar__menu-toggle {
+  background: var(--state-hover);
+  /* Explicit: unchanged from the base rule's own fg-default, but the
+     contrast gate checks each rule's own declarations. */
+  color: var(--fg-default);
+}
+.app-sidebar__menu-panel {
+  padding: 0 var(--space-3) var(--space-3);
+  border-top: var(--border-width-default) solid var(--border-muted);
+}
+
+.app-sidebar__brand {
+  margin: 0;
+  padding: var(--space-2) var(--space-3) var(--space-4);
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-bold);
+  color: var(--fg-default);
+  letter-spacing: -0.01em;
+}
+.app-sidebar__brand::before {
+  content: "🌱";
+  margin-right: var(--space-2);
+}
+.app-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.app-sidebar__group {
+  margin: var(--space-3) 0 var(--space-1);
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-caption);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  font-weight: var(--font-weight-medium);
+}
+.app-sidebar__link {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--fg-default);
+  text-decoration: none;
+}
+.app-sidebar__link:hover {
+  background: var(--state-hover);
+  text-decoration: none;
+  /* Explicit: unchanged from the base rule's own fg-default, but the
+     contrast gate checks each rule's own declarations. */
+  color: var(--fg-default);
+}
+.app-sidebar__link[aria-current="page"] {
+  background: var(--accent-subtle);
+  color: var(--accent-default);
+  font-weight: var(--font-weight-medium);
+}
+/* RFC 144 R5: a tint alone marks the current item; under
  * prefers-contrast: more it also gets a solid border. */
 @media (prefers-contrast: more) {
-  .app-nav__link[aria-current="page"] {
+  .app-sidebar__link[aria-current="page"] {
     border: var(--border-width-default) solid var(--accent-default);
   }
 }
-/* RFC 074: user-menu dropdown — replaces the flat "Security" nav link.
- * Uses <details>/<summary> so it works with JavaScript disabled.      */
-.user-menu { position: relative; margin-left: auto; flex-shrink: 0; }
+.app-sidebar__account {
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: var(--border-width-default) solid var(--border-muted);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.app-sidebar__version {
+  display: block;
+  padding: var(--space-1) var(--space-3);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+
+/* RFC 074/149 §3: the account menu — <details>/<summary>, so it works
+ * with JavaScript disabled. Plain links and buttons in a list (no
+ * role="menu"/"menuitem": that role promises arrow-key navigation,
+ * and no script provides it). */
+.user-menu { position: relative; }
 .user-menu__toggle {
   list-style: none;
   cursor: pointer;
@@ -205,7 +323,7 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
 .user-menu__panel {
   position: absolute;
   right: 0;
-  top: calc(100% + var(--space-1));
+  bottom: calc(100% + var(--space-1));
   min-width: 11rem;
   background: var(--surface-elevated);
   border: var(--border-width-default) solid var(--border-default);
@@ -214,7 +332,26 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   z-index: 100;
   display: flex;
   flex-direction: column;
+  margin: 0;
   padding: var(--space-1) 0;
+  list-style: none;
+}
+/* The top-bar case (Chrome::Account) opens below the toggle, not
+ * above it — there is no "foot of the sidebar" there to be near. */
+.app-nav .user-menu__panel {
+  bottom: auto;
+  top: calc(100% + var(--space-1));
+}
+/* In the sidebar (both copies), the menu opens in place, below its
+ * toggle, and takes room from the item list above it, which scrolls.
+ * Floated above the toggle instead, it covered the items, and at 200%
+ * font it ran off the top and left of the window, where a sticky
+ * sidebar cannot be scrolled to (measured, Q2's review). */
+.app-sidebar .user-menu__panel {
+  position: static;
+  margin-top: var(--space-1);
+  min-width: 0;
+  box-shadow: none;
 }
 .user-menu__item {
   display: flex;
@@ -232,6 +369,9 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   border: none;
   cursor: pointer;
   text-align: left;
+  /* A <button> centres its content by default; the menu's links and
+   * buttons line up as one list. */
+  justify-content: flex-start;
   width: 100%;
 }
 .user-menu__item:hover,
@@ -240,11 +380,28 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   /* Explicit: unchanged from the base rule's own fg-default, but the
      contrast gate checks each rule's own declarations. */
   color: var(--fg-default);
-  outline: none;
+  /* The outline is kept: removing it here outranked the global
+   * :focus-visible ring, leaving a keyboard user only the hover tint. */
 }
 .user-menu__form { display: contents; }
-
-
+/* RFC 149 §3: sign-out separated from the rest, with a divider. */
+.user-menu__signout { border-top: var(--border-width-default) solid var(--border-muted); }
+/* `.user-menu__panel`'s <li> children need no marker or inset. */
+.user-menu__panel > li { list-style: none; margin: 0; }
+/* RFC 149 §3: the theme row — its visible name, then its three buttons
+ * as a labelled group, so "Auto" is never read without "Theme". */
+.user-menu__theme { padding-top: var(--space-2); }
+.user-menu__theme-label {
+  display: block;
+  padding: 0 var(--space-4);
+  color: var(--fg-muted);
+  font-size: var(--font-size-caption);
+}
+.user-menu__theme-buttons { display: flex; flex-direction: column; }
+.user-menu__theme .theme-no-js-note {
+  margin: 0;
+  padding: var(--space-1) var(--space-4) var(--space-2);
+}
 
 .app-main {
   max-width: var(--content-max-width);
@@ -253,61 +410,6 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
 }
 .app-main--narrow {
   max-width: var(--content-narrow-width);
-}
-
-.app-footer {
-  border-top: var(--border-width-default) solid var(--border-muted);
-  padding: var(--space-4) var(--space-5);
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  color: var(--fg-muted);
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-caption);
-}
-/* Tagline — restrained per v0.48.2 user feedback: the previous
- * default body-size weight competed with the more functional
- * footer content (theme toggle, a11y badges). Smaller and muted
- * keeps it a recessive whisper of intent rather than a banner. */
-.app-footer__tagline {
-  flex: 1;
-  font-size: var(--font-size-caption);
-  color: var(--fg-muted);
-  opacity: 0.75;
-}
-.app-footer__a11y {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-/* v0.48.2: passive informational badges, not interactive.
- * Reset <ul>/<li> defaults, render as small muted chips that
- * read as "facts about the app" rather than "things you can
- * click". No hover state, no border, no underline. */
-.app-footer__a11y {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.app-footer__a11y-item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--font-size-caption);
-  color: var(--fg-muted);
-  cursor: default;
-}
-.app-footer__a11y-icon {
-  font-size: 1em;
-  line-height: 1;
-  opacity: 0.85;
-}
-.app-footer__version {
-  /* RFC 144 §1: --fg-subtle is never text (2.71:1 in the original
-     palette). --fg-muted clears 7:1. */
-  color: var(--fg-muted);
-  font-family: var(--font-mono);
 }
 
 "#;
@@ -325,6 +427,16 @@ pub const CHROME_PAGE_HEADER_CSS: &str = r#"
   margin-bottom: var(--space-4);
   padding-bottom: var(--space-3);
   border-bottom: var(--border-width-default) solid var(--border-muted);
+}
+/* RFC 149 §1: the group a settings page belongs to, named above its
+ * own heading — the sidebar no longer carries a tab row to say so. */
+.page-header__group {
+  margin: 0 0 var(--space-1) 0;
+  color: var(--fg-muted);
+  font-size: var(--font-size-caption);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: var(--font-weight-medium);
 }
 .page-header__title {
   margin: 0;
@@ -369,24 +481,19 @@ pub const CHROME_PAGE_HEADER_CSS: &str = r#"
 
 pub const CHROME_THEME_TOGGLE_CSS: &str = r#"
 /* ------------------------------------------------------------------ */
-/* Theme toggle (in footer)                                            */
+/* Theme toggle (RFC 149 §3: rows in the account menu)                 */
 /* ------------------------------------------------------------------ */
 
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  background: var(--surface-elevated);
-  border: var(--border-width-default) solid var(--border-control);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-  gap: 0;
-}
+/* RFC 149 §3: the theme buttons are account-menu rows now (the footer
+ * is gone), so they match `.user-menu__item`, which they also carry;
+ * this rule comes later and would otherwise shrink and mute them. The
+ * class stays because `/static/theme-init.js` selects it. */
 .theme-toggle__btn {
   background: transparent;
   border: none;
-  color: var(--fg-muted);
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--font-size-caption);
+  color: var(--fg-default);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-body);
   cursor: pointer;
   /* RFC 144 §4: 44×44 CSS px for standalone controls. */
   min-height: 2.75rem;
@@ -413,9 +520,10 @@ pub const CHROME_THEME_TOGGLE_CSS: &str = r#"
 /* RFC 092: no-js / js root-class visibility rules                    */
 /* ------------------------------------------------------------------ */
 
-/* Hide the interactive toggle button in no-JS environments so users   */
-/* do not see a non-functional control.                                */
-.no-js .theme-toggle { display: none; }
+/* Hide the interactive toggle buttons in no-JS environments so users  */
+/* do not see a non-functional control. RFC 149 §3: the theme row in   */
+/* the account menu keeps its visible name and shows the note instead. */
+.no-js .user-menu__theme-buttons { display: none; }
 
 /* Hide the noscript note in JS environments.                          */
 .js .theme-no-js-note { display: none; }
@@ -438,7 +546,9 @@ pub const CHROME_RESPONSIVE_CSS: &str = r#"
   border-radius: var(--radius-md);
   font-weight: var(--font-weight-medium);
   text-decoration: none;
-  white-space: nowrap;
+  /* It wraps rather than run past the window at a large font size,
+   * where it widened every page (375px at 200%: 484px wide). */
+  max-width: calc(100vw - 2 * var(--space-2));
 }
 .skip-link:focus {
   top: var(--space-2);
@@ -459,26 +569,12 @@ pub const CHROME_RESPONSIVE_CSS: &str = r#"
   .app-main {
     padding: var(--space-3) var(--space-3);
   }
-  /* Nav: the links wrap rather than squish. Items keep their
-   * desktop padding/typography. The links' wrap (.app-nav__links) and
-   * the row's no-wrap (.app-nav) are unconditional -- nothing to
-   * override at this breakpoint. */
-  /* The navigation takes the full width under the brand, so its links
-   * wrap several to a row rather than one per row beside it. */
+  /* The slim top bar (Chrome::Account/Bare) wraps rather than
+   * squishes if the brand and account menu don't both fit. */
   .app-header { flex-wrap: wrap; row-gap: var(--space-2); }
-  .app-nav { flex-basis: 100%; }
-  /* The header brand text shrinks slightly so the nav has more
-   * room before the links wrap. */
+  /* The header brand text shrinks slightly to leave more room. */
   .app-header__brand {
     font-size: var(--font-size-h3);
-  }
-  /* Footer collapses to a single column. Tagline + a11y badges +
-   * theme toggle + version each get their own line, in that
-   * order. Cleaner than trying to flow them at narrow widths. */
-  .app-footer {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-2);
   }
   /* Cards still fit one per row but use less internal padding. */
   .card { padding: var(--space-3); }

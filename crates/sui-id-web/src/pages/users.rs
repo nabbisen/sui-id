@@ -4,7 +4,7 @@ use super::audit::{AUDIT_COLUMNS, audit_row_view, audit_table_head};
 use super::common::*;
 use super::confirm::{ConfirmScreenData, ImpactLink, ReversibilityKind, confirm_screen};
 use crate::components::empty_state;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 use leptos::prelude::*;
 use sui_id_shared::api::UserSummary;
 
@@ -75,7 +75,7 @@ pub fn render_users(
             .map(|u| user_row_view(t, u, current_user.clone()))
             .collect();
         view! {
-            <Shell title=t.users_title.to_string() nav=Chrome::Console{username: nav_username} current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.users_title.to_string() nav=Chrome::Console{username: nav_username, item: NavItem::Users} dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.users_title}</h1>
@@ -138,7 +138,7 @@ pub fn render_users_new(
     render(move || {
         let t = lang.strings();
         view! {
-            <Shell title=t.users_create_section.to_string() nav=Chrome::Console{username} current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.users_create_section.to_string() nav=Chrome::Console{username, item: NavItem::Users} dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.users_create_section}</h1>
@@ -317,8 +317,7 @@ pub fn render_user_detail(
         let admin_username = data.admin_username.clone();
 
         view! {
-            <Shell title=username.clone() nav=Chrome::Console{username: admin_username}
-                   current=Some("users".to_string())
+            <Shell title=username.clone() nav=Chrome::Console{username: admin_username, item: NavItem::Users}
                    dev_mode=data.dev_mode lang=lang
                    csrf_token=data.csrf_token.clone()>
                 <div class="mb-3">
@@ -342,16 +341,14 @@ pub fn render_user_detail(
 
                 <section class="card mb-4">
                     <h2 class="card__title">{t.user_detail_auth_section}</h2>
-                    <dl class="kv-list">
-                        <div class="kv-list__row">
-                            <dt>{t.user_detail_totp_label}</dt>
-                            <dd>{totp_badge}</dd>
-                        </div>
-                        <div class="kv-list__row">
-                            <dt>{t.user_detail_passkeys_label}</dt>
-                            <dd>{data.passkey_count.to_string()}</dd>
-                        </div>
-                    </dl>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_row(t.user_detail_totp_label, totp_badge)}
+                                {kv_text(t.user_detail_passkeys_label, data.passkey_count.to_string())}
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
 
                 <section class="mb-4">
@@ -605,8 +602,7 @@ pub fn render_confirm_unlink_federation(
         view! {
             <Shell
                 title=t.confirm_unlink_federation_title.to_string()
-                nav=Chrome::Console{username: admin_username}
-                current=Some("users".to_string())
+                nav=Chrome::Console{username: admin_username, item: NavItem::Users}
                 dev_mode=dev_mode
                 lang=lang
                 csrf_token=data.csrf_token.clone()

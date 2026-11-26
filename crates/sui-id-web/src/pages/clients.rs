@@ -2,7 +2,7 @@
 
 use super::common::*;
 use crate::components::empty_state;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 use leptos::prelude::*;
 use sui_id_shared::api::ClientSummary;
 
@@ -127,7 +127,7 @@ pub fn render_clients(
             .map(|c| client_row_view(can_write, t, c, csrf_for_rows.clone()))
             .collect();
         view! {
-            <Shell title=t.clients_title.to_string() nav=Chrome::Console{username} current=Some("clients".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.clients_title.to_string() nav=Chrome::Console{username, item: NavItem::Apps} dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.clients_title}</h1>
@@ -191,7 +191,7 @@ pub fn render_clients_new(
     render(move || {
         let t = lang.strings();
         view! {
-            <Shell title=t.clients_create_section.to_string() nav=Chrome::Console{username} current=Some("clients".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.clients_create_section.to_string() nav=Chrome::Console{username, item: NavItem::Apps} dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.clients_create_section}</h1>
@@ -359,7 +359,7 @@ pub fn render_client_edit(
         };
 
         view! {
-            <Shell title=t.client_edit_title.to_string() nav=Chrome::Console{username} current=Some("clients".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.client_edit_title.to_string() nav=Chrome::Console{username, item: NavItem::Apps} lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.client_edit_title}</h1>

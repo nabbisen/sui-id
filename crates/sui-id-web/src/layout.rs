@@ -11,21 +11,139 @@
 //!   versions used inline `<script>` blocks for this; v0.48.1 moved
 //!   them to external files because CSP `script-src 'self'` blocks
 //!   inline JS.
-//!
-//!   `/static/logout-csrf.js` was a third external script (added in
-//!   v0.48.1) that read the `sui_id_csrf` cookie and populated the
-//!   sign-out form's hidden input at submit time. RFC-MI-021
-//!   (v0.51.0) server-renders the token into the form directly and
-//!   removes both the script and its asset; the file no longer
-//!   ships.
-//! - The footer with the theme toggle (light / dark / auto) and the
-//!   accessibility badges.
-//! - The admin nav, with its account menu, for [`Chrome::Console`]; the
-//!   account menu alone, for [`Chrome::Account`].
+//! - The admin console's grouped sidebar (RFC 149 §1), with the
+//!   account menu and the version at its foot, for [`Chrome::Console`];
+//!   a slim top bar with the account menu alone, for [`Chrome::Account`].
+//!   RFC 149 §4 removes the old footer (tagline, a11y badges, theme
+//!   toggle) entirely; the theme selector moves into the account menu
+//!   (§3), and the version is shown only with the console's chrome.
 
 use crate::components::components_css;
 use crate::tokens::TOKENS_CSS;
 use leptos::prelude::*;
+
+/// RFC 149 §1: one destination, one variant. The sidebar is rendered
+/// from [`NavItem::ALL`], grouped by [`NavItem::group`] — an
+/// exhaustive match, so a new variant cannot compile without a group,
+/// and cannot be left out of the sidebar (which renders the whole
+/// list, not a hand-kept subset).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavItem {
+    Dashboard,
+    Users,
+    Apps,
+    FederationProviders,
+    SignInSettings,
+    SigningKeys,
+    SessionsAndLockout,
+    AuditLog,
+    General,
+    Email,
+    Logs,
+    AboutThisServer,
+}
+
+/// RFC 149 §1's six groups, in the order an operator meets them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavGroup {
+    Overview,
+    People,
+    Applications,
+    SignIn,
+    Security,
+    System,
+}
+
+impl NavItem {
+    /// Every destination, in the exact order §1's table lists them —
+    /// the sidebar's own order, and the one source [`crate::layout`]'s
+    /// tests pin the render against.
+    pub const ALL: [NavItem; 12] = [
+        NavItem::Dashboard,
+        NavItem::Users,
+        NavItem::Apps,
+        NavItem::FederationProviders,
+        NavItem::SignInSettings,
+        NavItem::SigningKeys,
+        NavItem::SessionsAndLockout,
+        NavItem::AuditLog,
+        NavItem::General,
+        NavItem::Email,
+        NavItem::Logs,
+        NavItem::AboutThisServer,
+    ];
+
+    pub fn group(self) -> NavGroup {
+        match self {
+            NavItem::Dashboard => NavGroup::Overview,
+            NavItem::Users => NavGroup::People,
+            NavItem::Apps => NavGroup::Applications,
+            NavItem::FederationProviders | NavItem::SignInSettings => NavGroup::SignIn,
+            NavItem::SigningKeys | NavItem::SessionsAndLockout | NavItem::AuditLog => {
+                NavGroup::Security
+            }
+            NavItem::General | NavItem::Email | NavItem::Logs | NavItem::AboutThisServer => {
+                NavGroup::System
+            }
+        }
+    }
+
+    pub fn href(self) -> &'static str {
+        match self {
+            NavItem::Dashboard => "/admin",
+            NavItem::Users => "/admin/users",
+            NavItem::Apps => "/admin/clients",
+            NavItem::FederationProviders => "/admin/federation-providers",
+            NavItem::SignInSettings => "/admin/settings/authentication",
+            NavItem::SigningKeys => "/admin/signing-keys",
+            NavItem::SessionsAndLockout => "/admin/settings/security",
+            NavItem::AuditLog => "/admin/audit",
+            NavItem::General => "/admin/settings/basic",
+            NavItem::Email => "/admin/settings/email",
+            NavItem::Logs => "/admin/settings/logs",
+            NavItem::AboutThisServer => "/admin/settings/other",
+        }
+    }
+
+    pub fn label(self, t: &'static sui_id_i18n::Strings) -> &'static str {
+        match self {
+            NavItem::Dashboard => t.nav_dashboard,
+            NavItem::Users => t.nav_users,
+            NavItem::Apps => t.nav_apps,
+            NavItem::FederationProviders => t.nav_federation_providers,
+            NavItem::SignInSettings => t.nav_item_sign_in_settings,
+            NavItem::SigningKeys => t.nav_signing_keys,
+            NavItem::SessionsAndLockout => t.nav_item_sessions_and_lockout,
+            NavItem::AuditLog => t.nav_audit,
+            NavItem::General => t.settings_tab_general,
+            NavItem::Email => t.settings_tab_email,
+            NavItem::Logs => t.settings_tab_logs,
+            NavItem::AboutThisServer => t.nav_item_about_this_server,
+        }
+    }
+}
+
+impl NavGroup {
+    pub const ALL: [NavGroup; 6] = [
+        NavGroup::Overview,
+        NavGroup::People,
+        NavGroup::Applications,
+        NavGroup::SignIn,
+        NavGroup::Security,
+        NavGroup::System,
+    ];
+
+    pub fn label(self, t: &'static sui_id_i18n::Strings) -> &'static str {
+        match self {
+            NavGroup::Overview => t.nav_group_overview,
+            NavGroup::People => t.nav_group_people,
+            NavGroup::Applications => t.nav_group_applications,
+            NavGroup::SignIn => t.nav_group_sign_in,
+            NavGroup::Security => t.nav_group_security,
+            NavGroup::System => t.nav_group_system,
+        }
+    }
+}
 
 /// RFC 144, *Refresh*: the navigation **is** the signed-in person's
 /// name, or there is no navigation — there is no state where a page
@@ -42,8 +160,16 @@ use leptos::prelude::*;
 /// the access allowed cannot disagree.
 #[derive(Debug, Clone)]
 pub enum Chrome {
-    /// The console navigation, with the account menu for `username`.
-    Console { username: String },
+    /// An admin console page: the sidebar, with `item` marked current,
+    /// and the account menu for `username`. RFC 149 §1: the item lives
+    /// in the variant, so an `/admin` page cannot render the console's
+    /// chrome without naming its place in the navigation.
+    Console { username: String, item: NavItem },
+    /// The console's chrome on the person's own pages (`/me`, and the
+    /// forced MFA-setup and password-change pages) for someone who can
+    /// read the console: the same sidebar, with no item current, since
+    /// these pages belong to the account menu, not to a group.
+    ConsolePersonal { username: String },
     /// RFC 144 N2c: a signed-in person outside the console (`role`
     /// cannot read the admin console) — the account menu alone, with no
     /// console links to a page the server would then refuse.
@@ -59,7 +185,7 @@ impl Chrome {
     /// the access allowed cannot disagree.
     pub fn for_person(username: String, role: sui_id_store::models::Role) -> Self {
         if role.can_read_admin() {
-            Self::Console { username }
+            Self::ConsolePersonal { username }
         } else {
             Self::Account { username }
         }
@@ -69,13 +195,13 @@ impl Chrome {
 /// Wrap a page body in the standard sui-id chrome.
 ///
 /// `lang` controls the `<html lang="…">` attribute and propagates
-/// down to `Nav`, `Footer`, and `ThemeToggle` so every label in the
-/// admin chrome reads in the user's locale (RFC 050).
+/// down to `Sidebar`, `AccountNav`, and the account menu's theme
+/// selector so every label in the admin chrome reads in the user's
+/// locale (RFC 050).
 #[component]
 pub fn Shell(
     title: String,
     nav: Chrome,
-    current: Option<String>,
     lang: sui_id_i18n::Locale,
     /// CSRF token for the Shell-internal sign-out form (RFC-MI-021,
     /// v0.51.0). Required even for `Chrome::Bare`, so handlers have a
@@ -114,23 +240,37 @@ pub fn Shell(
                         " — not for production. cookie_secure=false, HIBP off."
                     </div>
                 })}
-                <header class="app-header" role="banner">
-                    <h1 class="app-header__brand">"sui-id"</h1>
-                    {match nav {
-                        Chrome::Console { username } => Some(view! {
-                            <Nav current=current.clone() lang=lang
-                                 csrf_token=csrf_token.clone()
-                                 username=username />
-                        }.into_any()),
-                        Chrome::Account { username } => Some(view! {
+                {match nav {
+                    Chrome::Console { username, item } => view! {
+                        <ConsoleShell current=Some(item) lang=lang
+                                      csrf_token=csrf_token.clone()
+                                      username=username>
+                            {children()}
+                        </ConsoleShell>
+                    }.into_any(),
+                    Chrome::ConsolePersonal { username } => view! {
+                        <ConsoleShell current=None lang=lang
+                                      csrf_token=csrf_token.clone()
+                                      username=username>
+                            {children()}
+                        </ConsoleShell>
+                    }.into_any(),
+                    Chrome::Account { username } => view! {
+                        <header class="app-header" role="banner">
+                            <span class="app-header__brand">"sui-id"</span>
                             <AccountNav lang=lang
                                         csrf_token=csrf_token.clone()
                                         username=username />
-                        }.into_any()),
-                        Chrome::Bare => None,
-                    }}</header>
-                <main class="app-main" id="main-content">{children()}</main>
-                <Footer lang=lang />
+                        </header>
+                        <main class="app-main" id="main-content">{children()}</main>
+                    }.into_any(),
+                    Chrome::Bare => view! {
+                        <header class="app-header" role="banner">
+                            <span class="app-header__brand">"sui-id"</span>
+                        </header>
+                        <main class="app-main" id="main-content">{children()}</main>
+                    }.into_any(),
+                }}
             </body>
         </html>
     }
@@ -161,81 +301,118 @@ pub fn AuthShell(title: String, lang: sui_id_i18n::Locale, children: Children) -
                     {t.a11y_skip_to_main}
                 </a>
                 <header class="app-header" role="banner">
-                    <h1 class="app-header__brand">"sui-id"</h1>
+                    <span class="app-header__brand">"sui-id"</span>
                 </header>
                 <main class="app-main app-main--narrow auth-page" id="main-content">
                     <div class="auth-card">{children()}</div>
                 </main>
-                <Footer lang=lang />
             </body>
         </html>
     }
 }
 
+/// RFC 149 §1/§2: the console's grouped sidebar, wide-screen, and the
+/// same list folded into a `Menu` `<details>` for narrow screens — two
+/// renders of [`sidebar_content`], toggled by a media query so exactly
+/// one is in the accessibility tree and the tab order at any width
+/// (§2: a `<details>` cannot be held open on wide screens without a
+/// script or an unsupported pseudo-element, so one copy per width is
+/// the shape this dispatch's own escape clause requires an alternative
+/// to beat with a measurement, not assume away).
 #[component]
-fn Nav(
-    current: Option<String>,
+fn ConsoleShell(
+    current: Option<NavItem>,
     lang: sui_id_i18n::Locale,
     csrf_token: String,
-    // RFC 144, Refresh: always present — Chrome::Console is the only
-    // variant that renders a Nav at all (see Shell). The account menu
-    // is on every page that shows the navigation, with no fallback.
     username: String,
+    children: Children,
 ) -> impl IntoView {
     let t = lang.strings();
-    // RFC 074: "clients" renamed to "apps" in nav label (route unchanged).
-    // "me" (Security link) removed — replaced by user-menu dropdown.
-    let items: [(&'static str, &'static str, &'static str); 7] = [
-        ("dashboard", t.nav_dashboard, "/admin"),
-        ("users", t.nav_users, "/admin/users"),
-        ("clients", t.nav_apps, "/admin/clients"), // label: Apps
-        ("signing-keys", t.nav_signing_keys, "/admin/signing-keys"),
-        (
-            "federation-providers",
-            t.nav_federation_providers,
-            "/admin/federation-providers",
-        ),
-        ("audit", t.nav_audit, "/admin/audit"),
-        ("settings", t.nav_settings, "/admin/settings"),
-    ];
     view! {
-        <nav class="app-nav" aria-label=t.nav_aria_main>
-            // RFC 144 N2b's walk, 125% browser font size: this inner
-            // wrapper is what scrolls when the links don't fit, so the
-            // account menu just below — outside it — stays visible
-            // and never slides off the edge with them.
-            <div class="app-nav__links">
-                {items.into_iter().map(|(key, label, href)| {
-                    let aria = if current.as_deref() == Some(key) { Some("page") } else { None };
-                    view! {
-                        <a class="app-nav__link" href=href aria-current=aria>{label}</a>
-                    }
-                }).collect::<Vec<_>>()}
+        <div class="app-shell">
+            <div class="app-sidebar app-sidebar--wide">
+                {sidebar_content(current, t, username.clone(), csrf_token.clone())}
             </div>
-
-            // RFC 074: user-menu dropdown — replaces the old flat
-            // "Security" link and "Sign out" button.
-            {user_menu(t, username, csrf_token)}
-        </nav>
+            <details class="app-sidebar app-sidebar--narrow">
+                <summary class="app-sidebar__menu-toggle">{t.nav_menu_toggle}</summary>
+                <div class="app-sidebar__menu-panel">
+                    {sidebar_content(current, t, username, csrf_token)}
+                </div>
+            </details>
+            <div class="app-shell__body">
+                <main class="app-main" id="main-content">{children()}</main>
+            </div>
+        </div>
     }
 }
 
-/// RFC 144 N2c: the account menu alone, for [`Chrome::Account`] — a
-/// signed-in person with no console to navigate.
+/// The sidebar's own content: the brand, every group with its items
+/// (from [`NavItem::ALL`], grouped by [`NavItem::group`] — the single
+/// source the sidebar renders from, not a hand-kept list), the account
+/// menu, and the version — rendered twice by [`ConsoleShell`], once
+/// per screen width.
+fn sidebar_content(
+    current: Option<NavItem>,
+    t: &'static sui_id_i18n::Strings,
+    username: String,
+    csrf_token: String,
+) -> AnyView {
+    view! {
+        <p class="app-sidebar__brand">"sui-id"</p>
+        <nav class="app-sidebar__nav" aria-label=t.nav_aria_main>
+            {NavGroup::ALL.into_iter().map(|group| {
+                let items: Vec<_> = NavItem::ALL
+                    .into_iter()
+                    .filter(|item| item.group() == group)
+                    .collect();
+                view! {
+                    <p class="app-sidebar__group">{group.label(t)}</p>
+                    {items.into_iter().map(|item| {
+                        let aria = (current == Some(item)).then_some("page");
+                        view! {
+                            <a class="app-sidebar__link" href=item.href() aria-current=aria>
+                                {item.label(t)}
+                            </a>
+                        }
+                    }).collect::<Vec<_>>()}
+                }
+            }).collect::<Vec<_>>()}
+        </nav>
+        <div class="app-sidebar__account">
+            {account_menu(t, username, csrf_token)}
+            <span class="app-sidebar__version">
+                {format!("sui-id v{}", env!("CARGO_PKG_VERSION"))}
+            </span>
+        </div>
+    }
+    .into_any()
+}
+
+/// RFC 144 N2c: the account menu alone, in a slim top bar, for
+/// [`Chrome::Account`] — a signed-in person with no console to
+/// navigate. No version (RFC 149 §4: shown only with the console's
+/// chrome).
 #[component]
 fn AccountNav(lang: sui_id_i18n::Locale, csrf_token: String, username: String) -> impl IntoView {
     let t = lang.strings();
     view! {
         <nav class="app-nav" aria-label=t.nav_aria_main>
-            {user_menu(t, username, csrf_token)}
+            {account_menu(t, username, csrf_token)}
         </nav>
     }
 }
 
-/// The account-menu markup shared by [`Nav`] and [`AccountNav`]: the
-/// signed-in person's name, *My account*, and sign-out. Pure HTML
-/// (`<details>`/`<summary>`); no JavaScript required.
-fn user_menu(
+/// RFC 149 §3: the account menu — *My account*, *Language*, the theme
+/// selector (moved here from the footer), and *Sign out*, separated
+/// from the rest. Plain links and buttons in a list: no `role="menu"`
+/// or `role="menuitem"` (a menu role promises arrow-key navigation,
+/// and no script provides it).
+///
+/// Used by both [`sidebar_content`] (at the sidebar's foot) and
+/// [`AccountNav`] (in the top bar) — the same contents either way;
+/// only where it sits differs. Signed-out pages render neither, so they
+/// have no theme selector (§3).
+fn account_menu(
     t: &'static sui_id_i18n::Strings,
     username: String,
     csrf_token: String,
@@ -245,107 +422,70 @@ fn user_menu(
             <summary class="app-nav__link user-menu__toggle">
                 {username} " ▾"
             </summary>
-            <div class="user-menu__panel" role="menu">
-                <a class="user-menu__item" href="/me/security/overview"
-                   role="menuitem">
-                    {t.nav_my_account}
-                </a>
-                <form method="post" action="/admin/logout"
-                      class="user-menu__form">
-                    <input type="hidden" name="_csrf" value=csrf_token.clone() />
-                    <button type="submit" class="user-menu__item"
-                            role="menuitem">
-                        {t.nav_logout}
-                    </button>
-                </form>
-            </div>
+            <ul class="user-menu__panel">
+                <li>
+                    <a class="user-menu__item" href="/me/security/overview">
+                        {t.nav_my_account}
+                    </a>
+                </li>
+                <li>
+                    <a class="user-menu__item" href="/me/security/language">
+                        {t.me_tab_language}
+                    </a>
+                </li>
+                {theme_selector_item(t)}
+                <li class="user-menu__signout">
+                    <form method="post" action="/admin/logout"
+                          class="user-menu__form">
+                        <input type="hidden" name="_csrf" value=csrf_token.clone() />
+                        <button type="submit" class="user-menu__item">
+                            {t.nav_logout}
+                        </button>
+                    </form>
+                </li>
+            </ul>
         </details>
     }
 }
 
-#[component]
-fn Footer(lang: sui_id_i18n::Locale) -> impl IntoView {
-    let t = lang.strings();
+/// RFC 149 §3: the theme selector, as one account-menu row — a visible
+/// name (*Theme*), then the three buttons in a labelled group, so
+/// *Auto* is never read without saying what is automatic. No `title=`
+/// (the visible label is the name; a `title` is a hover-only tooltip),
+/// and *Auto* is never relabelled *System* (that name is now a sidebar
+/// group, and the two would be confused). Click handlers and
+/// `aria-pressed` are attached by `/static/theme-init.js`, keyed off
+/// `data-theme-value` — unchanged by this move. With JavaScript off,
+/// the no-js note (hidden once `js` loads) replaces the buttons.
+fn theme_selector_item(t: &'static sui_id_i18n::Strings) -> impl IntoView {
     view! {
-        <footer class="app-footer" role="contentinfo">
-            <span class="app-footer__tagline">
-                {t.footer_tagline}
+        <li class="user-menu__theme">
+            <span class="user-menu__theme-label" aria-hidden="true">
+                {t.theme_toggle_group}
             </span>
-            // v0.48.2: the a11y "badges" are informational claims that
-            // the app respects keyboard / screen-reader / contrast
-            // affordances. They are NOT links or buttons — the previous
-            // styling (default body text + tooltip-on-hover) read as
-            // "interactive but broken" to operators. Restyled as
-            // recessive informational chips with a small leading icon
-            // and a `role="note"` so assistive technology treats them
-            // as ancillary content. Tooltips remain via `title=`.
-            //
-            // Future work (post-v1.0): when the docs site adds an
-            // a11y chapter, these could grow `href`s and become real
-            // links to the corresponding section. Until then, passive
-            // badges are the honest representation.
-            <ul class="app-footer__a11y" role="note"
-                aria-label=t.footer_a11y_group_label>
-                <li class="app-footer__a11y-item" title=t.a11y_keyboard>
-                    <span class="app-footer__a11y-icon" aria-hidden="true">"⌨"</span>
-                    {t.a11y_keyboard}
-                </li>
-                <li class="app-footer__a11y-item" title=t.a11y_screen_reader>
-                    <span class="app-footer__a11y-icon" aria-hidden="true">"⊙"</span>
-                    {t.a11y_screen_reader}
-                </li>
-                <li class="app-footer__a11y-item" title=t.a11y_contrast>
-                    <span class="app-footer__a11y-icon" aria-hidden="true">"◐"</span>
-                    {t.a11y_contrast}
-                </li>
-            </ul>
-            <ThemeToggle lang=lang />
-            <span class="app-footer__version">{format!("v{}", env!("CARGO_PKG_VERSION"))}</span>
-        </footer>
-    }
-}
-
-#[component]
-fn ThemeToggle(lang: sui_id_i18n::Locale) -> impl IntoView {
-    let t = lang.strings();
-    // Click handlers and initial aria-pressed are attached by
-    // `/static/theme-init.js` on DOM ready, keyed off the
-    // `data-theme-value` attribute on each button.
-    //
-    // Prior to v0.48.1 these were inline `onclick=` attributes;
-    // CSP `script-src 'self'` blocks inline event handlers
-    // (`script-src-attr`), so the toggle silently did nothing on
-    // production builds.
-    view! {
-        <div class="theme-toggle" role="group" aria-label=t.theme_toggle_group>
-            <button class="theme-toggle__btn"
-                    type="button"
-                    data-theme-value="light"
-                    aria-pressed="false"
-                    title=t.theme_toggle_light_title>
-                "☀ " {t.theme_toggle_light}
-            </button>
-            <button class="theme-toggle__btn"
-                    type="button"
-                    data-theme-value="system"
-                    aria-pressed="false"
-                    title=t.theme_toggle_auto_title>
-                "🖥 " {t.theme_toggle_auto}
-            </button>
-            <button class="theme-toggle__btn"
-                    type="button"
-                    data-theme-value="dark"
-                    aria-pressed="false"
-                    title=t.theme_toggle_dark_title>
-                "☾ " {t.theme_toggle_dark}
-            </button>
-        </div>
-        // RFC 092: no-JS fallback note. Hidden by `.js .theme-no-js-note { display:none }`.
-        // Visible only when JavaScript is disabled; informs the user that
-        // theme follows system preference.
-        <p class="theme-no-js-note muted">
-            {t.theme_noscript_note}
-        </p>
+            <div class="user-menu__theme-buttons" role="group" aria-label=t.theme_toggle_group>
+                <button class="user-menu__item theme-toggle__btn"
+                        type="button"
+                        data-theme-value="light"
+                        aria-pressed="false">
+                    "☀ " {t.theme_toggle_light}
+                </button>
+                <button class="user-menu__item theme-toggle__btn"
+                        type="button"
+                        data-theme-value="system"
+                        aria-pressed="false">
+                    "🖥 " {t.theme_toggle_auto}
+                </button>
+                <button class="user-menu__item theme-toggle__btn"
+                        type="button"
+                        data-theme-value="dark"
+                        aria-pressed="false">
+                    "☾ " {t.theme_toggle_dark}
+                </button>
+            </div>
+            // RFC 092: no-JS fallback note. Hidden by `.js .theme-no-js-note { display:none }`.
+            <p class="theme-no-js-note muted">{t.theme_noscript_note}</p>
+        </li>
     }
 }
 

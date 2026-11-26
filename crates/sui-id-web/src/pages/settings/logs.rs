@@ -1,7 +1,7 @@
 //! Settings logs tab (RFC 065).
 
 use super::*;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 
 pub struct SettingsLogsData {
     pub log_format: String,
@@ -44,17 +44,17 @@ pub fn render_settings_logs(
         let chain_badge = crate::components::status_badge(t, kind).into_any();
 
         view! {
-            <Shell title=t.settings_title_logs.to_string() nav=Chrome::Console{username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=NavItem::Logs.label(t).to_string() nav=Chrome::Console{username, item: NavItem::Logs} lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
-                        <h1 class="page-header__title">{t.settings_title}</h1>
+                        <p class="page-header__group">{NavItem::Logs.group().label(t)}</p>
+                        <h1 class="page-header__title">{NavItem::Logs.label(t)}</h1>
                         <p class="page-header__lede">
                             {t.settings_logs_lede}
                         </p>
                     </div>
                 </header>
                 {flash_banner(flash)}
-                {settings_tabs(SettingsTab::Logs, lang)}
 
                 <div class="card">
                     <h3 class="card__title">{t.settings_logs_output_section}</h3>

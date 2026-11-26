@@ -1,7 +1,7 @@
 //! Settings authentication tab (RFC 065).
 
 use super::*;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 
 pub struct SettingsAuthenticationData {
     /// The *stored* `server_settings.password_min_len` -- the value
@@ -112,17 +112,17 @@ pub fn render_settings_authentication(
             .into_any()
         };
         view! {
-            <Shell title=t.settings_title_authentication.to_string() nav=Chrome::Console{username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=NavItem::SignInSettings.label(t).to_string() nav=Chrome::Console{username, item: NavItem::SignInSettings} lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
-                        <h1 class="page-header__title">{t.settings_title}</h1>
+                        <p class="page-header__group">{NavItem::SignInSettings.group().label(t)}</p>
+                        <h1 class="page-header__title">{NavItem::SignInSettings.label(t)}</h1>
                         <p class="page-header__lede">
-                            {t.settings_basic_description}
+                            {t.settings_authentication_lede}
                         </p>
                     </div>
                 </header>
                 {flash_banner(flash)}
-                {settings_tabs(SettingsTab::Authentication, lang)}
 
                 <div class="card">
                     <h3 class="card__title">{t.settings_auth_password_section}</h3>

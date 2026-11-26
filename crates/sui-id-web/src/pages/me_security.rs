@@ -98,7 +98,6 @@ mod language;
 mod mfa;
 mod overview;
 mod passkey;
-mod security;
 mod sessions; // RFC 072: pub so sui-id handler can access AppGrantData/MeAppsData
 
 pub use apps::*;
@@ -106,5 +105,4 @@ pub use language::*;
 pub use mfa::*;
 pub use overview::*;
 pub use passkey::*;
-pub use security::*;
 pub use sessions::*;

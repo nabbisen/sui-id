@@ -1,7 +1,7 @@
 //! Settings other tab (RFC 065).
 
 use super::*;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 
 pub struct SettingsOtherData {
     pub binary_version: String,
@@ -41,17 +41,17 @@ pub fn render_settings_other(
         } = data;
         let now_str = clock_now.format("%Y-%m-%d %H:%M:%S UTC").to_string();
         view! {
-            <Shell title=t.settings_title_advanced.to_string() nav=Chrome::Console{username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=NavItem::AboutThisServer.label(t).to_string() nav=Chrome::Console{username, item: NavItem::AboutThisServer} lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
-                        <h1 class="page-header__title">{t.settings_title}</h1>
+                        <p class="page-header__group">{NavItem::AboutThisServer.group().label(t)}</p>
+                        <h1 class="page-header__title">{NavItem::AboutThisServer.label(t)}</h1>
                         <p class="page-header__lede">
                             {t.settings_advanced_lede}
                         </p>
                     </div>
                 </header>
                 {flash_banner(flash)}
-                {settings_tabs(SettingsTab::Other, lang)}
 
                 <div class="card">
                     <h3 class="card__title">{t.settings_advanced_build_section}</h3>

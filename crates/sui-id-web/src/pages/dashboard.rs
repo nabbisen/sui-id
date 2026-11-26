@@ -1,7 +1,7 @@
 //! Page renderers for the "dashboard" screen domain (RFC 065).
 
 use super::common::*;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 use leptos::prelude::*;
 
 pub struct DashboardSparkBucket {
@@ -235,7 +235,7 @@ pub fn render_dashboard(
         let nav_username = admin_username.clone();
 
         view! {
-            <Shell title=t.dashboard_title.to_string() nav=Chrome::Console{username: nav_username} current=Some("dashboard".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.dashboard_title.to_string() nav=Chrome::Console{username: nav_username, item: NavItem::Dashboard} dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.dashboard_title}</h1>

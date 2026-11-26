@@ -12,7 +12,7 @@ use crate::components::empty_state;
 use leptos::prelude::*;
 use sui_id_shared::api::FederationProviderSummary;
 
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 
 fn provider_row_view(
     can_write: bool,
@@ -109,8 +109,7 @@ pub fn render_federation_providers(
         view! {
             <Shell
                 title=t.federation_providers_title.to_string()
-                nav=Chrome::Console{username}
-                current=Some("federation-providers".to_string())
+                nav=Chrome::Console{username, item: NavItem::FederationProviders}
                 dev_mode=dev_mode
                 lang=lang
                 csrf_token=csrf_token.clone()
@@ -196,8 +195,7 @@ pub fn render_confirm_enable_federation_provider(
         view! {
             <Shell
                 title=t.federation_providers_enable_confirm_title.to_string()
-                nav=Chrome::Console{username}
-                current=Some("federation-providers".to_string())
+                nav=Chrome::Console{username, item: NavItem::FederationProviders}
                 dev_mode=dev_mode
                 lang=lang
                 csrf_token=data.csrf_token.clone()
@@ -255,8 +253,7 @@ pub fn render_confirm_disable_federation_provider(
         view! {
             <Shell
                 title=t.federation_providers_disable_confirm_title.to_string()
-                nav=Chrome::Console{username}
-                current=Some("federation-providers".to_string())
+                nav=Chrome::Console{username, item: NavItem::FederationProviders}
                 dev_mode=dev_mode
                 lang=lang
                 csrf_token=data.csrf_token.clone()
@@ -344,8 +341,7 @@ pub fn render_confirm_delete_federation_provider(
         view! {
             <Shell
                 title=t.confirm_delete_federation_provider_title.to_string()
-                nav=Chrome::Console{username}
-                current=Some("federation-providers".to_string())
+                nav=Chrome::Console{username, item: NavItem::FederationProviders}
                 dev_mode=dev_mode
                 lang=lang
                 csrf_token=data.csrf_token.clone()

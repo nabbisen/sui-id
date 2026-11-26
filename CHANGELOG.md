@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The console's navigation is a grouped sidebar**, not a flat row of
+  links: *Overview*, *People*, *Applications*, *Sign-in*, *Security*
+  and *System*, each with its own items, the current one marked. The
+  settings pages are now found under their groups instead of a shared
+  tab strip; each one's heading names it, with its group above in
+  small text. The theme selector and *Language* moved into the account
+  menu, which now holds *My account*, *Language*, the theme buttons
+  and *Sign out* with both the console's chrome and the account
+  chrome. The footer is removed; the version is now shown only inside
+  the console, below the account menu. **Every URL still works** —
+  nothing moved, only where it is found from. An operator's theme
+  preference is set from the account menu, where their other personal
+  settings are. A signed-out page (sign-in, setup, an error) no longer
+  offers one: it follows the saved theme, or the device's.
+- **For anyone building against `sui-id-web`:** a console page now names
+  its place in the navigation as `Chrome::Console { username, item }`,
+  so an admin page cannot render the console without one; the person's
+  own pages, for someone who can read the console, use the new
+  `Chrome::ConsolePersonal { username }`. `Shell`'s `current` property
+  is removed.
+
+### Fixed
+
+- **The account menu's items show the keyboard focus ring.** A rule
+  removed it, leaving only the hover tint to show where focus was.
+- **At a large font size, the skip link no longer widens every page**
+  (at 375px wide and 200% font, it was 484px wide).
+
+### Removed
+
+- `sui-id-web`: `MeSecurityData`, `render_me_security` (the dead `/me`
+  page nothing routed to), `SettingsTab` (the settings tab strip's
+  own type, replaced by the sidebar naming the open page directly).
+- `sui-id-i18n`: `footer_tagline`, `footer_a11y_group_label`,
+  `a11y_keyboard`, `a11y_screen_reader`, `a11y_contrast`,
+  `theme_toggle_light_title`, `theme_toggle_auto_title`,
+  `theme_toggle_dark_title` (the retired footer); `settings_tab_security`,
+  `settings_tab_authentication`, `settings_tabs_aria`,
+  `settings_title_basic`, `settings_title_security`,
+  `settings_title_authentication`, `settings_title_logs`,
+  `settings_title_advanced`, `settings_email_page_title` (the retired
+  settings tab strip and its shared page title).
+
 ## [0.94.0] — 2026-11-26
 
 **`admin master-key rotate` now requires an old-key custody choice** (retain

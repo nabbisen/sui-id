@@ -104,7 +104,6 @@ hmac                        = { workspace = true }
 subtle                      = { workspace = true }
 qrcode                      = { workspace = true }
 webauthn-rs                 = { workspace = true }
-tempfile                    = { workspace = true }
 sha2                        = { workspace = true }
 
 [dev-dependencies]

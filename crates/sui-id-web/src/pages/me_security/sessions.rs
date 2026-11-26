@@ -10,6 +10,15 @@ pub struct MeSessionsData {
     pub csrf_token: String,
 }
 
+pub struct MeSessionDescriptor {
+    pub id: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    /// Comma-separated human display: "password", "password + TOTP", etc.
+    pub auth_methods: String,
+    pub is_current: bool,
+}
+
 pub fn render_me_sessions(
     data: MeSessionsData,
     flash: Option<Flash>,
@@ -66,7 +75,7 @@ pub fn render_me_sessions(
 
         let revoke_all_confirm = t.me_security_sessions_revoke_all_others_confirm;
         view! {
-            <Shell title=t.me_security_sessions_section.to_string() nav=Chrome::for_person(shell.username, shell.role) current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.me_security_sessions_section.to_string() nav=Chrome::for_person(shell.username, shell.role) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_security_sessions_section}</h1>
                 </header>

@@ -1,7 +1,7 @@
 //! Page renderers for the "confirm" screen domain (RFC 065).
 
 use super::common::*;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 use leptos::prelude::*;
 
 fn reversibility_badge(recoverable: bool, t: &'static sui_id_i18n::Strings) -> impl IntoView {
@@ -272,8 +272,7 @@ pub fn render_confirm_disable_user(
             lang,
         );
         view! {
-            <Shell title=title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::Users} dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
         }
@@ -319,8 +318,7 @@ pub fn render_confirm_delete_user(
             lang,
         );
         view! {
-            <Shell title=t.confirm_delete_user_title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.confirm_delete_user_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::Users} dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
         }
@@ -366,8 +364,7 @@ pub fn render_confirm_reset_mfa(
             lang,
         );
         view! {
-            <Shell title=t.confirm_reset_mfa_title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.confirm_reset_mfa_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::Users} dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
         }
@@ -416,8 +413,7 @@ pub fn render_confirm_recovery_link(
             lang,
         );
         view! {
-            <Shell title=t.confirm_recovery_link_title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.confirm_recovery_link_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::Users} dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
         }
@@ -463,8 +459,7 @@ pub fn render_confirm_delete_client(
             lang,
         );
         view! {
-            <Shell title=t.confirm_delete_client_title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("clients".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.confirm_delete_client_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::Apps} dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
         }
@@ -511,8 +506,7 @@ pub fn render_confirm_delete_signing_key(
             lang,
         );
         view! {
-            <Shell title=t.confirm_delete_signing_key_title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("signing_keys".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.confirm_delete_signing_key_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::SigningKeys} dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
         }
@@ -576,8 +570,7 @@ pub fn render_confirm_rotate_signing_key(
             lang,
         );
         view! {
-            <Shell title=t.confirm_rotate_signing_key_title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("signing_keys".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.confirm_rotate_signing_key_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::SigningKeys} dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
         }
@@ -628,8 +621,7 @@ pub fn render_settings_email_confirm(
             lang,
         );
         view! {
-            <Shell title=t.confirm_email_settings_title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("settings".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.confirm_email_settings_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::Email} dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
         }

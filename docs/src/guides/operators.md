@@ -634,7 +634,7 @@ back in.
 ### Configuring SMTP
 
 Configuration lives in the database, not in `sui-id.toml`. Sign
-in as an admin and visit **Settings → メール**
+in as an admin and visit **System → Email**
 (`/admin/settings/email`). The form asks for:
 
 | Field          | Notes                                                                                  |
@@ -1751,10 +1751,11 @@ sets it through a recovery link.
 
 ### Password minimum length
 
-An administrator can raise the minimum password length from the
-*Authentication* tab under *Settings*, between 12 and 128 characters
-inclusive — it can never be set below 12, and an auditor sees the
-current value but no form to change it. The default is 12.
+An administrator can raise the minimum password length from *Sign-in
+settings*, under *Sign-in* in the console's sidebar, between 12 and
+128 characters inclusive — it can never be set below 12, and an
+auditor sees the current value but no form to change it. The default
+is 12.
 
 This minimum applies to every **new** password — a reset, a
 self-service change, an admin-issued recovery link — in whichever

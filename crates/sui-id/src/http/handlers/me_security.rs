@@ -17,7 +17,6 @@
 //! files. No `mod.rs`.
 
 use axum::response::Redirect;
-use axum_extra::extract::cookie::CookieJar;
 
 #[path = "me_security/apps.rs"]
 mod apps;
@@ -83,16 +82,4 @@ pub(super) fn describe_auth_methods(methods: &[sui_id_shared::AuthMethod]) -> St
         })
         .collect();
     parts.join(" + ")
-}
-
-/// Translate the (currently always-empty) post-action flash query.
-///
-/// In its current form this helper returns `None` unconditionally —
-/// flashes on `/me/security/*` are surfaced via `?saved=1` style
-/// query params (RFC 057), handled inside each tab. The helper
-/// exists for API symmetry with the admin side; a future revision
-/// may consolidate `?saved`/`?msg=…` translation here.
-pub(super) fn flash_from_query(jar: &CookieJar) -> Option<sui_id_web::Flash> {
-    let _ = jar;
-    None
 }

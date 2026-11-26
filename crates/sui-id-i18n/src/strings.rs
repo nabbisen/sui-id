@@ -128,22 +128,28 @@ pub struct Strings {
     pub nav_logout: &'static str,
     pub a11y_skip_to_main: &'static str,
     pub nav_aria_main: &'static str,
+    /// RFC 149 §1/§2: the sidebar's six group headings.
+    pub nav_group_overview: &'static str,
+    pub nav_group_people: &'static str,
+    pub nav_group_applications: &'static str,
+    pub nav_group_sign_in: &'static str,
+    pub nav_group_security: &'static str,
+    pub nav_group_system: &'static str,
+    /// RFC 149 §1: items with no pre-existing label to reuse. The
+    /// others reuse `nav_dashboard`/`nav_users`/`nav_apps`/
+    /// `nav_federation_providers`/`nav_signing_keys`/`nav_audit`/
+    /// `settings_tab_general`/`settings_tab_email`/`settings_tab_logs`.
+    pub nav_item_sign_in_settings: &'static str,
+    pub nav_item_sessions_and_lockout: &'static str,
+    pub nav_item_about_this_server: &'static str,
+    /// RFC 149 §2: the narrow-screen fold's `<summary>` label.
+    pub nav_menu_toggle: &'static str,
 
-    // ---- Footer (RFC 050) ----
-    pub footer_tagline: &'static str,
-    pub footer_a11y_group_label: &'static str,
-    pub a11y_keyboard: &'static str,
-    pub a11y_screen_reader: &'static str,
-    pub a11y_contrast: &'static str,
-
-    // ---- Theme toggle (RFC 050) ----
+    // ---- Theme toggle (RFC 050; RFC 149 §3: in the account menu) ----
     pub theme_toggle_group: &'static str,
     pub theme_toggle_light: &'static str,
     pub theme_toggle_auto: &'static str,
     pub theme_toggle_dark: &'static str,
-    pub theme_toggle_light_title: &'static str,
-    pub theme_toggle_auto_title: &'static str,
-    pub theme_toggle_dark_title: &'static str,
 
     // ---- Status words (RFC 052) ----
     // Single source of truth for the status badges that previously
@@ -505,8 +511,6 @@ pub struct Strings {
     pub settings_title: &'static str,
     pub settings_lede: &'static str,
     pub settings_tab_basic: &'static str,
-    pub settings_tab_security: &'static str,
-    pub settings_tab_authentication: &'static str,
     pub settings_tab_logs: &'static str,
     pub settings_tab_email: &'static str,
     pub settings_tab_other: &'static str,
@@ -584,7 +588,6 @@ pub struct Strings {
     // landmark's purpose without being redundant with on-page text.
     pub setup_steps_aria: &'static str,
     pub me_security_tabs_aria: &'static str,
-    pub settings_tabs_aria: &'static str,
     pub me_security_password_change_link: &'static str,
     pub me_security_sessions_section: &'static str,
     pub me_security_sessions_lede: &'static str,
@@ -736,6 +739,9 @@ pub struct Strings {
     pub settings_basic_kv_cookie_secure: &'static str,
     pub settings_basic_kv_trusted_proxies: &'static str,
     // Security tab sections
+    /// RFC 149 §1: the page's own lede, naming what it actually holds
+    /// — it no longer shares `settings_basic_description`.
+    pub settings_security_lede: &'static str,
     pub settings_security_session_section: &'static str,
     pub settings_security_session_lede: &'static str,
     pub settings_security_idle_timeout_label: &'static str,
@@ -753,6 +759,8 @@ pub struct Strings {
     pub settings_security_cors_token_label: &'static str,
     pub settings_security_cors_public_label: &'static str,
     // Authentication tab sections
+    /// RFC 149 §1: likewise its own lede, not `settings_basic_description`.
+    pub settings_authentication_lede: &'static str,
     pub settings_auth_password_section: &'static str,
     pub settings_auth_mfa_section: &'static str,
     pub settings_auth_oidc_section: &'static str,
@@ -863,12 +871,7 @@ pub struct Strings {
     pub dashboard_recent_events_view_all: &'static str,
 
     // ---- Settings: page titles (RFC 039) ----
-    pub settings_title_basic: &'static str,
-    pub settings_title_security: &'static str,
-    pub settings_title_authentication: &'static str,
-    pub settings_title_logs: &'static str,
     pub settings_title_email: &'static str,
-    pub settings_title_advanced: &'static str,
 
     // ---- Settings: auth tab body (RFC 039) ----
     pub settings_auth_min_length_label: &'static str,
@@ -897,7 +900,6 @@ pub struct Strings {
     pub settings_advanced_manage_link: &'static str,
 
     // ---- Settings: email tab body (RFC 039) ----
-    pub settings_email_page_title: &'static str,
     pub settings_email_lede: &'static str,
     pub settings_email_smtp_section: &'static str,
     pub settings_email_enable_label: &'static str,

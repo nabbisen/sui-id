@@ -95,8 +95,9 @@ password-complexity parameters) will be added here.
 | `max_lockout` | string | no | `"24h"` | `"15min"`, `"1h"`, `"4h"`, `"12h"`, `"24h"`, `"48h"` | Cap on the automatic account-lockout duration after repeated failed sign-ins. Uses a progressive-backoff curve; `max_lockout` is the ceiling. Admins can unlock manually at any time with `sui-id admin user unlock`. The restricted value set prevents locking real users out over weekends or holidays. The maximum is `"48h"`. |
 
 > **Session policy** (idle timeout, concurrent session cap) is configured
-> in the admin UI under **Settings → Authentication**, not in this file.
-> The TOML governs sign-in policy; the admin UI governs session policy.
+> in the admin UI under **Security → Sessions and lockout**, not in this
+> file. The TOML governs sign-in policy; the admin UI governs session
+> policy.
 
 ---
 

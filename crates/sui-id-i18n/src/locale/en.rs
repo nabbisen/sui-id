@@ -105,22 +105,22 @@ pub static STRINGS_EN: Strings = Strings {
     nav_logout: "Sign out",
     a11y_skip_to_main: "Skip to main content",
     nav_aria_main: "Main navigation",
+    nav_group_overview: "Overview",
+    nav_group_people: "People",
+    nav_group_applications: "Applications",
+    nav_group_sign_in: "Sign-in",
+    nav_group_security: "Security",
+    nav_group_system: "System",
+    nav_item_sign_in_settings: "Sign-in settings",
+    nav_item_sessions_and_lockout: "Sessions and lockout",
+    nav_item_about_this_server: "About this server",
+    nav_menu_toggle: "Menu",
 
-    // Footer (RFC 050)
-    footer_tagline: "🌱 sui-id · A quiet, dependable identity foundation.",
-    footer_a11y_group_label: "Accessibility features",
-    a11y_keyboard: "Keyboard accessible",
-    a11y_screen_reader: "Screen reader friendly",
-    a11y_contrast: "High contrast support",
-
-    // Theme toggle (RFC 050)
+    // Theme toggle (RFC 050; RFC 149 §3: in the account menu)
     theme_toggle_group: "Theme",
     theme_toggle_light: "Light",
     theme_toggle_auto: "Auto",
     theme_toggle_dark: "Dark",
-    theme_toggle_light_title: "Light theme",
-    theme_toggle_auto_title: "Follow system",
-    theme_toggle_dark_title: "Dark theme",
 
     // Status words (RFC 052)
     status_active: "Active",
@@ -348,8 +348,6 @@ pub static STRINGS_EN: Strings = Strings {
     settings_title: "Settings",
     settings_lede: "Review the current effective configuration.",
     settings_tab_basic: "Basic",
-    settings_tab_security: "Security",
-    settings_tab_authentication: "Authentication",
     settings_tab_logs: "Logs",
     settings_tab_email: "Email",
     settings_tab_other: "Other",
@@ -413,7 +411,6 @@ pub static STRINGS_EN: Strings = Strings {
     me_security_language_saved_banner: "Language preference saved.",
     setup_steps_aria: "Setup steps",
     me_security_tabs_aria: "Security sections",
-    settings_tabs_aria: "Settings tabs",
     me_security_password_change_link: "Change password",
     me_security_sessions_section: "Where you are signed in",
     me_security_sessions_lede: "Each row is one browser session. Pressing Revoke immediately signs that browser out. The row marked \"current session\" is the one you are using now.",
@@ -689,7 +686,7 @@ pub static STRINGS_EN: Strings = Strings {
     login_title_self_service: "Sign in to manage your security",
     login_body_self_service: "Manage MFA, passkeys, sessions, and password.",
     login_body_oidc: "sui-id will verify your identity for this application.",
-    theme_noscript_note: "Theme follows your system setting.",
+    theme_noscript_note: "The theme follows your device's setting.",
     empty_users: "No users yet.",
     empty_users_cta: "Create first user",
     empty_clients: "No applications registered yet.",
@@ -737,6 +734,7 @@ pub static STRINGS_EN: Strings = Strings {
     settings_basic_kv_listen: "Listen address",
     settings_basic_kv_cookie_secure: "Cookie Secure flag",
     settings_basic_kv_trusted_proxies: "Trusted proxies",
+    settings_security_lede: "Session limits, security headers, and CORS.",
     settings_security_session_section: "Session limits",
     settings_security_session_lede: "Idle timeout and concurrent session cap. Both default to 0 (disabled); opt in per your policy.",
     settings_security_idle_timeout_label: "Idle timeout (seconds)",
@@ -753,6 +751,7 @@ pub static STRINGS_EN: Strings = Strings {
     settings_security_headers_hint: "All admin pages return the headers above. /oauth2/* public endpoints omit some headers where the protocol requires it.",
     settings_security_cors_token_label: "Token endpoint dynamic allow-list (origins of registered redirect_uris)",
     settings_security_cors_public_label: "Discovery / JWKS / userinfo open to all origins (*)",
+    settings_authentication_lede: "Password policy, multi-factor authentication, and OAuth 2.1 / OIDC tokens.",
     settings_auth_password_section: "Password",
     settings_auth_mfa_section: "Two-factor authentication",
     settings_auth_oidc_section: "OIDC / token settings",
@@ -784,12 +783,7 @@ pub static STRINGS_EN: Strings = Strings {
     consent_policy_always: "Always prompt",
 
     // Settings: page titles (RFC 039)
-    settings_title_basic: "Settings — Basic",
-    settings_title_security: "Settings — Security",
-    settings_title_authentication: "Settings — Authentication",
-    settings_title_logs: "Settings — Logs",
     settings_title_email: "Settings — Email",
-    settings_title_advanced: "Settings — Advanced",
     // Settings: auth tab body (RFC 039)
     settings_auth_min_length_label: "Minimum length",
     settings_auth_hash_algorithm_label: "Hash algorithm",
@@ -814,7 +808,6 @@ pub static STRINGS_EN: Strings = Strings {
     settings_advanced_key_file_label: "Master key file",
     settings_advanced_manage_link: "Manage →",
     // Settings: email tab body (RFC 039)
-    settings_email_page_title: "Settings — Email",
     settings_email_lede: "SMTP settings for password-reset and change notification emails.",
     settings_email_smtp_section: "SMTP connection",
     settings_email_enable_label: "Enable email delivery",

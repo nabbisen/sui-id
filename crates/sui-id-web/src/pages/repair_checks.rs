@@ -320,6 +320,19 @@ fn every_key_value_row_is_inside_a_table_body() {
     }
 }
 
+/// RFC 149 §5/§6 test 9: `.kv-list` (the unstyled `<dl>` the TOTP/passkey
+/// and recovery-link-expiry blocks once used) is gone — both moved onto
+/// the key-value table the line above already guards.
+#[test]
+fn no_kv_list_remains() {
+    for (name, src) in page_sources() {
+        assert!(
+            !src.contains("kv-list"),
+            "{name}: still references the retired kv-list class"
+        );
+    }
+}
+
 // ── RFC 144 N2e §2: a password match you can see ──────────────────────────
 
 /// The three forms with a confirmation field (`pages/setup/admin.rs`'s

@@ -6,7 +6,7 @@
 //! `sui-id-i18n`.
 
 use super::common::*;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 use leptos::prelude::*;
 
 /// What an administrator has just issued. `url` and `token` are the only
@@ -38,8 +38,7 @@ pub fn render_recovery_link_issued(
         let back = format!("/admin/users/{}", data.user_id);
         let admin_username = data.admin_username.clone();
         view! {
-            <Shell title=t.recovery_link_issued_title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("users".to_string()) dev_mode=dev_mode lang=lang
+            <Shell title=t.recovery_link_issued_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::Users} dev_mode=dev_mode lang=lang
                    csrf_token=data.csrf_token.clone()>
                 <div class="auth-card max-w-card">
                     <h1>{t.recovery_link_issued_title}</h1>
@@ -64,16 +63,14 @@ pub fn render_recovery_link_issued(
                         )}
                         <span class="field__hint">{t.recovery_link_token_hint}</span>
                     </div>
-                    <dl class="kv-list">
-                        <div class="kv-list__row">
-                            <dt>{t.recovery_link_expires_label}</dt>
-                            <dd>{fmt_time(data.expires_at)}</dd>
-                        </div>
-                        <div class="kv-list__row">
-                            <dt>{t.recovery_link_invalidated_label}</dt>
-                            <dd>{data.invalidated.to_string()}</dd>
-                        </div>
-                    </dl>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_text(t.recovery_link_expires_label, fmt_time(data.expires_at))}
+                                {kv_text(t.recovery_link_invalidated_label, data.invalidated.to_string())}
+                            </tbody>
+                        </table>
+                    </div>
                     <p class="muted">{t.recovery_link_handover}</p>
                     <div class="row gap-2 mt-4">
                         <a href=back class="button secondary">{t.recovery_link_back}</a>
@@ -137,8 +134,7 @@ pub fn render_recovery_link_refused(
         let back = format!("/admin/users/{}", data.user_id);
         let admin_username = data.admin_username.clone();
         view! {
-            <Shell title=t.recovery_refused_title.to_string() nav=Chrome::Console{username: admin_username}
-                   current=Some("users".to_string()) dev_mode=dev_mode lang=lang
+            <Shell title=t.recovery_refused_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::Users} dev_mode=dev_mode lang=lang
                    csrf_token=data.csrf_token.clone()>
                 <div class="auth-card max-w-card">
                     <h1>{t.recovery_refused_title}</h1>

@@ -59,7 +59,7 @@ caller away rather than trusting the classification alone.
 | `POST` | `/admin/login/webauthn/complete` | passkey sign-in; a pending ceremony |
 | `POST` | `/admin/logout` | ends the caller's own session; CSRF |
 | `GET` | `/admin/profile` | permanent redirect to /me/security |
-| `GET` | `/admin/settings` | constant redirect to the first settings tab; reads nothing |
+| `GET` | `/admin/settings` | constant redirect to /admin/settings/basic (General); reads nothing |
 | `GET` | `/me/security` | constant redirect to the overview; reads nothing |
 | `GET` | `/forgot-password` | recovery form |
 | `POST` | `/forgot-password` | uniform response; rate limit |

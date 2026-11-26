@@ -1,7 +1,7 @@
 //! Settings basic tab (RFC 065).
 
 use super::*;
-use crate::layout::{Chrome, Shell};
+use crate::layout::{Chrome, NavItem, Shell};
 
 pub struct SettingsBasicData {
     pub issuer: String,
@@ -82,17 +82,17 @@ pub fn render_settings_basic(
             trusted_proxies.join(", ")
         };
         view! {
-            <Shell title=t.settings_title_basic.to_string() nav=Chrome::Console{username} current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=NavItem::General.label(t).to_string() nav=Chrome::Console{username, item: NavItem::General} lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <div>
-                        <h1 class="page-header__title">{t.settings_title}</h1>
+                        <p class="page-header__group">{NavItem::General.group().label(t)}</p>
+                        <h1 class="page-header__title">{NavItem::General.label(t)}</h1>
                         <p class="page-header__lede">
                             {t.settings_basic_description}
                         </p>
                     </div>
                 </header>
                 {flash_banner(flash)}
-                {settings_tabs(SettingsTab::Basic, lang)}
 
                 <div class="card">
                     <h3 class="card__title">{t.settings_tab_basic}</h3>

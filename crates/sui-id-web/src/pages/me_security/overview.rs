@@ -17,6 +17,13 @@ pub struct MeOverviewData {
     pub recovery_event: Option<MeRecoveryEvent>,
 }
 
+pub struct MeAuditEntry {
+    pub at: chrono::DateTime<chrono::Utc>,
+    pub action: String,
+    pub result: String,
+    pub note: Option<String>,
+}
+
 /// The signed-in user's own most recent recovery-link event (RFC 103 5b):
 /// when an administrator- or operator-issued link was created for them, or
 /// when their password was last reset through a link of any origin. Never
@@ -101,7 +108,7 @@ pub fn render_me_overview(
             view! { <p class="muted text-caption">{text}</p> }
         });
         view! {
-            <Shell title=t.me_tab_overview.to_string() nav=Chrome::for_person(shell.username, shell.role) current=Some("me".to_string()) lang=lang csrf_token=data.csrf_token.clone()>
+            <Shell title=t.me_tab_overview.to_string() nav=Chrome::for_person(shell.username, shell.role) lang=lang csrf_token=data.csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_tab_overview}</h1>
                     {last_login_line}

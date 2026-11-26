@@ -30,7 +30,7 @@
    snapshot" below. Check stderr for any migration errors.
 
 6. **Verify** — open the admin panel and confirm the version shown in
-   Settings → Advanced.
+   System → About this server.
 
 ## Migration behaviour
 
