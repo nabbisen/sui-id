@@ -1,79 +1,157 @@
-# Cycle Q and `0.95.0` — the plan
+# Cycles Q and R: `0.95.0` and `0.96.0`, the plan
 
-> ## Whose turn it is: **`@nabbisen`'s**, on §1's two questions.
-> Q1 has landed. **Q2 can be dispatched as soon as question 1 is answered**, because every option keeps Q2 first.
+> ## Whose turn it is: **the implementation role's, on Q2** ([dispatch](0.95.0-q2-the-chrome-2026-11-26.md)).
+> No decision is pending now. §1 lists four questions still to come, three before Q6 and one before R3, each with the
+> architect's proposed answer.
 
-**Proposed.** 2026-11-26, by the architect, after `0.94.0` was published (`b97bacb`).
+**Authorized 2026-11-26.** `@nabbisen`, on the split proposed in this plan's first version (`6577468`): *"Yes. Scope them, the
+series, carefully with consideration."* This version is that scoping, from measurements made the same day at `6577468`.
+
 **Authority already given.**
 - **Cycle Q's scope** came from the split of cycle P (`@nabbisen`, 2026-11-24: *"Two releases, M2c first (Recommended)"*).
-- **RFC 149's build** is under the operator-experience track's freeze exception, decided 2026-11-15.
-- **RFC 152's schedule beside it** was authorized 2026-11-25 (*"Authorized."*).
+- **RFC 149, RFC 101 and RFC 150** are built under the operator-experience track's freeze exception, decided 2026-11-15.
+- **RFC 152's schedule beside RFC 149** was authorized 2026-11-25 (*"Authorized."*).
 
-This plan proposes the order, the stages and one split. **It is a proposal until it is authorized.**
+**What re-scoping found.** The first version was written from the records. Measuring the code changed four things:
+1. **Palette B has already shipped.** RFC 144 built it in `0.92.0` (`crates/sui-id-web/src/tokens.rs:7`, with
+   `--warning-default: #9D6600` at `:76`). The first version listed it as Q2 work. It is not.
+2. **RFC 152's D5 touches a console page.** The signing-keys page must say when a new key starts signing. So it follows Q2,
+   like the console stages. The first version said that Q5 and Q6 touch no console page.
+3. **The first version's Q4 was two stages.** One rebuilds the app form; that holds RFC 149's fourth closure condition and
+   changes an audit event. The other touches every list page. Each is now its own stage.
+4. **D5 is its own stage.** A stage that chooses which key signs every token is not one to share with documentation.
 
-## §0 — what is done, and what is carried
+## §0: what is done, and what is carried
 
-- **Q1 landed** (`5614f82`): the first run, tested through the binary in a real terminal. **RFC 148's last closure
+- **Q1 landed** (`5614f82`): the first run is tested through the binary, in a real terminal. **CI confirmed it on
+  `ubuntu-24.04`** (run `45806896282`, 29 of 29 jobs). All five terminal tests passed there. **RFC 148's last closure
   prerequisite is met**, and it moves to `done/` at `0.95.0`'s cut.
-- **RFC 151** was built in `0.94.0`. It **closes when Q2 creates the *Sign-in* group**, which its closure prerequisite names.
-- **Carried into RFC 149's build** (its handoff, *Carried into this RFC's build*):
-  - the footer redesign (the owner's own finding);
-  - the DNS deny reason's localized label;
-  - the kept-backup dashboard notice;
-  - `.kv-list`'s missing style;
-  - the dead `page_get`;
-  - C01 recording the consent policy.
-- **One tidy-up**: `sui-id`'s unused `tempfile` dependency, which `cargo package` warned about at `0.94.0`.
+- **RFC 151** was built in `0.94.0`. **It closes when Q2 creates the *Sign-in* group.** Its closure prerequisite says the
+  minimum is raised *"from the *Sign-in* settings"*.
+- **Carried into RFC 149's build**, from its handoff's *Carried into this RFC's build*, each placed in a stage below:
 
-## §1 — two questions
+  | Carried item | Stage |
+  |---|---|
+  | the footer redesign (the owner's own finding) | Q2 |
+  | `.kv-list` has no style | Q2 |
+  | the dead `/me` page (`page_get`, now in `handlers/me_security/overview.rs`) | Q2 |
+  | the kept-backup dashboard notice | Q3 |
+  | a short localized label for each DNS deny reason | Q3 |
+  | C01 records the consent policy | Q4 |
 
-1. **Split cycle Q into two releases?** Recommended: **yes**.
-   - **`0.95.0`**: RFC 149 (the console) and RFC 152 (what a relying party can rely on).
-   - **`0.96.0`, cycle R**: RFC 101 (the email lifecycle) and RFC 150 (an administrator edits a user). RFC 150's email half
-     needs RFC 101.
+- **One tidy-up**: `sui-id`'s unused `tempfile` dependency, which `cargo package` warned about at `0.94.0`. It is done in Q2.
 
-   **Why:**
-   - RFC 149 rebuilds the chrome of every page, and RFC 101 is a security RFC of its own (311 lines: verification,
-     pending changes, both addresses told, Class-A throughout).
-   - In one cycle, the review of either would wait on the other, and the release would carry the risk of both.
-   - Cycle P's split, for the same reason, let M2c ship on its own.
-   - RFC 150 waits on RFC 101 anyway.
-2. **RFC 152's three open questions**, answered in its own dispatch (Q6), with the architect's proposals then. Nothing is
-   needed now. Named here so they are not forgotten:
-   - `prompt=select_account`;
-   - which step-up paths count as signing in again;
-   - whether D4 ships with a release of warning.
+## §1: decisions still to come, with the architect's proposals
 
-## §2 — the stages of `0.95.0` (if split)
+None of these blocks Q2 to Q5. Each is settled before the stage named.
 
-Each stage is one dispatch, one return and one review, as in cycle P. **Each RFC 149 stage closes one or more of its closure
-prerequisites with a test over the rendered pages, mutated.**
+**Before Q6** (RFC 152's three open questions):
+
+1. **`prompt=select_account`.** **Proposed: honour it with a two-choice page.** The page offers *Continue as `<name>`* or
+   *Sign in as someone else*.
+   - **Why:** that is what the parameter asks for: the user chooses an account, and keeping the current one is a choice.
+   - **Refusing it** with `account_selection_required` turns a relying party's *switch account* button into an error.
+   - **Treating it as `login`** makes a user who wanted to stay re-enter their password.
+   - **The cost**: one page on the sign-in surface, with no new stored state. *Continue* resumes the request without a new
+     sign-in. *Someone else* is `prompt=login`'s path.
+2. **Which step-up paths count as presenting a credential** for D2's sign-in time. **Proposed: a session's sign-in, and a
+   completed step-up through L05** (`complete_step_up`, `crates/sui-id-store/src/commands.rs`: a TOTP code or a passkey).
+   - L05 records `last_step_up_at`.
+   - **B7's password re-check does not count.** B7 is `first_factor_proof`, the password asked before a sensitive action
+     (`crates/sui-id-core/src/authn/step_up.rs`). It records nothing on the session.
+   - **Why:** with this rule, `auth_time` can be older than the truth but never newer. A relying party that relies on it may
+     ask for a sign-in that was not strictly needed. It is never told that a sign-in happened when it did not.
+3. **Should D4 ship with one release of warning?** **Proposed: no**, as RFC 152 already argues. There is no compatibility
+   promise before 1.0, and returning these claims without `profile` was against the specification. The change is named in the
+   CHANGELOG's *Changed*, and in the upgrade note, for anyone who reads `name` without asking for `profile`.
+
+**Before R3** (RFC 101's §6.2, which it leaves open):
+
+4. **The event names and their notes.** The proposed names are `user.email_change_requested`, `user.email_changed` and
+   `auth.email.verified`. RFC 101 asks for *"a second reader against the namespace split"* recorded in
+   `audit-coverage-matrix.md`. The architect will measure the names against that split and propose the notes in R3's
+   dispatch, for `@nabbisen` to settle there.
+
+## §2: `0.95.0`, cycle Q
+
+One dispatch, one return and one review per stage. **Each RFC 149 stage asserts its closure conditions with a test over the
+rendered pages, and each test is mutated.**
 
 | Stage | What | Closes |
 |---|---|---|
-| **Q1** | the first run in a real terminal | RFC 148 ✔ (landed) |
-| **Q2** | **the chrome**: §1's six groups as the grouped sidebar; the account menu, with the theme selector beside Language; the footer reduced to the version; palette B's tokens (with light warning `#9D6600`); `.kv-list` styled; the dead `page_get` deleted; the *Authentication* tab shown under *Sign-in*, with every URL kept (§7) | RFC 149: *every admin page belongs to exactly one group*; RFC 151's *Sign-in* closure |
-| **Q3** | **help and the dashboard**: §3's three layers on every page (a `<details>` **?**, no hover-only tooltip); §2's first-run path on the dashboard; the kept-backup notice there; the DNS deny reason's localized short labels | RFC 149: *the first-run path*; *the help policy, no hover-only tooltip* |
-| **Q4** | **forms and tables**: §4's scope checkboxes and additional scopes (with the near-miss refusal); one input per redirect URI, working with JavaScript off; create and edit as one form; C01's consent-policy attribute; §5's counts, pages and the audit log's sticky header | RFC 149: *§4's editors work with JavaScript off* |
-| **Q5** | **RFC 152, the request**: `max_age` and `auth_time` (a migration: the code and the refresh token carry the sign-in time), `prompt` honoured or refused, and the other requirement-type parameters refused | RFC 152 D1–D3 |
-| **Q6** | **RFC 152, the rest**: userinfo's `profile` scope (D4); a signing key published before it signs (D5); discovery's claims (D6); the reference's parameter table (D7) and D8's relying-party obligations | RFC 152 D4–D8 |
-| **—** | the `tempfile` tidy-up, folded into whichever stage touches `crates/sui-id/Cargo.toml` first | — |
+| **Q1** | the first run in a real terminal | RFC 148 ✔ (landed; CI ✔) |
+| **Q2** | **the chrome.** The grouped sidebar, generated from one list. The account menu gains Language and the theme selector. The footer goes; the version stays, shown only inside the console. The settings tabs give way to the sidebar's items. `.kv-list` is styled; the dead `/me` page is deleted; `tempfile` is removed. Every URL is kept | RFC 149: *every admin page belongs to exactly one group*. RFC 151's *Sign-in* condition |
+| **Q3** | **help and the dashboard.** §3's three layers on every console page: a purpose line, `<details>` **?** with *Learn more*, and no `title=` tooltip anywhere. §2's first-run path, and a *needs attention* section for an overdue kept backup and for a federation provider that requires review. The DNS deny reasons' localized labels | RFC 149: *the first-run path*; *the help policy, no hover-only tooltip* |
+| **Q4** | **the app form.** §4's scope checkboxes; additional scopes, validated, with near misses refused; one input per redirect URI and per post-logout URI, working with JavaScript off; create and edit as one form; C01 records the consent policy | RFC 149: *§4's editors work with JavaScript off* |
+| **Q5** | **the lists.** §5: every list states its count and its page, and none truncates silently; the audit log keeps its five columns and its header in view | RFC 149 §5 (not a closure condition, but in its scope) |
+| **Q6** | **RFC 152, the request.** D1: every parameter that states a requirement is honoured or refused. D2: `max_age`, and `auth_time` in every ID token, with a migration so that the code and the refresh token carry it. D3: `prompt`, with §1's answer for `select_account` | RFC 152 D1–D3 |
+| **Q7** | **RFC 152, the key.** D5: a new signing key is published before it signs. The signer is chosen per token, with one constant shared with the JWKS `Cache-Control`. The signing-keys page says when the new key will start signing | RFC 152 D5 |
+| **Q8** | **RFC 152, claims and the reference.** D4, userinfo's `profile` scope. D6, discovery's claims, generated from the serialized list. D7, the reference's parameter table. D8, the relying party's obligations, each row checked against the code | RFC 152 D4, D6–D8 |
+| **prep** | the release preparation (the mechanical half, as for `0.94.0`) | — |
 
-**Order and parallelism.**
-- Q2 first, because Q3 and Q4 are built inside its chrome.
-- **Q5 and Q6 touch no console page**, so they can run beside Q3 and Q4, one at a time with the dev team, alternating while
-  the architect reviews.
-- The release preparation follows the last of them.
+**What each stage must settle that the RFCs leave to the build.** These are named now so that no dispatch meets them by
+surprise:
+- **Q3, the first-run path's fourth step.** *"Review sign-in and session settings"* has no state from which "done" can be
+  read. The proposal, settled in Q3's dispatch, is an acknowledgement: *Mark as reviewed*, a server setting written by a
+  Class-A command with its audit record. Step 5 is optional and never holds the path open. **A step must never show as
+  done because of something that does not mean it was done.**
+- **Q4, apps saved before `0.95.0`.** An app whose stored scopes include a near miss (`profle`) cannot be saved again until
+  it is corrected. The page names the scope and offers the standard one. The scope was never in effect, so nothing that
+  worked stops working. The upgrade note says so.
+- **Q6, `prompt=login` and `max_age`.** The new sign-in creates a new session and ends the old one in one transaction,
+  whoever signs in. One browser never holds two sessions, and a different user signing in is an account switch, not a
+  merge.
+- **Q7, a fresh installation.** No key has been published for 300 seconds, so the rule *"the newest key published at least
+  that long ago"* chooses none. The rule is completed so that the oldest published key signs. A key that is signing, or due
+  to sign next, cannot be deleted.
 
-**Closure.** At `0.95.0`'s cut:
-- RFC 148 to `done/`;
-- RFC 151 to `done/`, once Q2 has landed;
-- RFC 149 to `done/` once its closure prerequisites are all met (Q2–Q4);
-- RFC 152 to `done/` once Q5 and Q6 have landed.
+**Order.**
+- Q2 comes first, because every later stage renders inside its chrome.
+- Then Q3, Q4 and Q5, in that order. Q3's help layer is used by Q4's additional-scopes field.
+- **Q6, Q7 and Q8 can alternate with Q3 to Q5**, one stage with the dev team at a time, while the architect reviews the
+  other. Q8 comes last of the three, because its reference table documents what Q6 and Q7 built.
+- The release preparation follows the last stage.
 
-## §3 — what this plan does not include
+**Closure at `0.95.0`'s cut.**
+- RFC 148 moves to `done/`.
+- RFC 151 moves to `done/` once Q2 has landed.
+- RFC 149 moves once Q2, Q3 and Q4 have landed (its four conditions).
+- RFC 152 moves once Q6, Q7 and Q8 have landed.
 
-- **RFC 009** (other databases) and **the embedding work**. Both are frozen for building; their designs stay under review.
-- **RFC 097 stage 2** (the STRIDE worksheets). It is the architect's measurement work, and can run beside any stage without a
-  release. It will be proposed separately.
-- **No dates.** A failed gate moves the release, and scope is never cut to keep one.
+## §3: `0.96.0`, cycle R: RFC 150 and RFC 101
+
+This cycle edits a user and gives an email address its lifecycle.
+
+**Prerequisites, measured:**
+- RFC 101 requires RFC 103 to be implemented (it is in `done/`), and the Class-A seam, which closed in `0.88.0`.
+- RFC 150's email half requires RFC 101.
+- **Both are built inside RFC 149's console.** RFC 150 §4: *"The page's layout follows RFC 149, if that has been built by
+  then."* It will have been.
+
+| Stage | What | Closes |
+|---|---|---|
+| **R1** | **RFC 150 §1 and §1a.** The display name and the language, one Class-A command each, edited in one form on the user's own page. An unchanged field writes nothing. A directory user's name and email are read-only, with RFC 150's one line, and the command refuses them. The test that fails on any production call to `users::update_email` | RFC 150: *name and language*; *directory user read-only*; *no direct email write* |
+| **R2** | **RFC 150 §2 and §5.** A rename, with step-up, recording the old and the new name. The table of retired names (a migration), checked when a user is created or renamed. `admin.username.released`, with step-up and its confirmation page, for one name at a time. The test that fails if any other path frees a name | RFC 150: *rename*; *a retired name is released only deliberately* |
+| **R3** | **RFC 101 D1, D5, D6 and §6.4/§6.5: verifying the current address.** A single-use, hashed, expiring token, sent to the address itself. Consuming it sets `email_verified_at` (Class-A, audited). The OIDC `email_verified` claim follows it. Signed-in users are prompted, never blocked. **From this stage, password reset sends a link only to a verified address**, with no transition period. Requests are rate-limited as forgot-password is. The command inventory gains RFC 101's rows | RFC 101: *a user can verify an address*; *`email_verified` reflects reality* |
+| **R4** | **RFC 101 D2–D4 and D7: a user changes their address.** A pending new address. A confirmation screen, step-up, and an audit note (RFC 058's three obligations). Confirmation goes to the new address and a notice to the old one. The change revokes outstanding reset tokens, and a competing change voids the earlier token. The response never reveals that an address is in use | RFC 101: *change*; *recovery cannot be redirected by session compromise alone* |
+| **R5** | **RFC 101 §6.3 and RFC 150 §3: an administrator starts a change** from the user's page, through R4's lifecycle. The address an administrator sets is unverified until the user proves it. Never for a directory user | RFC 150: *email through RFC 101* |
+| **prep** | the release preparation | — |
+
+**Why this order.**
+- R1 and R2 change only who may write what, and build the user's edit form that R5 extends.
+- R3 lays the token and mail path that R4 and R5 reuse.
+- **R3 changes password reset for every existing user.** On the day it ships, no address is verified, so no one can reset a
+  password by email until they verify. The ruling of 2026-09-16 chose that, with no transition period, because an
+  administrator's recovery link (RFC 103) means nobody is stranded. The upgrade note must say it first. RFC 152 D8's R5 row
+  (*"every user, until RFC 101 ships"*) is updated in the same stage.
+
+**Closure at `0.96.0`'s cut.** RFC 150 and RFC 101 move to `done/` once all their conditions are met.
+
+## §4: what this plan does not include
+
+- **RFC 009** (other databases) and **the embedding work**. Both are frozen for building, and their designs stay under
+  review.
+- **RFC 097 stage 2** (the STRIDE worksheets). It is the architect's measurement work, which can run beside any stage without
+  a release. It will be proposed separately.
+- **Adding a federation provider from the console.** It stays after M7.
+- **No dates.** A failed gate moves a release, and scope is never cut to keep one.

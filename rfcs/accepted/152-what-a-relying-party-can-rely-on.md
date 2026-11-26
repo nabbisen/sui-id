@@ -146,7 +146,7 @@ section is written, as R6 and R7 were.
 - **Front- and back-channel logout.** A relying party learns of a disabled user through its next refresh, which a disable
   revokes in the same transaction. A logout channel is a separate decision.
 - **`acr_values` as an essential claim**, through the `claims` parameter, which D1 refuses until a later RFC.
-- **Email verification.** `email_verified` is `false` for every user until RFC 101 (Accepted; cycle Q) ships its flow.
+- **Email verification.** `email_verified` is `false` for every user until RFC 101 (Accepted; cycle R, `0.96.0`, since cycle Q's split of 2026-11-26) ships its flow.
   RFC 101's D2 already makes an address change a pending new address rather than an edit of the verified one.
 
 ## Tests, each with a mutation

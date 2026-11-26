@@ -1,7 +1,7 @@
 # RFC 149 — handoff
 
 **RFC.** [`../../accepted/149-the-console-follows-the-operator.md`](../../accepted/149-the-console-follows-the-operator.md)
-**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Not yet dispatched. **Its build is cycle Q's**, planned in [`cycle-q-and-0.95.0-2026-11-26.md`](cycle-q-and-0.95.0-2026-11-26.md) (proposed 2026-11-26).
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). **Being built in cycle Q** (`0.95.0`), on [`cycle-q-and-0.95.0-2026-11-26.md`](cycle-q-and-0.95.0-2026-11-26.md), authorized 2026-11-26. **Q2, the chrome, is dispatched**: [`0.95.0-q2-the-chrome-2026-11-26.md`](0.95.0-q2-the-chrome-2026-11-26.md). Q3 to Q5 follow. Each carried item below is placed in a stage, in the plan's §0.
 
 ## 2026-11-15: the mockups' questions answered
 

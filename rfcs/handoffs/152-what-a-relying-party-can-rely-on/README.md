@@ -2,7 +2,7 @@
 
 **RFC.** [`../../accepted/152-what-a-relying-party-can-rely-on.md`](../../accepted/152-what-a-relying-party-can-rely-on.md)
 **Status.** **Accepted 2026-11-26** ([design review record](design-review-2026-11-26.md)). Not yet dispatched. It is built
-in cycle Q beside RFC 149, as authorized 2026-11-25. **Amended 2026-11-26** with D8: what a relying party must do for sui-id's guarantees to reach its users.
+in cycle Q beside RFC 149, as authorized 2026-11-25: stages Q6 (D1–D3), Q7 (D5) and Q8 (D4, D6–D8) of [the plan](../149-the-console-follows-the-operator/cycle-q-and-0.95.0-2026-11-26.md), whose §1 proposes answers to its three open questions. **Amended 2026-11-26** with D8: what a relying party must do for sui-id's guarantees to reach its users.
 
 ## Documents
 

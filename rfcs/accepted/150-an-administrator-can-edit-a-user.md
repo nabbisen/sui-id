@@ -5,8 +5,8 @@
 **Approved by.** `@nabbisen`, 2026-11-16: *"All accepted."*
 **Security review.** Required
 **Design prerequisites.** RFC 101 Accepted, for the email half (§3).
-**Implementation prerequisites.** This RFC Accepted. Built in cycle P, as a
-freeze exception decided 2026-11-15 (ROADMAP, cycle P's row). The email
+**Implementation prerequisites.** This RFC Accepted. Built as a freeze exception decided 2026-11-15, first planned
+for cycle P; moved to cycle Q by cycle P's split (2026-11-24), and to cycle R (`0.96.0`) by cycle Q's (2026-11-26). The email
 half also needs RFC 101 implemented, so it waits for RFC 101's own build.
 **Closure prerequisites.** An administrator can change a user's display name
 and language from the user's own page. Each change is one Class-A command
