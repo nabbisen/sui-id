@@ -115,6 +115,33 @@ pub(crate) fn run_restore(
 ) -> Result<()> {
     let cfg = Config::load(config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
+
+    // RFC 100 `0.94.0` P9 §2: the same liveness lock a rotation takes,
+    // exclusive, always -- not only with `--force`. Taken before the
+    // passphrase prompt below and before the source is read, so a
+    // refusal is the first thing read, not something an operator meets
+    // after typing a passphrase (P7's own review lesson, applied here).
+    //
+    // P9 review: on a fresh host the key file's directory may not exist
+    // yet, and the lock file lives in it. The store's restore creates that
+    // directory anyway (`backup::ops::run_restore`); creating it here first
+    // keeps a fresh-host restore -- the case `--force` exists for --
+    // working. It creates nothing the restore would not have created.
+    if let Some(parent) = cfg.storage.key_file.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {} for the restore", parent.display()))?;
+    }
+    let adapter = crate::key_adapter::default_adapter();
+    let paths = crate::rotate::preconditions::RotationPaths::for_key_file(&cfg.storage.key_file);
+    let _lock = crate::rotate::preconditions::take_exclusive_lock(
+        adapter.as_ref(),
+        &paths,
+        "restore.lock",
+        crate::rotate::preconditions::LockAction::Restore,
+    )?;
+
     let passphrase = if decrypt {
         Some(read_passphrase("Decryption passphrase", false)?)
     } else {

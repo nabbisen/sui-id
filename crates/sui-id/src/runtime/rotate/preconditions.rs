@@ -82,34 +82,72 @@ impl RotationPaths {
     }
 }
 
+/// What a caller of [`take_exclusive_lock`] is doing. RFC 100 `0.94.0`
+/// P9 §2: "one rule" — a command that replaces the database or the key
+/// wholesale holds the lock exclusively, with no per-command exception
+/// for the wording. Only the verb in the refusal sentence differs
+/// between callers; the mechanism is identical.
+#[derive(Clone, Copy)]
+pub enum LockAction {
+    Rotate,
+    Restore,
+}
+
+impl LockAction {
+    /// The sentence's verb: "refusing to {verb}: ... Stop it, then
+    /// {verb}."
+    fn verb(self) -> &'static str {
+        match self {
+            LockAction::Rotate => "rotate",
+            LockAction::Restore => "restore",
+        }
+    }
+}
+
 /// RFC 100 `0.94.0` P2 §1 (P7 §1: exclusive only, against any holder --
-/// a running server, another sui-id command, or another rotation): take
-/// [`RotationPaths::lock`] exclusive, non-blocking -- a rotation's own
-/// acquisition, before anything else it does. On
+/// a running server, another sui-id command, or another rotation; P9
+/// §2: generalized to any caller that replaces the database or key
+/// wholesale): take [`RotationPaths::lock`] exclusive, non-blocking --
+/// before anything else the caller does. On
 /// [`std::io::ErrorKind::WouldBlock`], names the file and changes
 /// nothing; any other failure (the file could not be created at all) is
 /// reported as such instead of being confused with contention.
-pub fn take_rotation_lock(
+pub fn take_exclusive_lock(
     adapter: &dyn crate::key_adapter::KeyFileOps,
     paths: &RotationPaths,
     point: &str,
+    action: LockAction,
 ) -> anyhow::Result<Box<dyn crate::key_adapter::LockGuard>> {
+    let verb = action.verb();
     adapter
         .lock_exclusive(point, &paths.lock, false)
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::WouldBlock {
                 anyhow::anyhow!(
-                    "refusing to rotate: sui-id is running -- the server, or another sui-id \
-                     command -- and has this database open ({}). Stop it, then rotate.",
+                    "refusing to {verb}: sui-id is running -- the server, or another sui-id \
+                     command -- and has this database open ({}). Stop it, then {verb}.",
                     paths.lock.display()
                 )
             } else {
-                anyhow::Error::new(e).context(format!(
-                    "taking the rotation lock at {}",
-                    paths.lock.display()
-                ))
+                // P9 review: one lock, one name, whichever command takes
+                // it. "the restore lock" named a lock that does not exist
+                // as such; the path says which file it is.
+                anyhow::Error::new(e)
+                    .context(format!("taking the lock at {}", paths.lock.display()))
             }
         })
+}
+
+/// RFC 100 `0.94.0` P2 §1 (P7 §1): take the lock for a rotation. Thin
+/// wrapper over [`take_exclusive_lock`] so the exact text P7's own
+/// tests pin ("refusing to rotate: ...") stays in one place rather than
+/// a second copy kept in sync by hand.
+pub fn take_rotation_lock(
+    adapter: &dyn crate::key_adapter::KeyFileOps,
+    paths: &RotationPaths,
+    point: &str,
+) -> anyhow::Result<Box<dyn crate::key_adapter::LockGuard>> {
+    take_exclusive_lock(adapter, paths, point, LockAction::Rotate)
 }
 
 /// RFC 100 `0.94.0` P7 §1: the same lock, held shared, non-blocking --

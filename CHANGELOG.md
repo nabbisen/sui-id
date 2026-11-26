@@ -58,6 +58,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   another rotation — instead of completing beside it and silently
   leaving later-written rows sealed under the key the rotation just
   replaced, unreadable after the next restart.
+- **`backup restore` now refuses while sui-id is running against the
+  same database, as a rotation does** — before reading the backup or
+  prompting for a passphrase, naming the same lock file. Before, it
+  would overwrite the database and key file whether or not the server
+  had them open, and report nothing was wrong.
 - **The password-policy refusal was always in English**, regardless of
   the page's own language, and always named the same length even where
   a different minimum actually applied (setup vs. dev mode vs. the

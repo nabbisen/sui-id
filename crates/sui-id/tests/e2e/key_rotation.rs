@@ -1828,6 +1828,43 @@ mod concurrency {
         fn run(&self, args: &[&str], cfg: &Path) -> Output {
             Command::new(BIN).args(args).arg(cfg).output().expect("run")
         }
+        fn backup_tarball(&self) -> PathBuf {
+            self.dir.path().join("backup.tar")
+        }
+        /// `backup create --to <tarball> [--encrypt] --config <cfg>`.
+        /// `SUI_ID_BACKUP_PASSPHRASE` is set when `encrypted`, so this
+        /// never blocks on a prompt itself.
+        fn backup_create(&self, cfg: &Path, encrypted: bool) -> Output {
+            let mut cmd = Command::new(BIN);
+            cmd.args(["backup", "create", "--to"])
+                .arg(self.backup_tarball());
+            if encrypted {
+                cmd.arg("--encrypt")
+                    .env("SUI_ID_BACKUP_PASSPHRASE", "a-strong-test-passphrase");
+            }
+            cmd.args(["--config"]).arg(cfg);
+            cmd.output().expect("backup create")
+        }
+        /// `backup restore --from <tarball> <extra> --config <cfg>`,
+        /// as a not-yet-run [`Command`] -- a caller that needs
+        /// `--decrypt` to actually succeed sets
+        /// `SUI_ID_BACKUP_PASSPHRASE` on it directly; [`Home::backup_restore`]
+        /// below never sets it, so a refusal that happens before any
+        /// prompt is provably not short-circuited by the env var.
+        fn restore_cmd(&self, cfg: &Path, extra: &[&str]) -> Command {
+            let mut cmd = Command::new(BIN);
+            cmd.args(["backup", "restore", "--from"])
+                .arg(self.backup_tarball())
+                .args(extra)
+                .args(["--config"])
+                .arg(cfg);
+            cmd
+        }
+        fn backup_restore(&self, cfg: &Path, extra: &[&str]) -> Output {
+            self.restore_cmd(cfg, extra)
+                .output()
+                .expect("backup restore")
+        }
         /// Every file under `dir` except the permanent lock file, with
         /// its contents, independent of `readdir` order -- the lock
         /// file is the one thing a running server is allowed to have
@@ -1967,6 +2004,15 @@ mod concurrency {
         // P7 review: the refusal is the first thing read, not something an
         // operator meets after the summary and a typed `yes`.
         assert!(!err.contains("About to rotate"), "{err}");
+        // RFC 100 `0.94.0` P9 §2: `take_rotation_lock`'s refusal now
+        // goes through a verb shared with `backup restore`'s own --
+        // pin the exact word, not just "sui-id is running" (common to
+        // both), so a verb mix-up between the two callers is caught
+        // here, not only by `backup restore`'s own tests.
+        assert!(
+            err.contains("refusing to rotate: sui-id is running"),
+            "{err}"
+        );
 
         let after = h.snapshot_except_lock();
         assert_eq!(
@@ -1994,5 +2040,168 @@ mod concurrency {
 
         let out = h.run(&["admin", "registration-token", "list", "--config"], &cfg);
         assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    }
+
+    /// Holds `path` exclusively, via the real OS `flock(2)` the same
+    /// way sui-id's own `Real` adapter does -- a second process, not
+    /// a real rotation, is "a held lock through the adapter" (P9 §3):
+    /// the mechanism is what's under test, not which command took it.
+    /// Blocks until `flock(1)` reports it actually holds the lock
+    /// (its `-c` command only runs once acquired), not a sleep.
+    fn spawn_held_lock(path: &Path) -> KillOnDrop {
+        let mut child = Command::new("flock")
+            .arg("--exclusive")
+            .arg(path)
+            .arg("-c")
+            .arg("echo locked; sleep 60")
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("spawn flock");
+        let mut out = child.stdout.take().expect("stdout");
+        let mut byte = [0u8; 1];
+        loop {
+            match out.read(&mut byte) {
+                Ok(0) => panic!("flock exited before reporting it held the lock"),
+                Ok(_) if byte[0] == b'\n' => break,
+                Ok(_) => continue,
+                Err(e) => panic!("reading flock's stdout: {e}"),
+            }
+        }
+        KillOnDrop(child)
+    }
+
+    /// RFC 100 `0.94.0` P9 §2 -- the dispatch's own central proof,
+    /// mirroring `a_rotation_refuses_while_a_real_server_runs_and_
+    /// changes_nothing` exactly: a restore beside a running server
+    /// refuses, changes nothing but the permanent lock file, and
+    /// proceeds once the server stops.
+    #[test]
+    fn a_restore_refuses_while_a_real_server_runs_and_changes_nothing() {
+        let h = Home::new();
+        let cfg = h.config(18924);
+        h.create(&cfg);
+        assert_eq!(
+            h.backup_create(&cfg, false).status.code(),
+            Some(0),
+            "backup create must succeed before this test's own restore does"
+        );
+
+        let (child, _err_buf) = spawn_listening_server(&cfg);
+        let before = h.snapshot_except_lock();
+
+        let out = h.backup_restore(&cfg, &["--force"]);
+        assert_ne!(
+            out.status.code(),
+            Some(0),
+            "a restore must refuse while the server is running"
+        );
+        let err = stderr(&out);
+        assert!(
+            err.contains("refusing to restore: sui-id is running"),
+            "{err}"
+        );
+        assert!(!err.contains("restored from"), "{err}");
+
+        let after = h.snapshot_except_lock();
+        assert_eq!(
+            after, before,
+            "byte-identical apart from the lock file, which the snapshot excludes"
+        );
+
+        drop(child);
+
+        // Once the server stops, the restore proceeds.
+        let out2 = h.backup_restore(&cfg, &["--force"]);
+        assert_eq!(out2.status.code(), Some(0), "{}", stderr(&out2));
+    }
+
+    /// P9 review: a restore onto a fresh host -- the case `--force`'s own
+    /// guide text names -- where the storage directory does not exist
+    /// yet. The store's restore creates it; the lock beside the key file
+    /// must not be what stops that.
+    #[test]
+    fn a_restore_onto_a_fresh_host_whose_directory_does_not_exist_yet_succeeds() {
+        let h = Home::new();
+        let cfg = h.config(18927);
+        h.create(&cfg);
+        assert_eq!(h.backup_create(&cfg, false).status.code(), Some(0));
+
+        let fresh = h.dir.path().join("fresh-host").join("var-lib-sui-id");
+        assert!(!fresh.exists());
+        let text = std::fs::read_to_string(&cfg)
+            .expect("config")
+            .replace(
+                &h.db().display().to_string(),
+                &fresh.join("t.sqlite").display().to_string(),
+            )
+            .replace(
+                &h.key().display().to_string(),
+                &fresh.join("t.key").display().to_string(),
+            );
+        let cfg2 = h.dir.path().join("cfg-fresh.toml");
+        std::fs::write(&cfg2, text).expect("fresh config");
+
+        let out = h.backup_restore(&cfg2, &[]);
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+        assert!(fresh.join("t.sqlite").exists() && fresh.join("t.key").exists());
+    }
+
+    /// RFC 100 `0.94.0` P9 §2/§3: the lock is taken *before* the
+    /// passphrase prompt. Stdin is closed and `SUI_ID_BACKUP_PASSPHRASE`
+    /// is left unset, so if the refusal happened after the prompt (or
+    /// not at all), this would either hang reading from closed stdin
+    /// or print the prompt text -- neither happens.
+    #[test]
+    fn a_restore_with_decrypt_refuses_before_prompting_for_a_passphrase() {
+        let h = Home::new();
+        let cfg = h.config(18925);
+        h.create(&cfg);
+        assert_eq!(
+            h.backup_create(&cfg, true).status.code(),
+            Some(0),
+            "encrypted backup create must succeed first"
+        );
+
+        let (child, _err_buf) = spawn_listening_server(&cfg);
+
+        let mut cmd = h.restore_cmd(&cfg, &["--force", "--decrypt"]);
+        cmd.stdin(std::process::Stdio::null());
+        cmd.env_remove("SUI_ID_BACKUP_PASSPHRASE");
+        let out = cmd.output().expect("restore --decrypt");
+
+        assert_ne!(out.status.code(), Some(0));
+        let err = stderr(&out);
+        assert!(
+            err.contains("refusing to restore: sui-id is running"),
+            "{err}"
+        );
+        assert!(
+            !err.contains("Decryption passphrase"),
+            "the lock must be taken before the passphrase prompt: {err}"
+        );
+
+        drop(child);
+    }
+
+    /// RFC 100 `0.94.0` P9 §3: a restore beside a running *rotation's*
+    /// exclusive hold refuses with the same sentence -- a held lock is
+    /// enough, no real rotation is needed to prove this.
+    #[test]
+    fn a_restore_refuses_beside_a_held_rotation_lock() {
+        let h = Home::new();
+        let cfg = h.config(18926);
+        h.create(&cfg);
+        assert_eq!(h.backup_create(&cfg, false).status.code(), Some(0));
+
+        let _held = spawn_held_lock(&h.lock());
+
+        let out = h.backup_restore(&cfg, &["--force"]);
+        assert_ne!(out.status.code(), Some(0));
+        assert!(
+            stderr(&out).contains("refusing to restore: sui-id is running"),
+            "{}",
+            stderr(&out)
+        );
     }
 }

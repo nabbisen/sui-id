@@ -159,7 +159,9 @@ anything else, and names the lock file (`<key_file>.rotation-lock`) in
 the refusal. That file is permanent and empty, and exists beside every
 key file from the first time anything touches it. Never remove it, even
 while nothing is running: doing so while sui-id *is* running would
-silently drop this guard for whatever is holding it.
+silently drop this guard for whatever is holding it. **The same lock
+guards a restore** (below) — `backup restore` refuses for the same
+reason, with the same file named in its own refusal.
 
 **The one thing this guard cannot see is a sui-id older than `0.94.0`.**
 Older versions take no lock. So upgrade every sui-id process that uses
@@ -847,6 +849,13 @@ sui-id backup restore --from /tmp/backup.tar.enc --decrypt \
 By default `backup restore` refuses to overwrite an existing database or
 key file at the destination paths. Pass `--force` if you really mean
 it (typically only when recovering onto a fresh host).
+
+**Stop the server first.** Since `0.94.0`, `backup restore` takes the
+same liveness lock a rotation does (see
+[Rotating the master key](#rotating-the-master-key) above) and
+refuses, before reading the source or prompting for a passphrase,
+while anything else has the database open — the server, or any other
+sui-id command. `--force` does not override this.
 
 Backups produced by sui-id v0.12.x and earlier (no `MANIFEST.json`)
 are still accepted by v0.13+ restore — the manifest checks are
