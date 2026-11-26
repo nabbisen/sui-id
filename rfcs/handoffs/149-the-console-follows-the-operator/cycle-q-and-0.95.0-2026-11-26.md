@@ -1,8 +1,8 @@
 # Cycles Q and R: `0.95.0` and `0.96.0`, the plan
 
-> ## Whose turn it is: **the implementation role's, on Q2** ([dispatch](0.95.0-q2-the-chrome-2026-11-26.md)).
-> No decision is pending now. §1 lists four questions still to come, three before Q6 and one before R3, each with the
-> architect's proposed answer.
+> ## Whose turn it is: **the implementation role's, on Q3** ([dispatch](0.95.0-q3-help-and-the-dashboard-2026-11-27.md)).
+> Q2 landed (`57c80d1`). No decision is pending now. §1 lists four questions still to come, three before Q6 and one before
+> R3, each with the architect's proposed answer. Two decisions for Q3 were taken on 2026-11-27 (§1).
 
 **Authorized 2026-11-26.** `@nabbisen`, on the split proposed in this plan's first version (`6577468`): *"Yes. Scope them, the
 series, carefully with consideration."* This version is that scoping, from measurements made the same day at `6577468`.
@@ -29,8 +29,11 @@ before its stage.
 - **Q1 landed** (`5614f82`): the first run is tested through the binary, in a real terminal. **CI confirmed it on
   `ubuntu-24.04`** (run `45806896282`, 29 of 29 jobs). All five terminal tests passed there. **RFC 148's last closure
   prerequisite is met**, and it moves to `done/` at `0.95.0`'s cut.
-- **RFC 151** was built in `0.94.0`. **It closes when Q2 creates the *Sign-in* group.** Its closure prerequisite says the
-  minimum is raised *"from the *Sign-in* settings"*.
+- **Q2 landed** (`57c80d1`): the grouped sidebar, the account menu, and the footer reduced to the version inside the console.
+  Its review folded in what a browser walk found at 200% font, and put each page's item into `Chrome::Console`'s type.
+- **RFC 151** was built in `0.94.0`. **Its last condition is met by Q2**: the minimum is raised *"from the *Sign-in*
+  settings"*, asserted by `q2_navigation::rfc151_closure_the_minimum_length_is_under_sign_in`. It moves to `done/` at
+  `0.95.0`'s cut.
 - **Carried into RFC 149's build**, from its handoff's *Carried into this RFC's build*, each placed in a stage below:
 
   | Carried item | Stage |
@@ -45,6 +48,13 @@ before its stage.
 - **One tidy-up**: `sui-id`'s unused `tempfile` dependency, which `cargo package` warned about at `0.94.0`. It is done in Q2.
 
 ## §1: decisions still to come, with the architect's proposals
+
+**Decided 2026-11-27 for Q3**, by `@nabbisen`, on the architect's questions during Q2's review:
+- the first-run path's fourth step: *"Optional, no done state (Recommended)"*. That replaces the acknowledgement proposed
+  in §2 below;
+- the language: *"One chain everywhere (Recommended)"*. Every page resolves the language as the person's preference, then
+  the cookie, then `Accept-Language`, then the server default. Measured in Q2's review: the console used a chain of its own,
+  without the cookie and `Accept-Language`.
 
 None of these blocks Q2 to Q5. Each is settled before the stage named.
 
@@ -95,9 +105,8 @@ rendered pages, and each test is mutated.**
 **What each stage must settle that the RFCs leave to the build.** These are named now so that no dispatch meets them by
 surprise:
 - **Q3, the first-run path's fourth step.** *"Review sign-in and session settings"* has no state from which "done" can be
-  read. The proposal, settled in Q3's dispatch, is an acknowledgement: *Mark as reviewed*, a server setting written by a
-  Class-A command with its audit record. Step 5 is optional and never holds the path open. **A step must never show as
-  done because of something that does not mean it was done.**
+  read. **Settled 2026-11-27** (§1): it is *Recommended*, with no done state, and like step 5 it never holds the path open.
+  **A step must never show as done because of something that does not mean it was done.**
 - **Q4, apps saved before `0.95.0`.** An app whose stored scopes include a near miss (`profle`) cannot be saved again until
   it is corrected. The page names the scope and offers the standard one. The scope was never in effect, so nothing that
   worked stops working. The upgrade note says so.
