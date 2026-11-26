@@ -56,6 +56,94 @@ before upgrading across more than one or two of them.
 
 ## Version-specific notes
 
+### v0.94.x
+
+**Three migrations run**: `0053`, `0054` and `0055`. Starting takes an
+automatic pre-migration snapshot first, beside the database file (see
+"The pre-migration snapshot" below).
+
+**`admin master-key rotate` now requires an old-key custody choice.**
+Without `--retain-backup-until <RFC3339_INSTANT> --custody-reference
+<TEXT>` or `--discard-backup-once-verified --verification-reference
+<TEXT>`, it is a usage error (exit 2):
+
+> refusing to rotate: no old-key custody choice was given -- every
+> rotation requires one
+>
+> The operator must choose exactly one of:
+>   --retain-backup-until \<RFC3339_INSTANT\> --custody-reference \<TEXT\>
+>   --discard-backup-once-verified --verification-reference \<TEXT\>
+
+**A script that rotates the master key must add one of those two
+flag pairs**, or it will start failing on this version.
+
+**A rotation, and now a restore, refuse while sui-id is running
+against the same database** — the server, or any other sui-id
+command — naming `<key_file>.rotation-lock`:
+
+> Error: refusing to rotate: sui-id is running -- the server, or
+> another sui-id command -- and has this database open
+> (`<key_file>.rotation-lock`). Stop it, then rotate.
+
+> Error: refusing to restore: sui-id is running -- the server, or
+> another sui-id command -- and has this database open
+> (`<key_file>.rotation-lock`). Stop it, then restore.
+
+- **Stop the server first**, for either command.
+- **Never delete `<key_file>.rotation-lock`.** It is permanent and
+  empty; removing it while sui-id is running would silently drop this
+  guard.
+- **Upgrade every sui-id process that uses this database before
+  rotating or restoring with `0.94.0` or later** — the server, and any
+  script or timer that runs `sui-id` commands. A version older than
+  `0.94.0` takes no lock, so a rotation or a restore cannot see that it
+  is running.
+
+**New commands**: `admin master-key backup remove
+--confirm-retired-or-reencrypted` settles a kept pre-rotation backup
+and removes it; `admin master-key backup renew --until <INSTANT>
+--custody-reference <TEXT>` moves one's review date forward. A
+`--retain-backup-until` backup past its review date is reported at
+every start and beside `rotate --check`, until renewed or removed.
+
+**No action needed:**
+- **The password minimum** is a setting now (*Authentication* tab). It
+  stays 12 after the upgrade until an administrator raises it.
+- **Token introspection** now answers inactive for a disabled or
+  deleted user's unexpired access token, matching `/oauth2/userinfo` —
+  see the `0.94.0` CHANGELOG's *Security* entry. Anyone running a
+  resource server that relies on introspection should read it.
+
+**Configuration**: unchanged since `0.93.1` — no `Config` field was
+added, removed, or retyped.
+
+**For anyone building against the crates** (measured by diffing every
+`pub` item under each crate's `src/` between the `0.93.1` tag and this
+release). At least:
+- `sui-id`'s `KeyFileOps` trait gained a required `lock_shared`
+  method, and `LockGuard` dropped its lifetime parameter (now
+  `Send + Sync`, boxed, with no lifetime tied to the adapter that
+  created it) — an external implementation of either must be updated.
+- `sui_id_core::errors::CoreError` gained `PasswordTooShort`/
+  `PasswordTooLong`, replacing a `BadRequest(String)` the password
+  policy used to return.
+- `sui_id_i18n::Strings` changed the type of three existing fields
+  (`reset_password_new_hint`, `password_change_new_hint`,
+  `setup_admin_password_hint`) from `&'static str` to
+  `fn(usize) -> String`, and gained five new fields — a struct literal
+  built against the old shape will not compile.
+- `sui_id_store::StoreError` gained `PasswordMinLenOutOfRange`.
+- `sui_id_web::SettingsAuthenticationData` gained four new fields.
+- Beyond those five: `sui-id`'s and `sui_id_store`'s own master-key
+  rotation types were renamed and reshaped as RFC 100 landed
+  (`RotateKeyFilesError` → `RotateError`, `BackupDisposition` moved to
+  `sui_id_store::master_key_rotation::RotationDisposition`,
+  `RotateReport`'s type alias removed in favour of a `RotateOutcome`
+  struct, among others) — anyone building against the rotation API
+  directly should diff `crates/sui-id/src/runtime/key_adapter.rs` and
+  `crates/sui-id-store/src/commands.rs`'s rotation items between the
+  two tags rather than rely on this summary for that surface.
+
 ### v0.93.x
 
 **One migration runs, `0052_master_key_sentinel`.** Starting takes an

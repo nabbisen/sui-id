@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.94.0] — 2026-11-26
+
+**`admin master-key rotate` now requires an old-key custody choice** (retain
+until a named date, or discard once verified). **A rotation, and for the first
+time `backup restore`, now refuse outright while sui-id is running against the
+same database.** New commands settle or renew a kept backup, and the
+kept-backup finding is reported until one is. **Added:** the password
+minimum can be raised from the *Authentication* tab, and the threat model's
+inventory is now a checked contract (gate G24). **Fixed:** the
+password-policy refusal is now in the page's own language and names the
+actual minimum, not a fixed one; two inaccuracies in the OIDC reference are
+corrected; the README states plainly where embedding stands. **Removed:**
+the old `.bak.<timestamp>` key-file naming, replaced by one fixed name kept
+under the custody choice above. **Security:** token introspection now
+answers inactive for a disabled or deleted user's access token, agreeing
+with `/oauth2/userinfo`.
+
 ### Added
 
 - `admin master-key backup remove --confirm-retired-or-reencrypted
@@ -45,11 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   backup, and what an interrupted rotation leaves — and now documents
   the whole protocol as crash-safe, replacing the earlier "not yet
   crash-safe" warning.
-- **`--remove-backup-after-verified` is renamed to
-  `--discard-backup-once-verified`.** The old name read as though it
-  removed the backup itself; it only states how you'll verify it, and
-  `backup remove` is still the command that actually removes it. No
-  alias — nothing shipped under the old name.
 
 ### Fixed
 
