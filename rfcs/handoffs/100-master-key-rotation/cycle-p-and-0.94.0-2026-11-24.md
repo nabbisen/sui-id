@@ -69,7 +69,10 @@
 >   restore onto a fresh host no longer worked, and fixed it with a real-binary
 >   test.
 >
-> ## Whose turn it is: **the architect's**, to dispatch the `0.94.0` preparation.
+> - **The `0.94.0` preparation dispatched 2026-11-26**: [dispatch](release-0.94.0-preparation-2026-11-26.md).
+>
+> ## Whose turn it is: **the implementation role's**, on the preparation. In parallel, the architect writes RFC 148/107's
+> closure assessment.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).
