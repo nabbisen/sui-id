@@ -1,6 +1,6 @@
 # RFC 100 implementation stages
 
-**Governing RFC:** [RFC 100](../../accepted/100-master-key-rotation-recovery.md),
+**Governing RFC:** [RFC 100](../../done/100-master-key-rotation-recovery.md),
 **Accepted** 2026-11-14 and amended (non-material) the same day.
 **The harness:** [`crash-injection-harness-design-2026-11-14.md`](./crash-injection-harness-design-2026-11-14.md),
 **approved** 2026-11-14.

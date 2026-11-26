@@ -1,6 +1,6 @@
 # RFC 100 crash-injection matrix
 
-**Governing RFC:** [RFC 100](../../accepted/100-master-key-rotation-recovery.md)
+**Governing RFC:** [RFC 100](../../done/100-master-key-rotation-recovery.md)
 **Updated 2026-11-14** (cycle M, D2): three failure modes, per the
 [approved harness](./crash-injection-harness-design-2026-11-14.md); the
 as-built names (K07, `admin.master_key.resealed`, `admin.master_key.rotated`),

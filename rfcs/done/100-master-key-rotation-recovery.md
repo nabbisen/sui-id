@@ -1,6 +1,9 @@
 # RFC 100 — Master-Key Rotation Crash Recovery
 
-**Status.** Accepted
+**Status.** Implemented (v0.94.0)
+**Closure reviewed on.** 2026-11-25, on the architect's [M2c closure assessment](../handoffs/100-master-key-rotation/m2c-closure-assessment-2026-11-25.md), with the [release-binary drill](../handoffs/100-master-key-rotation/m2c-release-binary-drill-2026-11-25.md) in its evidence. It closed when its fix, P7 (`070e7f7`), landed.
+**Closure approved by.** `@nabbisen`, 2026-11-25: *"Accepted. Verify carefully they match my fundamental philosophy."*, then *"Fix first; close M2c on that (Recommended)"*.
+**Closure evidence.** The [M2c closure assessment](../handoffs/100-master-key-rotation/m2c-closure-assessment-2026-11-25.md); the [release-binary drill](../handoffs/100-master-key-rotation/m2c-release-binary-drill-2026-11-25.md) (three abort points, each recovered as the recovery table requires, on the shipped binary); the crash-injection harness's prefix tests; and P7's real-server refusal test (`key_rotation::concurrency::a_rotation_refuses_while_a_real_server_runs_and_changes_nothing`).
 **Accepted on.** 2026-11-14
 **Approved by.** `@nabbisen`, 2026-11-14: *"RFC 100 and 146 are accepted."*, after reviewing it himself.
 **Security review.** Required

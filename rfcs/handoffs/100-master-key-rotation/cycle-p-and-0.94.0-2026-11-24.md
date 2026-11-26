@@ -71,8 +71,10 @@
 >
 > - **The `0.94.0` preparation dispatched 2026-11-26**: [dispatch](release-0.94.0-preparation-2026-11-26.md).
 >
-> ## Whose turn it is: **the implementation role's**, on the preparation. In parallel, the architect writes RFC 148/107's
-> closure assessment.
+> - **The preparation landed 2026-11-26** (`c50abda`). RFC 100 moved to `done/` as Implemented (v0.94.0). RFC 151 stays
+>   Accepted until RFC 149's *Sign-in* tab exists.
+>
+> ## Whose turn it is: **the architect's**, on Level B for `0.94.0`. Then `@nabbisen`'s go-ahead for the tag and the publish.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).

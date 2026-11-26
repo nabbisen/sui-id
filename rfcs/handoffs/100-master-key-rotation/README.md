@@ -1,6 +1,6 @@
 # RFC 100 developer handoff
 
-**Governing RFC:** [RFC 100](../../accepted/100-master-key-rotation-recovery.md) — **Accepted 2026-11-14** ([design review record](./design-review-2026-11-14.md))
+**Governing RFC:** [RFC 100](../../done/100-master-key-rotation-recovery.md) — **Accepted 2026-11-14** ([design review record](./design-review-2026-11-14.md))
 **Milestone:** M2c — master-key rotation recovery
 **Audience:** implementer assigned after RFC 100 is Accepted
 **Status:** Planning companion. The RFC is **Accepted** (2026-11-14), and **every

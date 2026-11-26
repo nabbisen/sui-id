@@ -1,6 +1,6 @@
 # RFC 100 — the independent design review record, 2026-11-14
 
-**RFC.** [`../../accepted/100-master-key-rotation-recovery.md`](../../accepted/100-master-key-rotation-recovery.md)
+**RFC.** [`../../done/100-master-key-rotation-recovery.md`](../../done/100-master-key-rotation-recovery.md)
 **Reviewer.** `@nabbisen`, the accountable owner. He did not author RFC
 100, and he did not write its 2026-11-14 refresh. Both are the architect's
 (the original requirements-architect role on 2026-07-28, and the current

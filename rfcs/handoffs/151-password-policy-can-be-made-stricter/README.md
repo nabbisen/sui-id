@@ -7,4 +7,4 @@ as a freeze exception decided 2026-11-15.
 
 ## What exists
 
-**Built in `0.94.0` P5** (`a3e8dfc`, 2026-11-25): migration 0055, S11, the *Authentication* tab's field, and the localized hints and refusals. It closes on the RFC's closure prerequisites at `0.94.0`'s cut.
+**Built in `0.94.0` P5** (`a3e8dfc`, 2026-11-25): migration 0055, S11, the *Authentication* tab's field, and the localized hints and refusals. It ships in `0.94.0`. **It stays Accepted until RFC 149 lands**: its closure prerequisite says the minimum is raised *"from the *Sign-in* settings"*, and that tab is RFC 149's rename of today's *Authentication* tab (cycle Q). Every other prerequisite is met.
