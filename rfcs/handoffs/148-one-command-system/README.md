@@ -24,3 +24,4 @@ unit's `ExecStart`.
 **RFC 148 closes at `0.95.0`**, after one test: the first run's offer, driven through the binary in a real terminal. It is
 cycle Q's first item (`@nabbisen`, 2026-11-26: *"Your recommendation is accepted."*).
 **Q1 dispatched 2026-11-26**: [`0.95.0-q1-the-first-run-in-a-real-terminal-2026-11-26.md`](0.95.0-q1-the-first-run-in-a-real-terminal-2026-11-26.md).
+**Q1 landed 2026-11-26** (`7e2c3df`). RFC 148's last closure prerequisite is met; it moves to `done/` at `0.95.0`'s cut.
