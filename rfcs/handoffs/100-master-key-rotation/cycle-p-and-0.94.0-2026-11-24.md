@@ -59,8 +59,12 @@
 >   ([dispatch](../152-what-a-relying-party-can-rely-on/0.94.0-p8-introspection-agrees-with-userinfo-2026-11-25.md)).
 > - **P9 dispatched 2026-11-26**: [a restore refuses beside a running sui-id](0.94.0-p9-a-restore-refuses-beside-a-running-sui-id-2026-11-26.md).
 >   P7's lock, taken by `backup restore` too.
+> - **P6 landed 2026-11-26** (`d78e995`). RFC 097 stage 1: the threat model's
+>   inventory, and G24, which fails when a route, table or CLI command is in no
+>   boundary. The review made the table list come from the schema SQLite
+>   builds, and made unread routing calls fail closed.
 >
-> ## Whose turn it is: **the implementation role's**, on P6 and P9, in either order. Both land before the `0.94.0` cut.
+> ## Whose turn it is: **the architect's**, on P9's return. Then the `0.94.0` preparation.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).
