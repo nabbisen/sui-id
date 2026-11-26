@@ -23,3 +23,4 @@ unit's `ExecStart`.
 [`closure-assessment-2026-11-26.md`](closure-assessment-2026-11-26.md): RFC 107 is closed as Implemented (v0.93.0).
 **RFC 148 closes at `0.95.0`**, after one test: the first run's offer, driven through the binary in a real terminal. It is
 cycle Q's first item (`@nabbisen`, 2026-11-26: *"Your recommendation is accepted."*).
+**Q1 dispatched 2026-11-26**: [`0.95.0-q1-the-first-run-in-a-real-terminal-2026-11-26.md`](0.95.0-q1-the-first-run-in-a-real-terminal-2026-11-26.md).
