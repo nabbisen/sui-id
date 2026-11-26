@@ -64,7 +64,12 @@
 >   boundary. The review made the table list come from the schema SQLite
 >   builds, and made unread routing calls fail closed.
 >
-> ## Whose turn it is: **the architect's**, on P9's return. Then the `0.94.0` preparation.
+> - **P9 landed 2026-11-26** (`43c5c3e`). `backup restore` takes the liveness
+>   lock exclusively and refuses beside a running sui-id. The review found that a
+>   restore onto a fresh host no longer worked, and fixed it with a real-binary
+>   test.
+>
+> ## Whose turn it is: **the architect's**, to dispatch the `0.94.0` preparation.
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).

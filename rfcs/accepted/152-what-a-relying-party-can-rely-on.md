@@ -11,7 +11,11 @@ the schedule, **not this RFC's acceptance**.
 **Closure prerequisites.** Every authorization-request parameter that states a requirement is either honoured or refused
 with an error, and none is silently ignored. `max_age` and `prompt=login` force a new sign-in, and the ID token says when it
 happened. Userinfo returns profile claims only under the `profile` scope. A signing-key rotation cannot fail a sign-in at a
-relying party that caches the JWKS as sui-id tells it to. Each of these is tested, with a mutation.
+relying party that caches the JWKS as sui-id tells it to. Each of these is tested, with a mutation. **And the reference
+states D8's obligations**, each with what breaks when it is not met.
+**Amended.** 2026-11-26, approved by `@nabbisen`: *"Yes on both."*, on the architect's proposal from a prospective relying
+party's letter. **D8 added**: what a relying party must do for sui-id's guarantees to reach its users. It adds a documentation
+deliverable and no behaviour.
 **Tracks.** The OpenID Connect provider. Raised by a relying party's questions, 2026-11-25.
 **Touches.** `crates/sui-id/src/http/handlers/oidc.rs` (the authorization request and userinfo); `crates/sui-id-core/src/oidc/`
 (the code and token issuance, discovery, JWKS); `crates/sui-id-store` (an authorization code and a refresh token carry the
@@ -110,6 +114,32 @@ Discovery adds:
 - the key-publication delay.
 
 The *What sui-id does not do (yet)* list loses the entries this RFC delivers.
+
+### D8 — what a relying party must do, stated where it reads
+
+Added 2026-11-26. The finding, from a prospective relying party:
+- sui-id revokes a disabled user's refresh tokens in the same transaction as the disable;
+- **but the relying party's own session lifetime is the delay** before the person loses access;
+- **nothing sui-id published said so.** One candidate relying party, measured, keeps a seven-day session with no refresh.
+
+Its guarantee is built correctly and would not reach the person it protects.
+
+So `docs/src/reference/oidc-api.md` gains a section, **"What your relying party must do"**. Its first line says what RFC
+119's host obligations cannot say: **sui-id cannot enforce any of these**, because the relying party's session is outside
+it. Each obligation names what breaks:
+
+| # | A relying party should | What breaks if it does not |
+|---|---|---|
+| **R1** | Bound how long it trusts a sign-in: refresh at an interval it chooses, or keep sessions short | A user disabled at sui-id keeps access for the rest of the relying party's session. That session's lifetime is the revocation delay |
+| **R2** | Store `auth_time` as its own field, never inferred from its own session's issue time | The issue time stops meaning authentication when silent renewal is added, and `max_age` checks answer with the wrong fact, silently |
+| **R3** | Treat a re-authentication as true at that moment only, and ask again (`max_age`) when it needs recency later | A long-lived session minted from a `prompt=login` response voids the requirement it asked for |
+| **R4** | Key accounts on `(iss, sub)`, never on the email or the username | Accounts merge or split when either changes |
+| **R5** | Treat `email_verified = false` as unverified (every user, until RFC 101 ships) | An unverified address is trusted as an identity |
+| **R6** | Keep only the newest refresh token | Presenting an old one is treated as theft: that grant's whole token family is revoked, and the user signs in again |
+| **R7** | Refresh the JWKS once on an unknown `kid`, bypassing caches | A sign-in fails in the minutes around a signing-key rotation, until D5 lands |
+
+**Tests.** None run in sui-id: the list is documentation. Each row's claim about sui-id is checked against the code when the
+section is written, as R6 and R7 were.
 
 ## What this RFC does not do
 
