@@ -1,7 +1,7 @@
 # RFC 149 — handoff
 
 **RFC.** [`../../accepted/149-the-console-follows-the-operator.md`](../../accepted/149-the-console-follows-the-operator.md)
-**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Not yet dispatched: its build is cycle P's, authorized 2026-11-15.
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). Not yet dispatched. **Its build is cycle Q's**, planned in [`cycle-q-and-0.95.0-2026-11-26.md`](cycle-q-and-0.95.0-2026-11-26.md) (proposed 2026-11-26).
 
 ## 2026-11-15: the mockups' questions answered
 
