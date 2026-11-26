@@ -1051,10 +1051,10 @@ convention — the manifest they run from is itself gated, so a lane cannot
 be quietly renamed, removed, or pointed at a different command.
 
 The lane set is authoritative and is not transcribed here. RFC 093 §Gate
-Matrix v1 owns G01–G12; RFC 094 and RFC 098 own their own lanes through
-the multi-source registry; `contracts/gate-inputs.toml` is the machine-readable
-manifest that `scripts/ci-gate.sh` dispatches and that lane A3.4 verifies
-against each owning RFC's table, byte for byte.
+Matrix v1 owns G01–G12; RFC 094, RFC 098 and RFC 097 (G24) own their own
+lanes through the multi-source registry; `contracts/gate-inputs.toml` is
+the machine-readable manifest that `scripts/ci-gate.sh` dispatches and
+that lane A3.4 verifies against each owning RFC's table, byte for byte.
 
 The v3 table listed six jobs and a floor of "228/228 tests". Both were
 second copies: the lane set has more than doubled, and the test count is a

@@ -8,6 +8,12 @@
 inventory) is **dispatched 2026-11-25** as `0.94.0` P6:
 [`0.94.0-p6-the-inventory-and-its-gate-2026-11-25.md`](0.94.0-p6-the-inventory-and-its-gate-2026-11-25.md).
 
+**Stage 1 is built.** Returned to
+`.git-exclude/review-requests/0.94.0-p6-the-inventory-and-its-gate-2026-11-26.md`
+(gitignored; review pending). The contract is `contracts/threat-model.toml`
+(12 boundaries, all `status = "inventoried"`); the gate is **G24**
+(`scripts/check-threat-model.py`). Stages 2–5 remain.
+
 ## Entry gate
 
 RFC 093 (**M1a and M1b**), RFC 094 (**M2a and M2b**), RFC 095, and RFC 096

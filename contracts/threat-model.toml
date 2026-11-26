@@ -1,0 +1,435 @@
+# RFC 097 stage 1 (0.94.0 P6): the threat-model inventory, checked by G24
+# (scripts/check-threat-model.py). `docs/threat-model.md` refers to these
+# ids; this file is the source of truth for what exists. Schema per the
+# method (rfcs/handoffs/097-threat-model/method-2026-11-23.md) §2, with
+# `stores` added to `[[asset]]` per this stage's own dispatch §1.
+#
+# Stage 1 fills [[actor]], [[asset]] and [[boundary]] only. Every
+# boundary carries `status = "inventoried"` here -- stage 2 moves each
+# to "analysed" as its STRIDE worksheet and controls are built; G24
+# requires a control and a filled STRIDE row only of an "analysed"
+# boundary (method §2's gate requires both of every boundary, which
+# cannot hold yet -- the architect's own reading of the stage split,
+# per this stage's dispatch).
+schema_version = 1
+
+# ── actors ──────────────────────────────────────────────────────────────
+
+[[actor]]
+id = "admin"
+name = "Administrator (web console, full write access)"
+
+[[actor]]
+id = "auditor"
+name = "Auditor (web console, read-only)"
+
+[[actor]]
+id = "user"
+name = "Signed-in user (self-service, /me/security)"
+
+[[actor]]
+id = "visitor"
+name = "Unauthenticated visitor"
+
+[[actor]]
+id = "relying-party"
+name = "OAuth/OIDC relying party (confidential or public client)"
+
+[[actor]]
+id = "dynamic-registration-client"
+name = "A client registering itself (RFC 7591, POST /oauth2/register)"
+
+[[actor]]
+id = "upstream-oidc-provider"
+name = "Upstream OIDC provider (federation)"
+
+[[actor]]
+id = "ldap-directory"
+name = "Upstream LDAP directory"
+
+[[actor]]
+id = "smtp-relay"
+name = "Outbound SMTP relay"
+
+[[actor]]
+id = "hibp-service"
+name = "Have I Been Pwned Pwned Passwords API"
+
+[[actor]]
+id = "metrics-scraper"
+name = "A Prometheus-compatible metrics scraper"
+
+[[actor]]
+id = "host-operator"
+name = "The host operator, running the CLI"
+
+[[actor]]
+id = "database-writer"
+name = "The running sui-id process, as the one writer to its own database"
+
+# ── assets ──────────────────────────────────────────────────────────────
+# classification: secret | personal | integrity | availability
+
+[[asset]]
+id = "master-key"
+name = "The master key file, and the kept pre-rotation backup key"
+classification = "secret"
+stores = ["file:<key_file>", "file:<key_file>.pre-rotation"]
+
+[[asset]]
+id = "signing-keys"
+name = "OIDC ID-token / access-token signing keys"
+classification = "secret"
+stores = ["signing_keys"]
+
+[[asset]]
+id = "credential-secrets"
+name = "Password hashes, TOTP secrets, passkey private material, recovery codes"
+classification = "secret"
+stores = ["credentials", "user_totp", "user_webauthn_credentials"]
+
+[[asset]]
+id = "session-tokens"
+name = "Session cookies and refresh tokens"
+classification = "secret"
+stores = ["sessions", "refresh_tokens"]
+
+[[asset]]
+id = "client-and-recovery-secrets"
+name = "OAuth client secrets, dynamic-registration tokens, password-reset / recovery-link tokens"
+classification = "secret"
+stores = ["clients", "client_registration_token", "password_reset_tokens"]
+
+[[asset]]
+id = "upstream-credentials"
+name = "The federation client secret, the SMTP password, and the LDAP bind password"
+classification = "secret"
+stores = ["federation_provider", "smtp_config", "env:bind_password_env"]
+
+[[asset]]
+id = "metrics-token"
+name = "The /metrics bearer token"
+classification = "secret"
+stores = ["server_settings"]
+
+[[asset]]
+id = "audit-chain"
+name = "The hash-chained audit log"
+classification = "integrity"
+stores = ["audit_log"]
+
+[[asset]]
+id = "personal-data"
+name = "Account personal data (display name, email, federation identity link)"
+classification = "personal"
+stores = ["users", "federation_link"]
+
+# ── boundaries ──────────────────────────────────────────────────────────
+# Every entry_points string is "METHOD /path" (an HTTP route) or
+# "cli: sui-id <words>" (a CLI leaf command), exactly as G24 derives
+# them from crates/sui-id/src/http/router.rs and
+# docs/src/reference/cli.md. A CLI command may be named by more than
+# one boundary (e.g. `backup create` is both an operator action and a
+# master-key write) -- the gate's own check is "at least one", not
+# "exactly one".
+
+[[boundary]]
+id = "browser-application"
+name = "Browser <-> application (cookie-session web console and self-service)"
+owner = "RFC-MI-021"
+status = "inventoried"
+# RFC-MI-021 (server-rendered CSRF for shell-level forms) is the
+# closest single identifiable owner found by grepping rfcs/ for this
+# boundary's primary named control (CSRF). It does not own every
+# control here: step-up is RFC 102, admin logout/session
+# self-management is RFC 026, and the admin surface itself is built up
+# across dozens of feature RFCs. Recorded as the infrastructure owner,
+# not a claim that every control traces to it -- see this stage's own
+# review-request package.
+entry_points = [
+  "GET /",
+  "GET /admin",
+  "GET /admin/audit",
+  "GET /admin/audit.csv",
+  "GET /admin/clients",
+  "POST /admin/clients",
+  "GET /admin/clients/new",
+  "POST /admin/clients/{id}/delete",
+  "GET /admin/clients/{id}/delete-confirm",
+  "POST /admin/clients/{id}/disabled",
+  "GET /admin/clients/{id}/edit",
+  "POST /admin/clients/{id}/edit",
+  "POST /admin/clients/{id}/rotate-secret",
+  "GET /admin/federation-providers",
+  "POST /admin/federation-providers/{id}/check",
+  "POST /admin/federation-providers/{id}/delete",
+  "GET /admin/federation-providers/{id}/delete-confirm",
+  "POST /admin/federation-providers/{id}/disable",
+  "GET /admin/federation-providers/{id}/disable-confirm",
+  "POST /admin/federation-providers/{id}/enable",
+  "GET /admin/federation-providers/{id}/enable-confirm",
+  "GET /admin/login",
+  "POST /admin/login",
+  "GET /admin/login/mfa",
+  "POST /admin/login/mfa",
+  "POST /admin/login/webauthn/complete",
+  "POST /admin/login/webauthn/start",
+  "POST /admin/logout",
+  "GET /admin/profile",
+  "GET /admin/settings",
+  "GET /admin/settings/authentication",
+  "POST /admin/settings/authentication/password-min-len",
+  "GET /admin/settings/basic",
+  "POST /admin/settings/basic/lang",
+  "GET /admin/settings/email",
+  "POST /admin/settings/email",
+  "GET /admin/settings/email/confirm",
+  "POST /admin/settings/email/confirm",
+  "POST /admin/settings/email/test",
+  "GET /admin/settings/logs",
+  "GET /admin/settings/other",
+  "GET /admin/settings/security",
+  "POST /admin/settings/security/idle-timeout",
+  "POST /admin/settings/security/max-sessions",
+  "GET /admin/signing-keys",
+  "POST /admin/signing-keys/rotate",
+  "GET /admin/signing-keys/rotate-confirm",
+  "POST /admin/signing-keys/{id}/delete",
+  "GET /admin/signing-keys/{id}/delete-confirm",
+  "GET /admin/users",
+  "POST /admin/users",
+  "GET /admin/users/new",
+  "GET /admin/users/{id}",
+  "POST /admin/users/{id}/delete",
+  "GET /admin/users/{id}/delete-confirm",
+  "GET /admin/users/{id}/disable-confirm",
+  "POST /admin/users/{id}/disabled",
+  "POST /admin/users/{id}/mfa-reset",
+  "GET /admin/users/{id}/mfa-reset-confirm",
+  "POST /admin/users/{id}/recovery-link",
+  "GET /admin/users/{id}/recovery-link-confirm",
+  "POST /admin/users/{id}/role",
+  "POST /admin/users/{user_id}/federation/{provider_id}/unlink",
+  "GET /admin/users/{user_id}/federation/{provider_id}/unlink-confirm",
+  "GET /forgot-password",
+  "POST /forgot-password",
+  "GET /healthz",
+  "GET /me/apps",
+  "POST /me/apps/{client_id}/revoke",
+  "GET /me/security",
+  "GET /me/security/language",
+  "POST /me/security/language",
+  "GET /me/security/mfa",
+  "POST /me/security/mfa/disable",
+  "POST /me/security/mfa/enroll/confirm",
+  "POST /me/security/mfa/enroll/start",
+  "POST /me/security/mfa/recovery-codes/regenerate",
+  "GET /me/security/overview",
+  "GET /me/security/passkeys",
+  "POST /me/security/passkeys/register/complete",
+  "POST /me/security/passkeys/register/start",
+  "POST /me/security/passkeys/{id}/delete",
+  "POST /me/security/passkeys/{id}/rename",
+  "GET /me/security/password",
+  "POST /me/security/password",
+  "GET /me/security/sessions",
+  "POST /me/security/sessions/revoke-all-others",
+  "POST /me/security/sessions/{id}/revoke",
+  "GET /me/security/step-up",
+  "POST /me/security/step-up",
+  "POST /me/security/step-up/webauthn/finish",
+  "POST /me/security/step-up/webauthn/start",
+  "GET /oauth2/authorize",
+  "POST /oauth2/consent",
+  "GET /oauth2/logout",
+  "GET /reset-password",
+  "POST /reset-password",
+  "GET /setup",
+  "GET /setup/admin",
+  "POST /setup/admin",
+  "GET /setup/done",
+  "GET /setup/hibp",
+  "POST /setup/hibp",
+  "GET /setup/lang",
+  "POST /setup/lang",
+  "GET /static/{*path}",
+]
+outbound = []
+stores = [
+  "users",
+  "credentials",
+  "sessions",
+  "consents",
+  "user_totp",
+  "login_pending_mfa",
+  "webauthn_pending",
+  "user_webauthn_credentials",
+  "password_reset_tokens",
+  "server_settings",
+  "pending_settings_change",
+  "user_consent",
+  "forgot_password_requests",
+  "clients",
+]
+
+[[boundary]]
+id = "oauth-token-endpoint"
+name = "OAuth/OIDC client <-> token endpoint"
+owner = "RFC 123"
+status = "inventoried"
+entry_points = [
+  "GET /.well-known/openid-configuration",
+  "GET /.well-known/jwks.json",
+  "GET /oauth2/userinfo",
+  "POST /oauth2/userinfo",
+  "POST /oauth2/token",
+  "POST /oauth2/introspect",
+  "POST /oauth2/revoke",
+]
+outbound = []
+stores = ["auth_codes", "refresh_tokens", "signing_keys", "revoked_access_tokens", "scope_definition"]
+
+[[boundary]]
+id = "dynamic-registration"
+name = "Dynamic client registration (RFC 7591)"
+owner = "RFC 095"
+status = "inventoried"
+entry_points = ["POST /oauth2/register"]
+outbound = []
+stores = ["client_registration_token"]
+
+[[boundary]]
+id = "federation-upstream"
+name = "sui-id <-> upstream OIDC provider"
+owner = "RFC 096"
+status = "inventoried"
+entry_points = ["GET /auth/federated/{slug}/start", "GET /auth/federated/callback"]
+outbound = ["discovery", "jwks", "token", "userinfo"]
+stores = [
+  "federation_provider",
+  "federation_link",
+  "federation_login_attempt",
+  "federation_mfa_pending",
+  "federation_webauthn_ceremony",
+]
+
+[[boundary]]
+id = "ldap"
+name = "sui-id <-> upstream LDAP directory"
+owner = "RFC 005"
+status = "inventoried"
+# No HTTP entry point of its own: a bind attempt happens inside
+# browser-application's POST /admin/login when the configured
+# user_source is "ldap". The shadow-user upsert it cascades into
+# writes `users`/`credentials`, already claimed above -- shared
+# storage, not exclusive.
+entry_points = []
+outbound = ["ldaps bind"]
+stores = []
+
+[[boundary]]
+id = "smtp"
+name = "Outbound SMTP (password-reset and notification mail)"
+owner = "RFC 001"
+status = "inventoried"
+entry_points = []
+outbound = ["submission"]
+stores = ["smtp_config", "email_outbox"]
+
+[[boundary]]
+id = "hibp"
+name = "Have I Been Pwned Pwned Passwords query"
+owner = "RFC 003"
+status = "inventoried"
+entry_points = []
+outbound = ["k-anonymity range query"]
+stores = []
+
+[[boundary]]
+id = "metrics"
+name = "Prometheus metrics exposure"
+owner = "RFC 006"
+status = "inventoried"
+entry_points = ["GET /metrics"]
+outbound = []
+stores = []
+
+[[boundary]]
+id = "filesystem-environment"
+name = "Filesystem and environment (database/config files, secret sourcing)"
+owner = "RFC 076"
+status = "inventoried"
+# RFC 076 (configuration reference) is the closest identifiable owner
+# found by grepping rfcs/ for this boundary; it documents the config
+# surface rather than asserting the security controls over it (file
+# modes, env-sourced secrets). Recorded with that caveat in this
+# stage's own review-request package.
+entry_points = []
+outbound = []
+stores = ["sui_meta", "file:<db_path>", "file:<config>", "env:bind_password_env", "env:client_secret_env"]
+
+[[boundary]]
+id = "operator-cli"
+name = "Operator / CLI"
+owner = "RFC 148"
+status = "inventoried"
+entry_points = [
+  "cli: sui-id init",
+  "cli: sui-id setup",
+  "cli: sui-id serve",
+  "cli: sui-id backup create",
+  "cli: sui-id backup restore",
+  "cli: sui-id backup verify",
+  "cli: sui-id upgrade preview",
+  "cli: sui-id config sample",
+  "cli: sui-id config check",
+  "cli: sui-id admin user unlock",
+  "cli: sui-id admin user reset-mfa",
+  "cli: sui-id admin user recovery-link",
+  "cli: sui-id admin master-key rotate",
+  "cli: sui-id admin master-key backup remove",
+  "cli: sui-id admin master-key backup renew",
+  "cli: sui-id admin metrics-token rotate",
+  "cli: sui-id admin registration-token issue",
+  "cli: sui-id admin registration-token revoke",
+  "cli: sui-id admin registration-token list",
+  "cli: sui-id admin registration-token legacy-candidates",
+  "cli: sui-id dev",
+  "cli: sui-id help",
+  "cli: sui-id version",
+]
+outbound = []
+stores = []
+
+[[boundary]]
+id = "database-writer"
+name = "The database writer (sealed-command / audit-chain trust boundary)"
+owner = "RFC 094"
+status = "inventoried"
+entry_points = []
+outbound = []
+stores = ["audit_log"]
+
+[[boundary]]
+id = "master-key"
+name = "The master key and its rotation artifacts"
+owner = "RFC 100"
+status = "inventoried"
+entry_points = [
+  "cli: sui-id init",
+  "cli: sui-id serve",
+  "cli: sui-id backup create",
+  "cli: sui-id backup restore",
+  "cli: sui-id admin master-key rotate",
+  "cli: sui-id admin master-key backup remove",
+  "cli: sui-id admin master-key backup renew",
+]
+outbound = []
+stores = [
+  "file:<key_file>",
+  "file:<key_file>.next",
+  "file:<key_file>.pre-rotation",
+  "file:<key_file>.rotation-lock",
+  "master_key_rotation",
+  "master_key_sentinel",
+]

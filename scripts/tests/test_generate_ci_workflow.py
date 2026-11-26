@@ -68,10 +68,10 @@ class GenerateCiWorkflow(unittest.TestCase):
         r = self.run_gen()
         self.assertEqual(r.returncode, 0, r.stderr)
         # Bump when a gate lane is added (G19/G20 took this 24 -> 26; G21 26 -> 27;
-        # G22 27 -> 28). A new lane turning this red is the intended signal, not a
-        # nuisance: it is how a lane added to [gates] without a regenerated ci.yml
-        # is caught.
-        self.assertIn("28 jobs", r.stdout)
+        # G22 27 -> 28; G24 28 -> 29). A new lane turning this red is the intended
+        # signal, not a nuisance: it is how a lane added to [gates] without a
+        # regenerated ci.yml is caught.
+        self.assertIn("29 jobs", r.stdout)
 
     def test_the_real_repository_is_a_fresh_generation(self) -> None:
         # The check CI runs, on the real tree rather than the copy.

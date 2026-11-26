@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regardless). Applies to every new password — a reset, a self-service
   change, an admin recovery link — never to passwords that already
   exist. Audited as `settings.password_min_len.changed`.
+- **The threat model's inventory, as a contract**: `contracts/threat-model.toml`
+  (RFC 097 stage 1) records every actor, asset and trust boundary. A
+  new gate, **G24**, fails when an HTTP route, a database table, or a
+  CLI command is in no boundary's inventory, derived fresh from
+  `router.rs`, the migrations, and the CLI reference each run — never
+  recalled from the contract itself.
 
 ### Changed
 

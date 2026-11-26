@@ -31,6 +31,7 @@ one that still names `ci/<file>` is a violation that says where the file moved.
 | `owner-attribution-baseline.txt` | baseline | G16 | RFC 117 |
 | `owner-attributions.toml` | policy | G16 | RFC 117 |
 | `rfc-policy.toml` | policy | G11 | RFC 093, RFC 110 |
+| `threat-model.toml` | registry | G24 | RFC 097 |
 | `ui-invariants.toml` | policy | G12 | RFC 093 |
 | `workflow-template.toml` | generator input | `scripts/generate-ci-workflow.py` | RFC 116 |
 | `write-authority.toml` | policy | G23 | RFC 094 |

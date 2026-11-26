@@ -557,4 +557,14 @@ gate-matrix-fixtures = '''
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
+      - name: check-threat-model.py self-tests (RFC 097, G24)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_check_threat_model"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_check_threat_model
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
 '''

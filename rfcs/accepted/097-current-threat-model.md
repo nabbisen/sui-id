@@ -77,3 +77,15 @@ It also proposes:
 part-built: a manual, not-crash-safe procedure, with the stage 1–4
 protections recorded as protected. **Accepted 2026-11-23**, with that
 method.
+
+## Gate Matrix lane owned by RFC 097
+
+Registered through the multi-source lane registry (RFC 094 R10), as RFC
+098, 116, 117, 134 and 137 do. The heading above is the recorded source
+heading and is matched by plain equality; do not rename it without
+changing the manifest in the same commit. Column layout mirrors RFC
+093's table so one parser reads both. Added with stage 1 (`0.94.0` P6).
+
+| ID | Toolchain | Features | Blocking command / assertion |
+|---|---|---|---|
+| G24 | Python 3.14 | n/a | `python3.14 scripts/check-threat-model.py --root . --contract contracts/threat-model.toml` |
