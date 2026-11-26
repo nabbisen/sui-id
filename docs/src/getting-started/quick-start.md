@@ -173,10 +173,9 @@ sui-id dev
 Dev mode:
 - Binds to `127.0.0.1:8801` by default.
 - Seeds an admin (`admin`), two users (`alice`, `bob`) and one OIDC client from
-  hardcoded defaults. No seed file is read automatically; `--dev-seed PATH`
-  is the flag for one. Every `--dev-*` flag that takes a value (`--dev-seed`,
-  `--dev-bind`, `--dev-db`, `--dev-admin-password`, `--dev-client-secret`) is
-  honoured.
+  hardcoded defaults. No seed file is read automatically; `--seed PATH` is
+  the flag for one. `sui-id dev --help` lists the others: `--bind`, `--db`,
+  `--admin-password` and `--client-secret`.
 - Disables `cookie_secure` and HIBP checking. Account lockout stays active.
 - Shows a **yellow banner** on every admin page as a reminder.
 
