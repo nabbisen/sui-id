@@ -1,6 +1,9 @@
 # RFC 107 — `sui-id --help` names every subcommand the binary accepts
 
-**Status.** Accepted
+**Status.** Implemented (v0.93.0)
+**Closure reviewed on.** 2026-11-26, on the architect's [closure assessment](../handoffs/148-one-command-system/closure-assessment-2026-11-26.md) of RFC 148 and RFC 107.
+**Closure approved by.** `@nabbisen`, 2026-11-26: *"Close RFC 107 (Recommended)"*.
+**Closure evidence.** The [closure assessment](../handoffs/148-one-command-system/closure-assessment-2026-11-26.md), measuring each prerequisite against: `cli::help::tests::overview_fits_one_screen_and_names_every_leaf` and `every_leaf_has_notes` (every subcommand in `--help`); RFC 148's one registry, held by `cli::reference::tests::the_committed_page_matches_a_fresh_render` and `e2e::o2a_cli_registry::help_and_the_registry_cannot_diverge` (the lists cannot drift); `cli::tests::a_flags_value_is_never_taken_for_a_command` and `a_value_that_spells_a_command_name_is_never_mistaken_for_one`. All shipped in `0.93.0` (`ff1a9f5`).
 **Accepted on.** 2026-10-18
 **Approved by.** `@nabbisen`, 2026-10-18: *"RFC 107 is accepted."*
 **Independent design review.** [`design-review-2026-10-14.md`](../handoffs/107-cli-help-completeness/design-review-2026-10-14.md) — by the implementation role, under RFC 139's dispatch §6. **Genuinely independent**, unlike most reviews in this repository: the architect authored RFC 107 and did not review it. The review confirmed the problem by reading source rather than repeating the handoff, found one factual error in the Summary (which named `setup` as missing when `cli.rs:680` carries it), and required its correction before acceptance. **That correction landed on 2026-10-15** and is marked in the Summary below, so the review's only pre-acceptance condition is discharged. Its §5 records one adjacent finding held outside this repository; the review states it is not a blocker for accepting RFC 107.

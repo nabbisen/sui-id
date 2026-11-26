@@ -74,7 +74,10 @@
 > - **The preparation landed 2026-11-26** (`c50abda`). RFC 100 moved to `done/` as Implemented (v0.94.0). RFC 151 stays
 >   Accepted until RFC 149's *Sign-in* tab exists.
 >
-> ## Whose turn it is: **the architect's**, on Level B for `0.94.0`. Then `@nabbisen`'s go-ahead for the tag and the publish.
+> - **`0.94.0` released and published 2026-11-26**: tag `0.94.0` at `74ff966`; Level B CI `45754377904` and audit
+>   `45754380621`; publish run `45790618029`, six crates and the Release. **Cycle P is complete.**
+>
+> ## Whose turn it is: **the architect's**, to plan cycle Q (`0.95.0`).
 
 **Proposed.** 2026-11-24, by the architect, after `0.93.1` was published
 (`7d6d250`).

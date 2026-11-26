@@ -80,7 +80,7 @@ RFC 107 is `Proposed` and **cannot be accepted as it stands**. Measured: adding
 the acceptance metadata and running G11 gives
 
 ```
-check-rfc-integrity: rfcs/accepted/107-cli-help-completeness.md:
+check-rfc-integrity: rfcs/done/107-cli-help-completeness.md:
   Security review is Required but 'Independent design review.' is missing
 ```
 

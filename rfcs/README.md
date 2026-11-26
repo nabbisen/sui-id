@@ -120,7 +120,7 @@ the move. The paths below are current.
 |---|---|---|
 | 104 | [Audit event labels shown, and bound to the registered events](./proposed/104-audit-event-labels.md) | [104-audit-event-labels](./handoffs/104-audit-event-labels/README.md) |
 | 106 | [Backup restore fails closed](./proposed/106-backup-restore-hardening.md) | [106-backup-restore-hardening](./handoffs/106-backup-restore-hardening/README.md) |
-| 107 | [`sui-id --help` names every subcommand the binary accepts](./accepted/107-cli-help-completeness.md) **(Accepted 2026-10-18)** | [107-cli-help-completeness](./handoffs/107-cli-help-completeness/README.md) |
+| 107 | [`sui-id --help` names every subcommand the binary accepts](./done/107-cli-help-completeness.md) **(Implemented, v0.93.0)** | [107-cli-help-completeness](./handoffs/107-cli-help-completeness/README.md) |
 | 108 | [Confirm screens for client disable and secret rotation; the secret leaves the URL](./proposed/108-client-confirm-screens.md) | [108-client-confirm-screens](./handoffs/108-client-confirm-screens/README.md) |
 | 109 | [Request logs keep their request ID across `.await`](./proposed/109-request-id-span.md) | [109-request-id-span](./handoffs/109-request-id-span/README.md) |
 | 111 | [Reconcile `rfcs/README.md`'s template with what G11 enforces](./proposed/111-rfc-template-reconciliation.md) | [111-rfc-template-reconciliation](./handoffs/111-rfc-template-reconciliation/README.md) |
@@ -379,7 +379,7 @@ On every one of these, the sign-off of record is `@nabbisen`'s. What failed
 is who performed the review and what the field calls it, not the chain of
 sign-off behind it.
 
-**Fifteen predate the rulings. [RFC 107](accepted/107-cli-help-completeness.md)
+**Fifteen predate the rulings. [RFC 107](done/107-cli-help-completeness.md)
 does not.** Its review was dispatched to the dev team on 2026-10-14, two
 weeks after §S1a and §S1c. That one is a breach of a standing ruling rather
 than a header written before one, and it is named here rather than averaged

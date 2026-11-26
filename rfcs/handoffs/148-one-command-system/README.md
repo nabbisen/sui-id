@@ -17,3 +17,9 @@ On the `0.91.0` binary (`a0a6c1a`), from an empty directory: the outputs of
 source: the dispatch in `crates/sui-id/src/main.rs:80-117`, the `admin`
 dispatch at `crates/sui-id/src/cli.rs:271-279`, and the documented service
 unit's `ExecStart`.
+
+## Closure
+
+[`closure-assessment-2026-11-26.md`](closure-assessment-2026-11-26.md): RFC 107 is closed as Implemented (v0.93.0).
+**RFC 148 closes at `0.95.0`**, after one test: the first run's offer, driven through the binary in a real terminal. It is
+cycle Q's first item (`@nabbisen`, 2026-11-26: *"Your recommendation is accepted."*).

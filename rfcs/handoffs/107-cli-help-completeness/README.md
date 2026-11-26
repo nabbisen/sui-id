@@ -8,7 +8,7 @@
 > being fixed by hand first and then replaced (cycle N's §5, decided
 > 2026-11-16).
 
-**Authorized by.** [RFC 107](../../accepted/107-cli-help-completeness.md),
+**Authorized by.** [RFC 107](../../done/107-cli-help-completeness.md),
 **Accepted 2026-10-18**. That supersedes the 2026-09-16 authorization under
 `ROADMAP.md` §Non-RFC work packages, which is the line this handoff was
 written with and which is now historical record.

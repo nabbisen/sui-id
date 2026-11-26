@@ -5,7 +5,7 @@
 > implementation-eligible under RFC 000 `:49-50`.
 
 **Dispatched.** 2026-10-18 JST, by the architect.
-**RFC.** [107](../../accepted/107-cli-help-completeness.md) — **Status: Accepted**.
+**RFC.** [107](../../done/107-cli-help-completeness.md) — **Status: Accepted**.
 **Handoff.** [`README.md`](README.md) — the specification. This dispatch adds
 the measurement and the order; where they differ, say so rather than guessing.
 **Independent design review.** [`design-review-2026-10-14.md`](design-review-2026-10-14.md)
