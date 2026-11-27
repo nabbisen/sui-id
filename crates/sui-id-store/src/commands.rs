@@ -6440,6 +6440,9 @@ pub async fn update_client_app_identity(
 // ── C01 — create client ──────────────────────────────────────────────────
 //
 // RFC 094 M2b wave 4 stage 3. One write, target is the new client's id.
+// RFC 149 Q4 §4: `consent_policy` added — the choice an administrator makes
+// at creation, which until this stage went unrecorded (only a later change
+// to it did, via C09).
 
 static C01_CREATED: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::ClientCreate,
@@ -6447,7 +6450,11 @@ static C01_CREATED: EventDescriptor = EventDescriptor {
     class: AuditClass::Atomic,
     actor: ActorRequirement::Required,
     target: TargetRequirement::Required,
-    attributes: &[],
+    attributes: &[AttributeSpec {
+        name: "consent_policy",
+        description: "the consent policy chosen at creation",
+        required: true,
+    }],
 };
 
 crate::declare_write_command! {
@@ -6456,14 +6463,17 @@ crate::declare_write_command! {
     command C01 = "C01" {
         system_principal: forbidden;
         enum C01Event {
-            Created { client_id: ClientId } => &C01_CREATED,
+            Created {
+                client_id: ClientId,
+                consent_policy: crate::models::ConsentPolicy,
+            } => &C01_CREATED,
         }
     }
 }
 
 impl SealedCommandEvent<C01> for C01Event {
     fn target(&self) -> Option<AuditTarget> {
-        let Self::Created { client_id } = self;
+        let Self::Created { client_id, .. } = self;
         Some(AuditTarget(client_id.to_string()))
     }
 
@@ -6472,7 +6482,10 @@ impl SealedCommandEvent<C01> for C01Event {
     }
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        AuditAttributes::builder().build()
+        let Self::Created { consent_policy, .. } = self;
+        AuditAttributes::builder()
+            .attribute("consent_policy", consent_policy.as_str())
+            .build()
     }
 }
 
@@ -6487,10 +6500,17 @@ pub async fn create_client(
     row: crate::models::ClientRow,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let client_id = row.id;
+    let consent_policy = row.consent_policy.clone();
     let context = AuthorizedCommandContext::<C01>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, C01>| {
         crate::repos::clients::create_within_tx(tx.tx(), &row)?;
-        Ok(((), C01Event::Created { client_id }))
+        Ok((
+            (),
+            C01Event::Created {
+                client_id,
+                consent_policy,
+            },
+        ))
     })
     .await
 }

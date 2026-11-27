@@ -6,6 +6,15 @@
 
 use serde::Serialize;
 
+/// The scopes this server supports, in the order shown everywhere a
+/// human sees them. RFC 149 Q4 §1: the one list discovery advertises
+/// and the app form's checkboxes are built from — they cannot drift,
+/// because there is only one list. `openid` is first and is not an
+/// ordinary choice: OpenID Connect requires it, so the form shows it
+/// checked and disabled, and the server includes it in every client's
+/// scopes regardless of what was submitted.
+pub const STANDARD_SCOPES: &[&str] = &["openid", "profile", "email", "offline_access"];
+
 #[derive(Debug, Serialize)]
 pub struct Discovery {
     pub issuer: String,
@@ -65,7 +74,7 @@ impl Discovery {
             ],
             grant_types_supported: vec!["authorization_code", "refresh_token"],
             code_challenge_methods_supported: vec!["S256"],
-            scopes_supported: vec!["openid", "profile", "email", "offline_access"],
+            scopes_supported: STANDARD_SCOPES.to_vec(),
         }
     }
 }

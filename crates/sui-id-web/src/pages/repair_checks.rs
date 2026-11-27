@@ -390,9 +390,9 @@ fn every_help_block_is_at_most_three_sentences() {
         }
     }
     assert_eq!(
-        checked, 9,
-        "expected 9 help blocks (§1's own list), found {checked} — a page was added, removed, \
-         or stopped calling help_details"
+        checked, 11,
+        "expected 11 help blocks (Q3's 9 plus Q4's redirect-uri and additional-scopes blocks), \
+         found {checked} — a page was added, removed, or stopped calling help_details"
     );
 }
 
@@ -402,6 +402,9 @@ fn every_help_block_is_at_most_three_sentences() {
 /// to a real heading in that file (mdBook/GitHub's own slug rule:
 /// lowercase, drop everything but letters/digits/spaces/hyphens, spaces
 /// become hyphens).
+/// How many `#anchor`s follow a `github_doc_url!` call today (Q4's review).
+const ANCHORS_EXPECTED: usize = 12;
+
 #[test]
 fn every_learn_more_link_resolves() {
     fn repo_root() -> std::path::PathBuf {
@@ -414,7 +417,13 @@ fn every_learn_more_link_resolves() {
         let mut out = String::new();
         for c in heading.chars() {
             let c = c.to_ascii_lowercase();
-            if c.is_ascii_alphanumeric() {
+            // GitHub/mdBook's own rule keeps letters, digits and
+            // underscore (found the hard way: "allowed_scopes" keeps
+            // its underscore in the real anchor, which an
+            // alphanumeric-only check would silently merge away into
+            // "allowedscopes" — a false pass, not a real check, until
+            // a mismatched href surfaced it).
+            if c.is_ascii_alphanumeric() || c == '_' {
                 out.push(c);
             } else if (c == ' ' || c == '-') && !out.ends_with('-') && !out.is_empty() {
                 out.push('-');
@@ -427,6 +436,7 @@ fn every_learn_more_link_resolves() {
     }
     let root = repo_root();
     let mut checked = 0usize;
+    let mut anchors_checked = 0usize;
     for (name, src) in page_sources() {
         let marker = "crate::github_doc_url!(\"";
         let mut from = 0usize;
@@ -448,7 +458,7 @@ fn every_learn_more_link_resolves() {
             };
             let between = &tail[..next_quote_rel];
             if !between
-                .trim_matches(|c: char| c.is_whitespace() || c == ',')
+                .trim_matches(|c: char| c.is_whitespace() || c == ',' || c == ')')
                 .is_empty()
             {
                 // Something else sits between — not an adjacent anchor.
@@ -467,6 +477,7 @@ fn every_learn_more_link_resolves() {
                 .filter(|l| l.trim_start().starts_with('#'))
                 .map(|l| slugify(l.trim_start().trim_start_matches('#').trim()))
                 .collect();
+            anchors_checked += 1;
             assert!(
                 headings.iter().any(|h| h == slug),
                 "{name}: {rel_path}#{slug} — no heading slugifies to {slug:?}; headings found: {headings:?}"
@@ -474,8 +485,16 @@ fn every_learn_more_link_resolves() {
         }
     }
     assert_eq!(
-        checked, 13,
-        "expected 13 github_doc_url! call sites, found {checked} — one was added or removed"
+        checked, 15,
+        "expected 15 github_doc_url! call sites, found {checked} — one was added or removed"
+    );
+    // Q4's review: until Q4, every anchor was skipped (the `)` closing
+    // the macro sat between it and the call), and the test still passed.
+    // Counting the anchors checked makes a skip fail, not pass.
+    assert_eq!(
+        anchors_checked, ANCHORS_EXPECTED,
+        "expected {ANCHORS_EXPECTED} anchors checked, found {anchors_checked} — an anchor was \
+         added, removed, or silently skipped"
     );
 }
 

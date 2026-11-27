@@ -62,13 +62,26 @@ with a given client (all users can authenticate with any client by design).
 
 **New clients** default to `openid profile email`. Clients upgraded from
 before v0.29.12 with an empty `allowed_scopes` retain "permit any" legacy
-behaviour — review and restrict those clients.
+behaviour — review and restrict those clients. Such an app's edit page
+says so above its scopes, and starts its boxes from the new-app default:
+saving it sets exactly what is ticked.
 
 ### Common error: "scope X is not permitted for this client"
 
-Go to **Admin → Clients**, select the client, and add the missing scope to
-the *Allowed scopes* field. The error description includes the client name
-and its current allowed list to make this easy to find.
+In the console, open **Applications → Apps**, select the app, and tick the
+scope, or add it under *Additional scopes* if it is your own API's. The
+error description includes the app's name and its current allowed list to
+make this easy to find.
+
+### How a redirect URI is matched
+
+A sign-in request's `redirect_uri` must match one you registered for that
+client, **exactly** — scheme, host, path, query string and the absence of a
+fragment all compared as written. The one exception: a **public** client's
+own loopback redirect (`http://localhost`, `127.0.0.1` or `::1`) may use a
+different **port** each time, since native apps often pick an ephemeral one
+(RFC 8252). A **confidential** client gets no such exception, even on
+loopback.
 
 For multi-tenant isolation (separate user namespaces per customer) see
 RFC 025, which is the planned expansion path.

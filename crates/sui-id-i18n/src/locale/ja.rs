@@ -508,6 +508,10 @@ pub static STRINGS_JA: Strings = Strings {
     help_chain_check_body: "各行のハッシュはその行の内容と直前の行のハッシュから計算されるため、行は鎖のようにつながっています。この検査は直近の行のつながりを計算し直し、一致しない最初の行を報告します。これで sui-id の外で変更・削除された行がわかります。ただし、データベースに書き込める人に対する証明にはなりません。その人は、変更した行より後のつながりをすべて計算し直せるからです。",
     help_about_storage_paths: "保存先パスについて",
     help_storage_paths_body: "データベースにはすべてのアカウントと設定が入っており、その中の秘密情報はマスターキーで復号されます。マスターキーは SUI_ID_MASTER_KEY が設定されていればそこから、なければここに表示された鍵ファイルから読み込まれます。バックアップには sui-id backup create を使ってください。サーバーの稼働中でも整合したコピーを取り、鍵ファイルも含むため、このホストの外へ持ち出す前に --encrypt を付けてください。鍵のないデータベースファイルのコピーでは、秘密情報はすべて失われます。",
+    help_about_redirect_uri: "Redirect URI とは",
+    help_redirect_uri_body: "サインイン後、sui-id はここに登録されたアドレスにのみユーザーを戻します。基本的に完全一致で照合されますが、パブリックアプリ自身のループバックアドレスだけはポート番号が異なっても構いません。本番サイトとテストサイトなど、アプリがサインインを受け取る場所ごとに 1 つずつ追加してください。",
+    help_about_additional_scopes: "追加スコープについて",
+    help_additional_scopes_body: "自分のAPIが確認するスコープのみを入力してください。sui-id 自身はこれらのスコープを解釈せず、アプリが受け取るアクセストークンに含めるだけです。",
 
     // Admin: ダッシュボード (RFC 029)
     dashboard_title: "ダッシュボード",
@@ -593,7 +597,8 @@ pub static STRINGS_JA: Strings = Strings {
     client_edit_label_client_id: "Client ID",
     client_edit_label_kind: "種別",
     client_edit_label_status: "状態",
-    client_edit_post_logout_hint: "1 行に 1 つ。空欄＝Redirect URIs を流用。",
+    client_edit_label_created_at: "作成日時",
+    client_edit_label_updated_at: "最終更新",
 
     // Admin: クライアント管理 (RFC 029)
     clients_title: "クライアント管理",
@@ -609,17 +614,6 @@ pub static STRINGS_JA: Strings = Strings {
     clients_table_th_client_id: "クライアント ID",
     clients_count_caption: |n| format!("現在 {n} 件。"),
     clients_label_app_name: "アプリケーション名",
-    clients_label_redirect_uris: "Redirect URIs",
-    clients_hint_redirect_uris: "1 行に 1 つ。https またはループバックの http のみ。",
-    clients_label_allowed_scopes: "許可スコープ (Allowed scopes)",
-    clients_hint_scopes_intro: "スペース区切り。既知のスコープ: ",
-    clients_hint_scopes_openid_note: " (必須) · ",
-    clients_hint_scopes_profile_note: " (名前・言語) · ",
-    clients_hint_scopes_email_note: " (メール) · ",
-    clients_hint_scopes_offline_note: " (リフレッシュトークン)。",
-    clients_hint_scopes_default: "空欄の場合は openid profile email がデフォルトになります。",
-    clients_label_post_logout_uris: "Post-logout redirect URIs(任意)",
-    clients_hint_one_per_line: "1 行に 1 つ。",
     clients_label_confidential_checkbox: "Confidential client（client secret を発行する）",
     clients_button_register: "登録",
 
@@ -627,6 +621,41 @@ pub static STRINGS_JA: Strings = Strings {
     clients_label_homepage_uri: "ホームページ URL（任意）",
     clients_label_privacy_policy_uri: "プライバシーポリシー URL（任意）",
     clients_label_tos_uri: "利用規約 URL（任意）",
+
+    // The app form (RFC 149 Q4)
+    clients_section_about: "アプリについて",
+    clients_section_redirect_uris: "サインイン後に戻る先",
+    clients_label_post_logout_uris: "Post-logout redirect URIs（任意）",
+    clients_section_scopes: "アプリが要求できる情報",
+    clients_scopes_empty_notice: "このアプリのスコープ一覧は空で、要求されたどのスコープも許可される状態です。下のチェックは新しいアプリの既定値です。保存するとチェックしたものだけが許可されるため、保存の前に確認してください。",
+    clients_uri_redirect_label: |n| format!("Redirect URI {n}"),
+    clients_uri_post_logout_label: |n| format!("Post-logout URI {n}"),
+    clients_uri_redirect_label_template: "Redirect URI {n}",
+    clients_uri_post_logout_label_template: "Post-logout URI {n}",
+    clients_uri_empty_suffix: "（未入力）",
+    clients_button_add_another: "もう1つ追加",
+    clients_button_remove: "削除",
+    clients_scope_openid_desc: "必須：アプリにユーザーを識別させます。",
+    clients_scope_profile_desc: "ユーザーの名前と表示名。",
+    clients_scope_email_desc: "ユーザーのメールアドレスと、確認済みかどうか。",
+    clients_scope_offline_access_desc: "再度のサインインなしでアプリをサインイン状態に保ちます（リフレッシュトークン）。",
+    clients_label_additional_scopes: "追加スコープ",
+    clients_hint_additional_scopes: "自分のAPIが確認するスコープのみ。スペースで区切ってください。",
+    clients_error_additional_scope_syntax: |tok| {
+        format!("「{tok}」は正しいスコープトークンではありません。")
+    },
+    clients_error_additional_scope_is_standard: |standard| {
+        format!("「{standard}」は上のチェックボックスにあります。そちらにチェックしてください。")
+    },
+    clients_error_additional_scope_near_miss: |typed, standard| {
+        format!(
+            "「{typed}」は標準スコープ「{standard}」に似ています。上の {standard} にチェックするか、スペルを確認してください。"
+        )
+    },
+    clients_error_name_required: "名前を入力してください。",
+    clients_error_redirect_uri_not_url: "正しいURLではありません。",
+    clients_error_redirect_uri_scheme: "https:// で始まる必要があります（http:// はテスト用の localhost、127.0.0.1、::1 の場合のみ許可されます）。",
+    clients_error_redirect_uri_fragment: "# フラグメントを含めることはできません。",
 
     // Admin: 監査ログ (RFC 029)
     audit_lede: "管理操作の履歴（新しい順）。",

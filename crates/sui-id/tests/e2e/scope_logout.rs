@@ -38,6 +38,9 @@ async fn authorize_rejects_scope_outside_client_policy() {
             allowed_scopes: "openid",
             post_logout_redirect_uris: &[],
             consent_policy: sui_id_store::models::ConsentPolicy::default(),
+            homepage_uri: None,
+            privacy_policy_uri: None,
+            tos_uri: None,
         },
         &state.caches,
     )
@@ -127,6 +130,9 @@ async fn authorize_with_empty_policy_permits_any_scope() {
             allowed_scopes: "", // permit any
             post_logout_redirect_uris: &[],
             consent_policy: sui_id_store::models::ConsentPolicy::default(),
+            homepage_uri: None,
+            privacy_policy_uri: None,
+            tos_uri: None,
         },
         &state.caches,
     )
@@ -183,6 +189,9 @@ async fn logout_uses_post_logout_redirect_uris_when_registered() {
             allowed_scopes: "openid",
             post_logout_redirect_uris: &["https://rp.test/goodbye".into()],
             consent_policy: sui_id_store::models::ConsentPolicy::default(),
+            homepage_uri: None,
+            privacy_policy_uri: None,
+            tos_uri: None,
         },
         &state.caches,
     )
@@ -258,6 +267,9 @@ async fn logout_falls_back_to_redirect_uris_when_post_logout_list_empty() {
             allowed_scopes: "openid",
             post_logout_redirect_uris: &[], // empty -> fallback
             consent_policy: sui_id_store::models::ConsentPolicy::default(),
+            homepage_uri: None,
+            privacy_policy_uri: None,
+            tos_uri: None,
         },
         &state.caches,
     )

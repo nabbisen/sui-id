@@ -43,11 +43,11 @@ async fn client_edit_form_updates_scopes_uris_and_consent_policy_and_is_audited(
         .expect("count");
 
     let body = format!(
-        "name=rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb\
-         &allowed_scopes=openid+profile+email\
-         &post_logout_redirect_uris=https%3A%2F%2Frp.test%2Fbye\
+        "name=rp&redirect_uri_0=https%3A%2F%2Frp.test%2Fcb\
+         &scope_profile=true&scope_email=true\
+         &post_logout_uri_0=https%3A%2F%2Frp.test%2Fbye\
          &consent_policy=always\
-         &_csrf={csrf}"
+         &save=1&_csrf={csrf}"
     );
     let router = build_router(state.clone());
     let req = Request::builder()

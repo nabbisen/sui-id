@@ -293,8 +293,8 @@ pub async fn complete_setup_and_login(state: &AppState) -> String {
     extract_set_cookie(resp.headers(), "sui_id_session").expect("session cookie set")
 }
 
-/// Create a test client. Default `allowed_scopes` is `"openid profile"` (the
-/// server default when the form field is left blank). Use
+/// Create a test client. Default `allowed_scopes` is `"openid profile
+/// email"` — the create form's own default checkbox state. Use
 /// [`create_client_with_scopes`] when a test needs to exercise additional
 /// scopes such as `"email"` or `"offline_access"`.
 pub async fn create_client(state: &AppState, session_cookie: &str) -> (String, String) {
@@ -306,29 +306,73 @@ pub async fn create_client(state: &AppState, session_cookie: &str) -> (String, S
 }
 
 /// Like [`create_client`] but with an explicit `allowed_scopes` policy.
-/// Pass a space-separated list; e.g. `"openid profile email"`.
+/// Pass a space-separated list; e.g. `"openid profile email"`. RFC 149
+/// Q4 rebuilt the create form around per-scope checkboxes and one
+/// `redirect_uri_<n>` input per URI (§1, §2) — this translates the
+/// same space-separated string callers already passed into that
+/// shape, rather than changing every call site.
 pub async fn create_client_with_scopes(
     state: &AppState,
     session_cookie: &str,
     allowed_scopes: &str,
 ) -> (String, String) {
-    // First, GET the clients page to obtain a CSRF cookie + token.
+    // First, GET the create form to obtain a CSRF cookie + token.
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::GET)
-        .uri("/admin/clients")
+        .uri("/admin/clients/new")
         .header(header::COOKIE, format!("sui_id_session={session_cookie}"))
         .body(Body::empty())
         .expect("req");
-    let resp = router.oneshot(req).await.expect("clients GET");
+    let resp = router.oneshot(req).await.expect("clients/new GET");
     let csrf = extract_set_cookie(resp.headers(), "sui_id_csrf").expect("csrf cookie set on GET");
+
+    // Empty means "use the form's own default" (profile + email
+    // checked, nothing additional) -- the same net scopes the old
+    // server-side "openid profile email when left blank" default
+    // produced, now chosen on the form instead.
+    let (profile, email, offline_access, additional): (bool, bool, bool, Vec<&str>) =
+        if allowed_scopes.trim().is_empty() {
+            (true, true, false, Vec::new())
+        } else {
+            let mut profile = false;
+            let mut email = false;
+            let mut offline_access = false;
+            let mut additional = Vec::new();
+            for tok in allowed_scopes.split_whitespace() {
+                match tok {
+                    "openid" => {}
+                    "profile" => profile = true,
+                    "email" => email = true,
+                    "offline_access" => offline_access = true,
+                    other => additional.push(other),
+                }
+            }
+            (profile, email, offline_access, additional)
+        };
 
     // Then POST the form with both the cookie and a matching _csrf field.
     let router = build_router(state.clone());
-    let encoded_scopes = urlencode(allowed_scopes);
-    let body = format!(
-        "name=test-rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb&confidential=true&allowed_scopes={encoded_scopes}&_csrf={csrf}"
+    let mut body = format!(
+        "name=test-rp&redirect_uri_0={}&confidential=true&_csrf={csrf}",
+        urlencode("https://rp.test/cb"),
     );
+    if profile {
+        body.push_str("&scope_profile=true");
+    }
+    if email {
+        body.push_str("&scope_email=true");
+    }
+    if offline_access {
+        body.push_str("&scope_offline_access=true");
+    }
+    if !additional.is_empty() {
+        body.push_str(&format!(
+            "&additional_scopes={}",
+            urlencode(&additional.join(" "))
+        ));
+    }
+    body.push_str("&save=1");
     let req = Request::builder()
         .method(Method::POST)
         .uri("/admin/clients")

@@ -45,8 +45,8 @@ async fn client_edit_form_updates_basic_info_and_is_audited() {
         .await
         .expect("count");
 
-    let body = "name=renamed-via-c02&redirect_uris=https%3A%2F%2Frp.test%2Fnew-cb\
-         &allowed_scopes=openid&consent_policy=none&_csrf=CSRF_PLACEHOLDER"
+    let body = "name=renamed-via-c02&redirect_uri_0=https%3A%2F%2Frp.test%2Fnew-cb\
+         &consent_policy=none&save=1&_csrf=CSRF_PLACEHOLDER"
         .replace("CSRF_PLACEHOLDER", &csrf);
     let router = build_router(state.clone());
     let req = Request::builder()

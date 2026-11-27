@@ -319,8 +319,8 @@ fn enforce_scope_policy(allowed: &str, requested: &str, client_name: &str) -> Co
                 description: format!(
                     "scope {tok:?} is not permitted for client {:?} \
                      (allowed: {:?}). \
-                     Go to Admin → Clients → edit this client and add {tok:?} \
-                     to the Allowed scopes field.",
+                     An administrator can allow it on this app's page in the \
+                     sui-id console (Applications → Apps).",
                     client_name, allowed_trimmed,
                 ),
             });

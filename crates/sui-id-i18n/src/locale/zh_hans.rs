@@ -509,6 +509,10 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     help_chain_check_body: "每一行的哈希由该行内容和上一行的哈希计算得出，因此各行连成一条链。此检查重新计算最近各行的链接，并报告第一个不匹配的行，从而发现在 sui-id 之外被修改或删除的行。但它无法防范能够写入数据库的人：他们可以重新计算被修改行之后的所有链接。",
     help_about_storage_paths: "关于存储路径",
     help_storage_paths_body: "数据库保存所有账户和设置，其中的机密由主密钥解密：设置了 SUI_ID_MASTER_KEY 时从中读取，否则从此处显示的密钥文件读取。请使用 sui-id backup create 备份：它在服务器运行时也能得到一致的副本，并包含密钥文件，因此在备份离开本机之前请加上 --encrypt。没有密钥的数据库文件副本会丢失其中的所有机密。",
+    help_about_redirect_uri: "什么是 Redirect URI",
+    help_redirect_uri_body: "登录后，sui-id 只会把用户带回此处登记的地址。地址通常要求完全匹配，唯一例外是公开应用自身的回环地址，其端口号可以不同。请为应用接收登录结果的每一个位置各添加一条，例如正式站点和测试站点。",
+    help_about_additional_scopes: "关于附加权限范围",
+    help_additional_scopes_body: "只填写你自己的 API 会检查的权限范围。sui-id 本身不会解释这些值，只会把它们包含在应用收到的访问令牌中。",
 
     // Admin: 仪表盘 (RFC 029)
     dashboard_title: "仪表盘",
@@ -593,7 +597,8 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     client_edit_label_client_id: "Client ID",
     client_edit_label_kind: "类型",
     client_edit_label_status: "状态",
-    client_edit_post_logout_hint: "每行一个。留空＝沿用 Redirect URIs。",
+    client_edit_label_created_at: "创建时间",
+    client_edit_label_updated_at: "最近更改",
 
     // Admin: 客户端管理 (RFC 029)
     clients_title: "客户端管理",
@@ -609,17 +614,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     clients_table_th_client_id: "Client ID",
     clients_count_caption: |n| format!("当前 {n} 个。"),
     clients_label_app_name: "应用名称",
-    clients_label_redirect_uris: "Redirect URIs",
-    clients_hint_redirect_uris: "每行一个，仅支持 https 或回环 http。",
-    clients_label_allowed_scopes: "允许的权限范围 (Allowed scopes)",
-    clients_hint_scopes_intro: "空格分隔。已知范围：",
-    clients_hint_scopes_openid_note: " (必填) · ",
-    clients_hint_scopes_profile_note: " (姓名、语言) · ",
-    clients_hint_scopes_email_note: " (邮箱) · ",
-    clients_hint_scopes_offline_note: " (刷新令牌)。",
-    clients_hint_scopes_default: "留空时默认为 openid profile email。",
-    clients_label_post_logout_uris: "Post-logout redirect URIs（可选）",
-    clients_hint_one_per_line: "每行一个。",
     clients_label_confidential_checkbox: "Confidential client（发放 client secret）",
     clients_button_register: "注册",
 
@@ -627,6 +621,37 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     clients_label_homepage_uri: "主页 URL（可选）",
     clients_label_privacy_policy_uri: "隐私政策 URL（可选）",
     clients_label_tos_uri: "服务条款 URL（可选）",
+
+    // The app form (RFC 149 Q4)
+    clients_section_about: "关于此应用",
+    clients_section_redirect_uris: "登录后返回的位置",
+    clients_label_post_logout_uris: "Post-logout redirect URIs（可选）",
+    clients_section_scopes: "应用可以请求的信息",
+    clients_scopes_empty_notice: "此应用的范围列表为空，这意味着请求可以使用任何范围。下方勾选的是新应用的默认值：保存后只会允许勾选的范围，请在保存前确认。",
+    clients_uri_redirect_label: |n| format!("Redirect URI {n}"),
+    clients_uri_post_logout_label: |n| format!("Post-logout URI {n}"),
+    clients_uri_redirect_label_template: "Redirect URI {n}",
+    clients_uri_post_logout_label_template: "Post-logout URI {n}",
+    clients_uri_empty_suffix: "（未填写）",
+    clients_button_add_another: "再添加一个",
+    clients_button_remove: "删除",
+    clients_scope_openid_desc: "必需：让应用识别该用户。",
+    clients_scope_profile_desc: "用户的姓名和显示名称。",
+    clients_scope_email_desc: "用户的邮箱地址，以及是否已验证。",
+    clients_scope_offline_access_desc: "让应用无需再次请求即可保持登录状态（刷新令牌）。",
+    clients_label_additional_scopes: "附加权限范围",
+    clients_hint_additional_scopes: "仅用于你自己的 API 会检查的权限范围，以空格分隔。",
+    clients_error_additional_scope_syntax: |tok| format!("“{tok}”不是合法的权限范围令牌。"),
+    clients_error_additional_scope_is_standard: |standard| {
+        format!("“{standard}”已有对应的复选框，请在上方勾选它。")
+    },
+    clients_error_additional_scope_near_miss: |typed, standard| {
+        format!("“{typed}”看起来像标准权限范围“{standard}”。请在上方勾选 {standard}，或检查拼写。")
+    },
+    clients_error_name_required: "名称不能为空。",
+    clients_error_redirect_uri_not_url: "不是合法的 URL。",
+    clients_error_redirect_uri_scheme: "必须以 https:// 开头（http:// 仅在测试时允许用于 localhost、127.0.0.1 或 ::1）。",
+    clients_error_redirect_uri_fragment: "不能包含 # 片段。",
 
     // Admin: 审计日志 (RFC 029)
     audit_lede: "管理操作历史（最新在前）。",

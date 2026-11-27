@@ -158,6 +158,37 @@ input[type="radio"] {
   padding: var(--space-3);
 }
 
+/* ── The app form's scope checklist (RFC 149 Q4 §1) ─────────────────── */
+/* A checkbox beside a two-line label (the scope's own name, then a      */
+/* muted one-line description) — distinct from .check elsewhere, which   */
+/* is a read-only <li>, not a form control.                              */
+.scope-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-top: var(--border-width-default) solid var(--border-muted);
+}
+.scope-check:first-of-type {
+  border-top: none;
+}
+.scope-check input[type="checkbox"] {
+  margin-top: 0.2rem;
+}
+.scope-check__desc {
+  display: block;
+  color: var(--fg-muted);
+  font-size: var(--font-size-caption);
+}
+
+/* ── The app form's one-input-per-URI rows (RFC 149 Q4 §2) ──────────── */
+.uri-row .row {
+  align-items: flex-start;
+}
+.uri-row input[type="url"] {
+  flex: 1;
+}
+
 "#;
 
 /// A single server-validated field error (RFC-MI-050, v0.54.0).
@@ -225,7 +256,7 @@ pub(crate) const ERROR_SUMMARY_CSS: &str = r#"
 pub fn error_summary(
     t: &'static sui_id_i18n::Strings,
     errors: &[FieldError],
-) -> Option<impl leptos::prelude::IntoView> {
+) -> Option<impl leptos::prelude::IntoView + use<>> {
     use leptos::prelude::*;
     if errors.len() <= 1 {
         return None;

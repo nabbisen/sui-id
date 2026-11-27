@@ -421,6 +421,9 @@ pub const CHROME_PAGE_HEADER_CSS: &str = r#"
 
 .page-header {
   display: flex;
+  /* Wraps rather than push its actions past the window: at 375px with a
+   * 200% font, the app form's header did (Q4's review). */
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-3);
@@ -450,6 +453,7 @@ pub const CHROME_PAGE_HEADER_CSS: &str = r#"
 }
 .page-header__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
 }

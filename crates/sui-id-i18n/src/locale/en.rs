@@ -512,6 +512,10 @@ pub static STRINGS_EN: Strings = Strings {
     help_chain_check_body: "Each row's hash covers its own content and the previous row's hash, so the rows form a chain. This check recomputes the links of the most recent rows and reports the first that does not match, which reveals a row changed or removed outside sui-id. It is not proof against someone who can write to the database: they could recompute every link after the row they changed.",
     help_about_storage_paths: "About the storage paths",
     help_storage_paths_body: "The database holds every account and setting, and the master key decrypts the secrets in it: from SUI_ID_MASTER_KEY when that is set, otherwise from the key file shown here. Back up with sui-id backup create, which takes a consistent copy while the server runs and includes the key file, so add --encrypt before the backup leaves this host. A copy of the database file without its key loses every secret in it.",
+    help_about_redirect_uri: "About redirect URIs",
+    help_redirect_uri_body: "After sign-in, sui-id sends the user back only to an address listed here. It must match exactly — except a public app's own loopback address, where the port may differ. Add one for each place your app receives the sign-in, for example the live site and a test site.",
+    help_about_additional_scopes: "About additional scopes",
+    help_additional_scopes_body: "Only for scopes your own API checks — sui-id does not act on them itself, beyond including them in the access token your app receives.",
 
     // Admin: Dashboard (RFC 029)
     dashboard_title: "Dashboard",
@@ -598,7 +602,8 @@ pub static STRINGS_EN: Strings = Strings {
     client_edit_label_client_id: "Client ID",
     client_edit_label_kind: "Kind",
     client_edit_label_status: "Status",
-    client_edit_post_logout_hint: "One per line. Leave blank to reuse Redirect URIs.",
+    client_edit_label_created_at: "Created",
+    client_edit_label_updated_at: "Last changed",
 
     // Admin: Clients (RFC 029)
     clients_title: "Clients",
@@ -614,17 +619,6 @@ pub static STRINGS_EN: Strings = Strings {
     clients_table_th_client_id: "Client ID",
     clients_count_caption: |n| format!("{n} registered."),
     clients_label_app_name: "Application name",
-    clients_label_redirect_uris: "Redirect URIs",
-    clients_hint_redirect_uris: "One per line. https or loopback http only.",
-    clients_label_allowed_scopes: "Allowed scopes",
-    clients_hint_scopes_intro: "Space-separated. Known scopes: ",
-    clients_hint_scopes_openid_note: " (required) · ",
-    clients_hint_scopes_profile_note: " (name, language) · ",
-    clients_hint_scopes_email_note: " (email) · ",
-    clients_hint_scopes_offline_note: " (refresh tokens).",
-    clients_hint_scopes_default: " Leaving this blank defaults to openid profile email.",
-    clients_label_post_logout_uris: "Post-logout redirect URIs (optional)",
-    clients_hint_one_per_line: "One per line.",
     clients_label_confidential_checkbox: "Confidential client (issues a client secret)",
     clients_button_register: "Register",
 
@@ -632,6 +626,39 @@ pub static STRINGS_EN: Strings = Strings {
     clients_label_homepage_uri: "Homepage URL (optional)",
     clients_label_privacy_policy_uri: "Privacy policy URL (optional)",
     clients_label_tos_uri: "Terms of service URL (optional)",
+
+    // The app form (RFC 149 Q4)
+    clients_section_about: "About the app",
+    clients_section_redirect_uris: "Where users return after signing in",
+    clients_label_post_logout_uris: "Post-logout redirect URIs (optional)",
+    clients_section_scopes: "What the app may ask for",
+    clients_scopes_empty_notice: "This app's scope list is empty, which lets a request name any scope at all. The boxes below show the default for a new app: saving sets exactly what is ticked, so check them before you save.",
+    clients_uri_redirect_label: |n| format!("Redirect URI {n}"),
+    clients_uri_post_logout_label: |n| format!("Post-logout URI {n}"),
+    clients_uri_redirect_label_template: "Redirect URI {n}",
+    clients_uri_post_logout_label_template: "Post-logout URI {n}",
+    clients_uri_empty_suffix: ", empty",
+    clients_button_add_another: "Add another",
+    clients_button_remove: "Remove",
+    clients_scope_openid_desc: "Required: identifies the user to the app.",
+    clients_scope_profile_desc: "The user's name and display name.",
+    clients_scope_email_desc: "The user's email address, and whether it is verified.",
+    clients_scope_offline_access_desc: "Lets the app stay signed in without asking again (a refresh token).",
+    clients_label_additional_scopes: "Additional scopes",
+    clients_hint_additional_scopes: "Only for scopes your own API checks. Separate them with spaces.",
+    clients_error_additional_scope_syntax: |tok| format!("\"{tok}\" is not a valid scope token."),
+    clients_error_additional_scope_is_standard: |standard| {
+        format!("\"{standard}\" has its own checkbox above. Tick it instead.")
+    },
+    clients_error_additional_scope_near_miss: |typed, standard| {
+        format!(
+            "\"{typed}\" looks like the standard scope \"{standard}\". Tick {standard} above instead, or check the spelling."
+        )
+    },
+    clients_error_name_required: "Name must not be empty.",
+    clients_error_redirect_uri_not_url: "Not a valid URL.",
+    clients_error_redirect_uri_scheme: "Must start with https:// (http:// is allowed only for localhost, 127.0.0.1 or ::1, while testing).",
+    clients_error_redirect_uri_fragment: "Must not contain a # fragment.",
 
     // Admin: Audit log (RFC 029)
     audit_lede: "Administrative operation history (newest first).",

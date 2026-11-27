@@ -20,7 +20,11 @@ pub struct CreateClientSpec<'a> {
     pub name: &'a str,
     pub redirect_uris: &'a [String],
     pub confidential: bool,
-    /// Space-separated list of allowed scopes. Empty → permit any scope.
+    /// Space-separated list of allowed scopes. Empty → permit any
+    /// scope, unchanged. A *non-empty* value gets `openid` added if
+    /// missing (RFC 149 Q4 §1) — OpenID Connect requires it whenever
+    /// the caller names scopes at all. The admin form (this stage's
+    /// own scope) never submits an empty string here.
     pub allowed_scopes: &'a str,
     /// RP-initiated logout return URIs. Empty → fall back to
     /// `redirect_uris` at logout time (with a deprecation warning logged).
@@ -31,6 +35,13 @@ pub struct CreateClientSpec<'a> {
     /// `sui_id_store::models::ConsentPolicy::default()` explicitly,
     /// same as this function used to hardcode.
     pub consent_policy: sui_id_store::models::ConsentPolicy,
+    /// RFC 149 Q4 §3: the create form now offers the same three
+    /// fields editing already did. Already validated by the caller
+    /// (`validate_application_uri`, the same check edit's own form
+    /// uses) — `None` means unset, not a caller shortcut.
+    pub homepage_uri: Option<String>,
+    pub privacy_policy_uri: Option<String>,
+    pub tos_uri: Option<String>,
 }
 
 pub async fn create_client(
@@ -56,9 +67,7 @@ pub async fn create_client(
     for uri in spec.post_logout_redirect_uris {
         validate_redirect_uri(uri)?;
     }
-    // Empty scope policy is allowed (means "permit any") — but if a list
-    // is given, sanity-check that scope tokens look reasonable. RFC 6749
-    // §3.3 restricts scope tokens to a printable subset.
+    // RFC 6749 §3.3 restricts scope tokens to a printable subset.
     for tok in spec.allowed_scopes.split_whitespace() {
         if !tok
             .chars()
@@ -69,6 +78,9 @@ pub async fn create_client(
             )));
         }
     }
+    // RFC 149 Q4 §1: OpenID Connect requires `openid`; it is included
+    // whatever was submitted, never decided by the caller.
+    let allowed_scopes = ensure_openid_scope(spec.allowed_scopes);
 
     let secret_plain = if spec.confidential {
         Some(tokens::random_token(32))
@@ -87,7 +99,7 @@ pub async fn create_client(
         confidential: spec.confidential,
         secret_hash,
         redirect_uris: spec.redirect_uris.to_vec(),
-        allowed_scopes: spec.allowed_scopes.to_owned(),
+        allowed_scopes,
         post_logout_redirect_uris: spec.post_logout_redirect_uris.to_vec(),
         is_disabled: false,
         is_deleted: false,
@@ -99,9 +111,11 @@ pub async fn create_client(
         consent_policy: spec.consent_policy.clone(),
         registered_via: sui_id_store::models::RegistrationSource::Admin,
         logo_uri: None,
-        homepage_uri: None,
-        privacy_policy_uri: None,
-        tos_uri: None,
+        // RFC 149 Q4 §3: the create form now offers these same three
+        // fields editing already did, already validated by the caller.
+        homepage_uri: spec.homepage_uri.clone(),
+        privacy_policy_uri: spec.privacy_policy_uri.clone(),
+        tos_uri: spec.tos_uri.clone(),
         // RFC 095 M3 stage 4a: an administrator creating a client was not
         // asked for any of these either -- `None` here is "unrecorded",
         // the same as it is for a client that predates the column, not a
@@ -155,11 +169,14 @@ pub async fn update_client_form(
     for uri in post_logout_redirect_uris {
         validate_redirect_uri(uri)?;
     }
+    // RFC 149 Q4 §1: same as `create_client` — `openid` is included
+    // whatever was submitted.
+    let allowed_scopes = ensure_openid_scope(allowed_scopes);
     sui_id_store::commands::update_client_form(
         db,
         actor.user_id(),
         target,
-        allowed_scopes.to_owned(),
+        allowed_scopes,
         post_logout_redirect_uris.to_vec(),
         consent_policy,
         clock.now(),
@@ -285,13 +302,25 @@ pub async fn delete_client(
     Ok(())
 }
 
-// ---------- signing keys ----------
+// ---------- redirect URIs ----------
 
-/// Validate a redirect URI. Public so other crates (e.g. dynamic
-/// registration handler) can call it without duplicating the logic.
-pub fn validate_redirect_uri(uri: &str) -> CoreResult<()> {
-    let parsed = url::Url::parse(uri)
-        .map_err(|_| CoreError::BadRequest(format!("redirect_uri is not a valid URL: {uri}")))?;
+/// Why a redirect URI is refused — structured, so a caller that shows
+/// one error per URI (RFC 149 Q4 §2) can build its own localized
+/// sentence instead of reading [`CoreError::BadRequest`]'s English
+/// text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RedirectUriError {
+    NotAUrl,
+    SchemeNotAllowed,
+    HasFragment,
+}
+
+/// The structured check [`validate_redirect_uri`] wraps. Public so a
+/// caller that validates many URIs at once (the app form) can collect
+/// one [`RedirectUriError`] per URI, by index, rather than stopping at
+/// the first.
+pub fn check_redirect_uri(uri: &str) -> Result<(), RedirectUriError> {
+    let parsed = url::Url::parse(uri).map_err(|_| RedirectUriError::NotAUrl)?;
     let scheme = parsed.scheme();
     let host = parsed.host_str().unwrap_or("");
     // Permit https everywhere; permit http only on loopback addresses for
@@ -302,17 +331,108 @@ pub fn validate_redirect_uri(uri: &str) -> CoreResult<()> {
         _ => false,
     };
     if !ok {
-        return Err(CoreError::BadRequest(format!(
-            "redirect_uri must use https (http permitted only on loopback): {uri}"
-        )));
+        return Err(RedirectUriError::SchemeNotAllowed);
     }
     if parsed.fragment().is_some() {
-        return Err(CoreError::BadRequest(
-            "redirect_uri must not contain a fragment".into(),
-        ));
+        return Err(RedirectUriError::HasFragment);
     }
     Ok(())
 }
+
+/// Validate a redirect URI. Public so other crates (e.g. dynamic
+/// registration handler) can call it without duplicating the logic.
+pub fn validate_redirect_uri(uri: &str) -> CoreResult<()> {
+    check_redirect_uri(uri).map_err(|e| {
+        CoreError::BadRequest(match e {
+            RedirectUriError::NotAUrl => format!("redirect_uri is not a valid URL: {uri}"),
+            RedirectUriError::SchemeNotAllowed => {
+                format!("redirect_uri must use https (http permitted only on loopback): {uri}")
+            }
+            RedirectUriError::HasFragment => "redirect_uri must not contain a fragment".into(),
+        })
+    })
+}
+
+/// [`check_redirect_uri`], over every URI, never short-circuiting —
+/// RFC 149 Q4 §2: "each URI is checked on its own... all the URIs'
+/// errors are shown at once". `Ok(())` at index `i` means `uris[i]`
+/// is valid.
+pub fn check_redirect_uris(uris: &[String]) -> Vec<Result<(), RedirectUriError>> {
+    uris.iter().map(|u| check_redirect_uri(u)).collect()
+}
+
+// ---------- scopes ----------
+
+/// `openid` is included in a *non-empty* `raw` whatever else it
+/// already contains — RFC 149 Q4 §1: OpenID Connect requires it, and
+/// this is never decided by the caller. A no-op if already present
+/// (whitespace-split, exact token match, so `"topenid"` is not
+/// mistaken for it). A genuinely empty `raw` is left empty: that is
+/// this function's caller's own "permit any scope" legacy meaning
+/// (`CreateClientSpec::allowed_scopes`'s own doc comment), which
+/// predates this stage and is not this stage's to end — the admin
+/// form (this stage's own scope) never sends an empty string in the
+/// first place, since it always lists `openid` itself before calling
+/// either `create_client` or `update_client_form`.
+pub fn ensure_openid_scope(raw: &str) -> String {
+    if raw.trim().is_empty() || raw.split_whitespace().any(|tok| tok == "openid") {
+        raw.to_owned()
+    } else {
+        format!("openid {raw}")
+    }
+}
+
+/// Why an *additional scope* token is refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AdditionalScopeError {
+    /// Fails RFC 6749 §3.3's token syntax.
+    InvalidSyntax(String),
+    /// Exactly a standard scope — it has its own checkbox.
+    IsStandardScope(&'static str),
+    /// A case difference or a one-edit typo of a standard scope.
+    NearMiss {
+        typed: String,
+        standard: &'static str,
+    },
+}
+
+/// Validate the *additional scopes* field: each whitespace-separated
+/// token must pass RFC 6749 §3.3's syntax, then must not be a
+/// standard scope or a near miss of one (RFC 149 Q4 §1). Stops at the
+/// first refusal — unlike [`check_redirect_uris`], this field is one
+/// box, not one row per token, so there is nowhere to show more than
+/// one error beside. A duplicate token is kept once, in the order
+/// first seen.
+pub fn validate_additional_scopes(raw: &str) -> Result<Vec<String>, AdditionalScopeError> {
+    let mut out: Vec<String> = Vec::new();
+    for tok in raw.split_whitespace() {
+        if !tok
+            .chars()
+            .all(|c| c == '!' || ('#'..='[').contains(&c) || (']'..='~').contains(&c))
+        {
+            return Err(AdditionalScopeError::InvalidSyntax(tok.to_owned()));
+        }
+        match scope_check::classify_against_standard_scopes(tok) {
+            scope_check::StandardScopeMatch::ExactStandardScope(s) => {
+                return Err(AdditionalScopeError::IsStandardScope(s));
+            }
+            scope_check::StandardScopeMatch::NearMiss(standard) => {
+                return Err(AdditionalScopeError::NearMiss {
+                    typed: tok.to_owned(),
+                    standard,
+                });
+            }
+            scope_check::StandardScopeMatch::None => {}
+        }
+        if !out.iter().any(|existing| existing == tok) {
+            out.push(tok.to_owned());
+        }
+    }
+    Ok(out)
+}
+
+#[path = "clients/scope_check.rs"]
+pub mod scope_check;
 
 #[cfg(test)]
 #[path = "clients/tests.rs"]

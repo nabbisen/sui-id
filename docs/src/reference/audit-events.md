@@ -63,7 +63,7 @@ the administrator is asked to step up again.
 
 | Event name | Label | Description |
 |---|---|---|
-| `client.create` | Client created | Administrator registered a new OIDC client. |
+| `client.create` | Client created | Administrator registered a new OIDC client. Attributes: `consent_policy` (the choice made at creation). |
 | `client.update` | Client updated | Administrator updated an OIDC client's configuration. |
 | `client.delete` | Client deleted | Administrator deleted an OIDC client. |
 | `client.update_form` | Client scopes, logout URIs and consent policy updated | Administrator saved the client-update form: allowed scopes, the URIs a client may pass as `post_logout_redirect_uri` to `/oauth2/logout`, and the consent-screen policy. All three commit together; the note carries the scope count, the URI count and the new consent policy, never the lists themselves. |

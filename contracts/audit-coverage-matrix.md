@@ -193,7 +193,7 @@ no attributes, never the hash.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `client.create` | Create OIDC client (command `C01`) | admin user id | new client id | — | A |
+| `client.create` | Create OIDC client (command `C01`) | admin user id | new client id | `consent_policy` (required) | A |
 | `client.update` | Update client basic info — name and redirect URIs only (command `C02`) | admin user id | client id | — | A |
 | `client.update_form` | The client-update form: allowed scopes, post-logout redirect URIs and consent policy, one admin save (commands `C03`/`C04`/`C09`) | admin user id | client id | `allowed_scopes_count`, `post_logout_redirect_uris_count` (both required — counts, not the lists themselves: an unbounded caller-influenced list has no place in a hash-chained record), `consent_policy` (required) | A |
 | `client.disable` | Disable client; also revokes its refresh tokens (command `C05`) | admin user id | client id | reason (optional), `refresh_tokens_revoked` (required) | A |

@@ -31,9 +31,10 @@ async fn client_creation_response_is_no_store() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
     let csrf = fetch_csrf(&state, &session).await;
-    let body = "name=test-rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb&confidential=true&_csrf="
-        .to_owned()
-        + &csrf;
+    let body =
+        "name=test-rp&redirect_uri_0=https%3A%2F%2Frp.test%2Fcb&confidential=true&save=1&_csrf="
+            .to_owned()
+            + &csrf;
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()

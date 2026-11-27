@@ -1,7 +1,9 @@
-//! Page renderers for the "clients" screen domain (RFC 065).
+//! Page renderers for the "clients" screen domain (RFC 065, RFC 149 Q4:
+//! the app form).
 
 use super::common::*;
 use crate::components::empty_state;
+use crate::components::forms::{FieldError, error_summary};
 use crate::layout::{Chrome, NavItem, Shell};
 use leptos::prelude::*;
 use sui_id_shared::api::ClientSummary;
@@ -179,19 +181,426 @@ pub fn render_clients(
     })
 }
 
+// ---------- the app form (RFC 149 Q4): shared by create and edit ----------
+
+/// Every field the create and edit forms both offer. RFC 149 Q4 §3: "one
+/// component renders both" — this struct, and [`render_app_form`], are
+/// that component. The caller (`clients_new_get`/`clients_edit_get`/the
+/// two POST handlers' re-renders) resolves every value and every error
+/// first; this function only lays them out.
+pub struct AppFormData {
+    pub action_url: String,
+    pub name: String,
+    pub name_error: Option<String>,
+    /// Always at least one row — the handler never lets this reach zero
+    /// (RFC 149 Q4 §2: removing the last row is a no-op, same as the
+    /// command layer's own "at least one redirect_uri" rule).
+    pub redirect_uris: Vec<String>,
+    /// Same length as `redirect_uris`; `Some(_)` at index `i` is that
+    /// row's own error.
+    pub redirect_uri_errors: Vec<Option<String>>,
+    pub post_logout_uris: Vec<String>,
+    pub post_logout_uri_errors: Vec<Option<String>>,
+    /// Every scope `openid` doesn't already cover, in the exact order
+    /// and membership `sui_id_core::discovery::STANDARD_SCOPES` lists
+    /// them (RFC 149 Q4 §1: discovery and this form share that one
+    /// constant, so they cannot drift) -- the caller builds this list
+    /// from it; this struct only renders whatever it is given.
+    pub standard_scopes: Vec<(&'static str, bool)>,
+    /// A warning above the scopes, when what is stored cannot be shown
+    /// as checkboxes (an empty list, which permits any scope).
+    pub scopes_notice: Option<String>,
+    pub additional_scopes: String,
+    pub additional_scopes_error: Option<String>,
+    /// "none", "first_time", or "always".
+    pub consent_policy: String,
+    pub homepage_uri: String,
+    pub homepage_uri_error: Option<String>,
+    pub privacy_policy_uri: String,
+    pub privacy_policy_uri_error: Option<String>,
+    pub tos_uri: String,
+    pub tos_uri_error: Option<String>,
+    /// `Some(_)` on create (still choosable); `None` on edit — kind is
+    /// immutable after creation (RFC 149 Q4 §3's own "basic info" card
+    /// shows it read-only instead).
+    pub confidential: Option<bool>,
+    pub csrf_token: String,
+    pub submit_label: &'static str,
+    pub cancel_url: String,
+}
+
+fn uri_row_view(
+    t: &'static sui_id_i18n::Strings,
+    field_prefix: &'static str,
+    remove_button_name: &'static str,
+    index: usize,
+    value: &str,
+    error: &Option<String>,
+    label: String,
+) -> impl IntoView {
+    let input_id = format!("{field_prefix}-{index}");
+    let input_name = format!("{field_prefix}_{index}");
+    let error_id = format!("{input_id}-error");
+    let has_error = error.is_some();
+    let row_class = if has_error {
+        "uri-row field field--invalid"
+    } else {
+        "uri-row field"
+    };
+    let described_by = has_error.then(|| error_id.clone());
+    let value = value.to_owned();
+    let error_text = error.clone();
+    let index_str = index.to_string();
+    view! {
+        <div class=row_class data-uri-row="">
+            <div class="row gap-1">
+                <input type="url" id=input_id.clone() name=input_name aria-label=label value=value
+                       aria-invalid=has_error
+                       aria-describedby=described_by.clone() />
+                <button type="submit" name=remove_button_name value=index_str formnovalidate=true class="button secondary" data-remove-uri-row="">
+                    {t.clients_button_remove}
+                </button>
+            </div>
+            {error_text.map(|e| view! { <p class="field__error" id=error_id>{e}</p> })}
+        </div>
+    }
+}
+
+fn uri_rows_view(
+    t: &'static sui_id_i18n::Strings,
+    field_prefix: &'static str,
+    remove_button_name: &'static str,
+    uris: &[String],
+    errors: &[Option<String>],
+    label_fn: fn(usize) -> String,
+) -> Vec<leptos::prelude::AnyView> {
+    uris.iter()
+        .enumerate()
+        .map(|(i, uri)| {
+            let ordinal = i + 1;
+            let label = if uri.is_empty() {
+                format!("{}{}", label_fn(ordinal), t.clients_uri_empty_suffix)
+            } else {
+                label_fn(ordinal)
+            };
+            let error = errors.get(i).cloned().unwrap_or(None);
+            uri_row_view(t, field_prefix, remove_button_name, i, uri, &error, label).into_any()
+        })
+        .collect()
+}
+
+fn scope_check_view(
+    id: String,
+    name: Option<String>,
+    checked: bool,
+    disabled: bool,
+    label: &'static str,
+    desc: &'static str,
+) -> impl IntoView {
+    let for_id = id.clone();
+    view! {
+        <div class="scope-check">
+            <input type="checkbox" id=id name=name value="true" checked=checked disabled=disabled />
+            <label for=for_id>
+                <strong>{label}</strong>
+                <span class="scope-check__desc">{desc}</span>
+            </label>
+        </div>
+    }
+}
+
+/// The one place a standard scope's name maps to its own description
+/// -- the *set* and *order* of scopes come from the discovery list
+/// the caller already generated `standard_scopes` from; this is only
+/// the leaf text lookup for a name that list is known to contain.
+fn scope_description(name: &str, t: &'static sui_id_i18n::Strings) -> &'static str {
+    match name {
+        "profile" => t.clients_scope_profile_desc,
+        "email" => t.clients_scope_email_desc,
+        "offline_access" => t.clients_scope_offline_access_desc,
+        _ => "",
+    }
+}
+
+fn render_app_form(data: AppFormData, t: &'static sui_id_i18n::Strings) -> impl IntoView {
+    let AppFormData {
+        action_url,
+        name,
+        name_error,
+        redirect_uris,
+        redirect_uri_errors,
+        post_logout_uris,
+        post_logout_uri_errors,
+        standard_scopes,
+        scopes_notice,
+        additional_scopes,
+        additional_scopes_error,
+        consent_policy,
+        homepage_uri,
+        homepage_uri_error,
+        privacy_policy_uri,
+        privacy_policy_uri_error,
+        tos_uri,
+        tos_uri_error,
+        confidential,
+        csrf_token,
+        submit_label,
+        cancel_url,
+    } = data;
+
+    // RFC 092: a top summary when more than one field is wrong, beside
+    // each field's own inline message either way.
+    let mut errors: Vec<FieldError> = Vec::new();
+    if let Some(e) = &name_error {
+        errors.push(FieldError {
+            field: "name",
+            message: e.clone(),
+        });
+    }
+    for e in redirect_uri_errors.iter().flatten() {
+        errors.push(FieldError {
+            field: "redirect_uri",
+            message: e.clone(),
+        });
+    }
+    for e in post_logout_uri_errors.iter().flatten() {
+        errors.push(FieldError {
+            field: "post_logout_uri",
+            message: e.clone(),
+        });
+    }
+    if let Some(e) = &additional_scopes_error {
+        errors.push(FieldError {
+            field: "additional_scopes",
+            message: e.clone(),
+        });
+    }
+    for (field, e) in [
+        ("homepage_uri", &homepage_uri_error),
+        ("privacy_policy_uri", &privacy_policy_uri_error),
+        ("tos_uri", &tos_uri_error),
+    ] {
+        if let Some(e) = e {
+            errors.push(FieldError {
+                field,
+                message: e.clone(),
+            });
+        }
+    }
+    let summary = error_summary(t, &errors);
+
+    let name_invalid = name_error.is_some();
+    let name_field_class = if name_invalid {
+        "field field--invalid"
+    } else {
+        "field"
+    };
+
+    let redirect_next_index = redirect_uris.len().to_string();
+    let post_logout_next_index = post_logout_uris.len().to_string();
+    let redirect_rows = uri_rows_view(
+        t,
+        "redirect_uri",
+        "remove_redirect_uri",
+        &redirect_uris,
+        &redirect_uri_errors,
+        t.clients_uri_redirect_label,
+    );
+    let post_logout_rows = uri_rows_view(
+        t,
+        "post_logout_uri",
+        "remove_post_logout_uri",
+        &post_logout_uris,
+        &post_logout_uri_errors,
+        t.clients_uri_post_logout_label,
+    );
+
+    let scope_rows: Vec<leptos::prelude::AnyView> = standard_scopes
+        .iter()
+        .map(|&(name, checked)| {
+            scope_check_view(
+                format!("scope-{}", name.replace('_', "-")),
+                Some(format!("scope_{name}")),
+                checked,
+                false,
+                name,
+                scope_description(name, t),
+            )
+            .into_any()
+        })
+        .collect();
+
+    let additional_scopes_class = if additional_scopes_error.is_some() {
+        "field field--invalid"
+    } else {
+        "field"
+    };
+
+    fn app_uri_field(
+        id: &'static str,
+        name: &'static str,
+        label: &'static str,
+        value: String,
+        error: Option<String>,
+    ) -> impl IntoView {
+        let field_class = if error.is_some() {
+            "field field--invalid"
+        } else {
+            "field"
+        };
+        let error_id = format!("{id}-error");
+        let described_by = error.as_ref().map(|_| error_id.clone());
+        view! {
+            <div class=field_class>
+                <label for=id class="field__label">{label}</label>
+                <input id=id name=name type="url" value=value
+                       aria-invalid=error.is_some()
+                       aria-describedby=described_by.clone() />
+                {error.map(|e| view! { <p class="field__error" id=error_id>{e}</p> })}
+            </div>
+        }
+    }
+
+    view! {
+        <>
+        <form method="post" action=action_url class="stack">
+            <input type="hidden" name="_csrf" value=csrf_token />
+            {summary}
+
+            <div class="card">
+                <h3 class="card__title">{t.clients_section_about}</h3>
+                <div class=name_field_class>
+                    <label for="app-name" class="field__label">{t.clients_label_app_name}</label>
+                    <input id="app-name" name="name" type="text" required=true value=name
+                           aria-invalid=name_invalid
+                           aria-describedby=name_invalid.then_some("app-name-error") />
+                    {name_error.map(|e| view! { <p class="field__error" id="app-name-error">{e}</p> })}
+                </div>
+                {app_uri_field("app-homepage", "homepage_uri", t.clients_label_homepage_uri, homepage_uri, homepage_uri_error)}
+                {app_uri_field("app-privacy", "privacy_policy_uri", t.clients_label_privacy_policy_uri, privacy_policy_uri, privacy_policy_uri_error)}
+                {app_uri_field("app-tos", "tos_uri", t.clients_label_tos_uri, tos_uri, tos_uri_error)}
+                <div class="field">
+                    <label for="app-consent" class="field__label">{t.consent_policy_label}</label>
+                    <select id="app-consent" name="consent_policy">
+                        {
+                            let cp1 = consent_policy.clone();
+                            let cp2 = consent_policy.clone();
+                            let cp3 = consent_policy.clone();
+                            view! {
+                                <>
+                                <option value="none" selected=move || cp1 == "none">
+                                    {t.consent_policy_none}
+                                </option>
+                                <option value="first_time" selected=move || cp2 == "first_time">
+                                    {t.consent_policy_first_time}
+                                </option>
+                                <option value="always" selected=move || cp3 == "always">
+                                    {t.consent_policy_always}
+                                </option>
+                                </>
+                            }
+                        }
+                    </select>
+                </div>
+                {confidential.map(|checked| view! {
+                    <label class="row gap-2">
+                        <input name="confidential" type="checkbox" value="true" checked=checked />
+                        <span>{t.clients_label_confidential_checkbox}</span>
+                    </label>
+                })}
+                <p class="field__hint mb-0">
+                    "\u{2139}  "
+                    {t.clients_single_realm_note}
+                </p>
+            </div>
+
+            <div class="card">
+                <h3 class="card__title">
+                    {t.clients_section_redirect_uris}
+                    {crate::components::help_details(
+                        t,
+                        t.help_about_redirect_uri.to_string(),
+                        t.help_redirect_uri_body,
+                        concat!(
+                            crate::github_doc_url!("docs/src/guides/operators.md"),
+                            "#how-a-redirect-uri-is-matched",
+                        ),
+                    )}
+                </h3>
+                <div class="stack" id="redirect-uri-rows" data-min-rows="1" data-next-index=redirect_next_index>{redirect_rows}</div>
+                <button type="submit" name="add_redirect_uri" value="1" formnovalidate=true class="button secondary mt-2"
+                        data-add-uri-row="" data-rows-for="redirect-uri-rows"
+                        data-input-name-prefix="redirect_uri"
+                        data-label-template=t.clients_uri_redirect_label_template
+                        data-remove-label=t.clients_button_remove>
+                    {t.clients_button_add_another}
+                </button>
+
+                <h4 class="mt-4">{t.clients_label_post_logout_uris}</h4>
+                <div class="stack" id="post-logout-uri-rows" data-min-rows="0" data-next-index=post_logout_next_index>{post_logout_rows}</div>
+                <button type="submit" name="add_post_logout_uri" value="1" formnovalidate=true class="button secondary mt-2"
+                        data-add-uri-row="" data-rows-for="post-logout-uri-rows"
+                        data-input-name-prefix="post_logout_uri"
+                        data-label-template=t.clients_uri_post_logout_label_template
+                        data-remove-label=t.clients_button_remove>
+                    {t.clients_button_add_another}
+                </button>
+            </div>
+
+            <div class="card">
+                <h3 class="card__title">{t.clients_section_scopes}</h3>
+                {scopes_notice.map(|n| view! {
+                    <p class="callout callout--warning" role="note">{n}</p>
+                })}
+                <div class="stack-tight">
+                    {scope_check_view("scope-openid".to_owned(), None, true, true, "openid", t.clients_scope_openid_desc)}
+                    {scope_rows}
+                </div>
+                <div class=additional_scopes_class>
+                    <label for="app-additional-scopes" class="field__label">
+                        {t.clients_label_additional_scopes}
+                        {crate::components::help_details(
+                            t,
+                            t.help_about_additional_scopes.to_string(),
+                            t.help_additional_scopes_body,
+                            concat!(
+                                crate::github_doc_url!("docs/src/guides/operators.md"),
+                                "#what-allowed_scopes-controls",
+                            ),
+                        )}
+                    </label>
+                    <input id="app-additional-scopes" name="additional_scopes" type="text" value=additional_scopes
+                           aria-invalid=additional_scopes_error.is_some()
+                           aria-describedby=additional_scopes_error.as_ref().map(|_| "app-additional-scopes-error") />
+                    {additional_scopes_error.map(|e| view! { <p class="field__error" id="app-additional-scopes-error">{e}</p> })}
+                    <span class="field__hint">{t.clients_hint_additional_scopes}</span>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" name="save" value="1">{submit_label}</button>
+                <a href=cancel_url class="button secondary">{t.button_cancel}</a>
+            </div>
+        </form>
+        <script src="/static/uri-rows.js"></script>
+        </>
+    }
+}
+
 // ---------- clients/new ----------
 
 pub fn render_clients_new(
+    form: AppFormData,
     flash: Option<Flash>,
-    csrf_token: String,
     dev_mode: bool,
     lang: sui_id_i18n::Locale,
     username: String,
 ) -> String {
     render(move || {
         let t = lang.strings();
+        let csrf_for_shell = form.csrf_token.clone();
         view! {
-            <Shell title=t.clients_create_section.to_string() nav=Chrome::Console{username, item: NavItem::Apps} dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.clients_create_section.to_string() nav=Chrome::Console{username, item: NavItem::Apps} dev_mode=dev_mode lang=lang csrf_token=csrf_for_shell>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.clients_create_section}</h1>
@@ -201,61 +610,7 @@ pub fn render_clients_new(
                     </div>
                 </header>
                 {flash_banner(flash)}
-                <div class="card">
-                    <form method="post" action="/admin/clients" class="stack">
-                        <input type="hidden" name="_csrf" value=csrf_token />
-                        <div class="field">
-                            <label for="c-name" class="field__label">{t.clients_label_app_name}</label>
-                            <input id="c-name" name="name" type="text" required=true />
-                        </div>
-                        <div class="field">
-                            <label for="c-uris" class="field__label">{t.clients_label_redirect_uris}</label>
-                            <textarea id="c-uris" name="redirect_uris" required=true rows="3"></textarea>
-                            <span class="field__hint">{t.clients_hint_redirect_uris}</span>
-                        </div>
-                        <div class="field">
-                            <label for="c-scopes" class="field__label">{t.clients_label_allowed_scopes}</label>
-                            <input id="c-scopes" name="allowed_scopes" type="text" value="openid profile email" />
-                            <span class="field__hint">
-                                {t.clients_hint_scopes_intro}
-                                <code>"openid"</code>{t.clients_hint_scopes_openid_note}
-                                <code>"profile"</code>{t.clients_hint_scopes_profile_note}
-                                <code>"email"</code>{t.clients_hint_scopes_email_note}
-                                <code>"offline_access"</code>{t.clients_hint_scopes_offline_note}
-                                {t.clients_hint_scopes_default}
-                            </span>
-                        </div>
-                        <p class="field__hint mb-0">
-                            "ℹ  "
-                            {t.clients_single_realm_note}
-                        </p>
-                        <div class="field">
-                            <label for="c-logout" class="field__label">{t.clients_label_post_logout_uris}</label>
-                            <textarea id="c-logout" name="post_logout_redirect_uris" rows="2"></textarea>
-                            <span class="field__hint">{t.clients_hint_one_per_line}</span>
-                        </div>
-                        // RFC 147 §5: the create form offers the same field
-                        // editing already does, with the same default the
-                        // handler used before this field existed ("none" --
-                        // no consent screen, the first-party default).
-                        <div class="field">
-                            <label for="c-consent" class="field__label">{t.consent_policy_label}</label>
-                            <select id="c-consent" name="consent_policy">
-                                <option value="none" selected=true>{t.consent_policy_none}</option>
-                                <option value="first_time">{t.consent_policy_first_time}</option>
-                                <option value="always">{t.consent_policy_always}</option>
-                            </select>
-                        </div>
-                        <label class="row gap-2">
-                            <input name="confidential" type="checkbox" value="true" checked=true />
-                            <span>{t.clients_label_confidential_checkbox}</span>
-                        </label>
-                        <div class="form-actions">
-                            <button type="submit">{t.clients_button_register}</button>
-                            <a href="/admin/clients" class="button secondary">{t.button_cancel}</a>
-                        </div>
-                    </form>
-                </div>
+                {render_app_form(form, t)}
             </Shell>
         }
     })
@@ -265,22 +620,10 @@ pub fn render_clients_new(
 
 pub struct ClientEditData {
     pub id: String,
-    pub name: String,
-    /// Newline-separated for textarea editing.
-    pub redirect_uris: Vec<String>,
-    /// Space-separated.
-    pub allowed_scopes: String,
-    pub post_logout_redirect_uris: Vec<String>,
     pub confidential: bool,
     pub is_disabled: bool,
-    /// RFC 038: "none", "first_time", or "always"
-    pub consent_policy: String,
-    /// RFC 140 stage 1 (C10). `None` means unset, not empty-string --
-    /// these columns are nullable. `logo_uri` is not here: stage 2, RFC
-    /// 140 §5 still undecided, and this form does not edit it.
-    pub homepage_uri: Option<String>,
-    pub privacy_policy_uri: Option<String>,
-    pub tos_uri: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
     /// RFC 065: "admin" or "dynamic". RFC 136 D2: drives the
     /// self-registered marker; "admin" renders no marker at all.
     pub registered_via: String,
@@ -299,34 +642,32 @@ pub struct ClientEditData {
     /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
     /// the account menu.
     pub username: String,
+    /// RFC 088: false for auditors → render static rows instead of form.
+    pub can_write: bool,
+    /// RFC 149 Q4 §3: the fields create and edit share.
+    pub form: AppFormData,
 }
 
 pub fn render_client_edit(
-    can_write: bool,
     data: ClientEditData,
     flash: Option<Flash>,
-    csrf_token: String,
     lang: sui_id_i18n::Locale,
 ) -> String {
     render(move || {
         let t = lang.strings();
         let ClientEditData {
             id,
-            name,
-            redirect_uris,
-            allowed_scopes,
-            post_logout_redirect_uris,
             confidential,
             is_disabled,
-            consent_policy,
-            homepage_uri,
-            privacy_policy_uri,
-            tos_uri,
+            created_at,
+            updated_at,
             registered_via,
             token_endpoint_auth_method,
             auth_method_unrecognized,
             freshly_rotated_secret,
             username,
+            can_write,
+            form,
         } = data;
         let self_registered_badge = (registered_via == "dynamic").then(|| {
             crate::components::status_badge(t, crate::components::StatusKind::SelfRegistered)
@@ -340,17 +681,11 @@ pub fn render_client_edit(
                 crate::components::StatusKind::AuthMethodUnrecognized,
             )
         });
-        let post_url = format!("/admin/clients/{id}/edit");
         let kind = if confidential {
             "confidential"
         } else {
             "public"
         };
-        let redirect_uris_value = redirect_uris.join("\n");
-        let post_logout_value = post_logout_redirect_uris.join("\n");
-        let homepage_uri_value = homepage_uri.unwrap_or_default();
-        let privacy_policy_uri_value = privacy_policy_uri.unwrap_or_default();
-        let tos_uri_value = tos_uri.unwrap_or_default();
 
         let status_view = if is_disabled {
             crate::components::status_badge(t, crate::components::StatusKind::Disabled).into_any()
@@ -358,12 +693,36 @@ pub fn render_client_edit(
             crate::components::status_badge(t, crate::components::StatusKind::Active).into_any()
         };
 
+        let name_for_lede = form.name.clone();
+        let csrf_for_shell = form.csrf_token.clone();
+
+        let form_or_table = if can_write {
+            render_app_form(form, t).into_any()
+        } else {
+            // RFC 071: an auditor sees the values, never the form.
+            view! {
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_text(t.clients_label_app_name, form.name.clone())}
+                                {kv_text(t.clients_section_redirect_uris, form.redirect_uris.join(", "))}
+                                {kv_text(t.clients_label_post_logout_uris, form.post_logout_uris.join(", "))}
+                                {kv_text(t.consent_policy_label, form.consent_policy.clone())}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            .into_any()
+        };
+
         view! {
-            <Shell title=t.client_edit_title.to_string() nav=Chrome::Console{username, item: NavItem::Apps} lang=lang csrf_token=csrf_token.clone()>
+            <Shell title=t.client_edit_title.to_string() nav=Chrome::Console{username, item: NavItem::Apps} lang=lang csrf_token=csrf_for_shell>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.client_edit_title}</h1>
-                        <p class="page-header__lede">{name.clone()}</p>
+                        <p class="page-header__lede">{name_for_lede}</p>
                     </div>
                 </header>
                 {flash_banner(flash)}
@@ -391,94 +750,15 @@ pub fn render_client_edit(
                             {auth_method_unrecorded_badge}
                             {auth_method_unrecognized_badge}
                         </div>
+                        <div>{t.client_edit_label_created_at}": "{fmt_time(created_at)}</div>
+                        <div>{t.client_edit_label_updated_at}": "{fmt_time(updated_at)}</div>
                     </div>
                     <p class="muted mt-3">
                         {t.client_edit_basic_note}
                     </p>
                 </div>
 
-                <div class="card">
-                    <h3 class="card__title">{t.settings_title}</h3>
-                    <form method="post" action=post_url class="stack">
-                        <input type="hidden" name="_csrf" value=csrf_token />
-                        <div class="field">
-                            <label for="e-name" class="field__label">{t.clients_label_app_name}</label>
-                            <input id="e-name" name="name" type="text" required=true value=name />
-                        </div>
-                        <div class="field">
-                            <label for="e-uris" class="field__label">{t.clients_label_redirect_uris}</label>
-                            <textarea id="e-uris" name="redirect_uris" required=true rows="3">
-                                {redirect_uris_value}
-                            </textarea>
-                            <span class="field__hint">{t.clients_hint_redirect_uris}</span>
-                        </div>
-                        <div class="field">
-                            <label for="e-scopes" class="field__label">{t.clients_label_allowed_scopes}</label>
-                            <input id="e-scopes" name="allowed_scopes" type="text" value=allowed_scopes />
-                            <span class="field__hint">
-                                {t.clients_hint_scopes_intro}
-                                <code>"openid"</code>" · "
-                                <code>"profile"</code>" · "
-                                <code>"email"</code>" · "
-                                <code>"offline_access"</code>"。"
-                            </span>
-                        </div>
-                        <div class="field">
-                            <label for="e-logout" class="field__label">{t.clients_label_post_logout_uris}</label>
-                            <textarea id="e-logout" name="post_logout_redirect_uris" rows="2">
-                                {post_logout_value}
-                            </textarea>
-                            <span class="field__hint">{t.client_edit_post_logout_hint}</span>
-                        </div>
-                        <div class="field">
-                            <label for="e-consent" class="field__label">{t.consent_policy_label}</label>
-                            <select id="e-consent" name="consent_policy">
-                                {
-                                    let cp = consent_policy.clone();
-                                    let cp2 = consent_policy.clone();
-                                    let cp3 = consent_policy.clone();
-                                    view! {
-                                        <>
-                                        <option value="none"     selected=move || cp  == "none">
-                                            {t.consent_policy_none}
-                                        </option>
-                                        <option value="first_time" selected=move || cp2 == "first_time">
-                                            {t.consent_policy_first_time}
-                                        </option>
-                                        <option value="always"   selected=move || cp3 == "always">
-                                            {t.consent_policy_always}
-                                        </option>
-                                        </>
-                                    }
-                                }
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="e-homepage" class="field__label">{t.clients_label_homepage_uri}</label>
-                            <input id="e-homepage" name="homepage_uri" type="url" value=homepage_uri_value />
-                        </div>
-                        <div class="field">
-                            <label for="e-privacy" class="field__label">{t.clients_label_privacy_policy_uri}</label>
-                            <input id="e-privacy" name="privacy_policy_uri" type="url" value=privacy_policy_uri_value />
-                        </div>
-                        <div class="field">
-                            <label for="e-tos" class="field__label">{t.clients_label_tos_uri}</label>
-                            <input id="e-tos" name="tos_uri" type="url" value=tos_uri_value />
-                        </div>
-                        // RFC 071: auditors cannot save changes.
-                        {can_write.then(|| view! {
-                            <div class="row">
-                                <button type="submit">{t.button_save}</button>
-                                <a href="/admin/clients" class="button secondary">{t.button_cancel}</a>
-                            </div>
-                        })}
-                        {(!can_write).then(|| view! {
-                            <div class="form-actions">
-                                <a href="/admin/clients" class="button secondary">{t.button_cancel}</a>
-                            </div>
-                        })}
-                    </form>
-                </div>
+                {form_or_table}
 
                 // RFC-MI-051 danger zone; RFC 071: hidden for auditors.
                 {can_write.then(|| view! {

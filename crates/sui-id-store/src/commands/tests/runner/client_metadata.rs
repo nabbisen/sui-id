@@ -36,6 +36,9 @@ async fn a_c01_create() {
 
     let event = last_event(&db).await;
     assert_eq!(event.action, "client.create");
+    // RFC 149 Q4 §4: the consent policy chosen at creation is now
+    // recorded — `a_client()`'s own default (`ConsentPolicy::None`).
+    assert_eq!(event.note.as_deref(), Some("consent_policy=none"));
     assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
     record_exactly_once_coverage("C01");
 }

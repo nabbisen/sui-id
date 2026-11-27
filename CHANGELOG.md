@@ -17,6 +17,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The app form (register/edit a client) is one shared form now**,
+  not two. Standard scopes (`openid`, `profile`, `email`,
+  `offline_access`) are checkboxes generated from the same list
+  discovery advertises — `openid` is always on and always saved, even
+  if the submission omits it; anything else goes in a separate
+  *Additional scopes* field, checked against RFC 6749 §3.3 syntax and
+  refused if it names a standard scope exactly or comes within one
+  typo of one (offering the standard name instead), with a stored
+  pre-release near-miss shown the same way and held until corrected.
+  Redirect and post-logout URIs are one input per URI, each with its
+  own *Remove* and a shared *Add another* — this still works with
+  JavaScript off, which only adds or removes a row server-side and
+  saves nothing; with it on, `uri-rows.js` does the same thing in
+  place. Every error names the field it is about, never a line
+  number. `sui_id_core::admin::clients::CreateClientSpec` gained
+  `homepage_uri`, `privacy_policy_uri` and `tos_uri`, previously
+  edit-only; `sui_id_web::pages::AppFormData` replaced its three
+  named scope-checkbox fields with one ordered list.
+- **`client.create`'s audit record now carries `consent_policy`** —
+  the policy chosen at creation, previously recorded only on a later
+  edit.
+- **An app whose scope list is empty is named on its edit page.** An
+  empty list lets a request name any scope at all (apps from before
+  v0.29.12 may still have one). The form says so above the scopes and
+  starts from the new-app default, since saving it sets exactly what is
+  ticked; before, an unrelated edit would have restricted the app
+  silently.
+- **The error a relying party receives for a scope its app does not
+  allow** now points to the app's page in the console (*Applications →
+  Apps*) instead of *Admin → Clients* and an *Allowed scopes* field,
+  neither of which exists any more.
 - **The dashboard's "Getting started" checklist is now a 5-step path**,
   each with its own status: protecting the administrator account,
   setting up email, and adding a first app are marked *Done* once
@@ -95,6 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the console, which nothing there can do**: the mode is chosen in the
   setup wizard and cannot yet be changed afterwards. The warning, and
   the operator's guide, now say so.
+- **A page header's actions wrap** instead of pushing past the window
+  at 375px with a 200% font.
 - **At 375px with a 200% font**, the dashboard's summary cards and an
   open help block no longer widen the page; the help `?` is a 44px
   target.

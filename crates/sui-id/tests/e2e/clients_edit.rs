@@ -42,9 +42,9 @@ async fn client_edit_updates_name_and_scopes() {
     // POST a change: rename, swap redirect_uri, tighten scopes,
     // register a dedicated logout URI.
     let body = format!(
-        "name=renamed-rp&redirect_uris=https%3A%2F%2Frp.test%2Fnew-cb\
-         &allowed_scopes=openid&post_logout_redirect_uris=https%3A%2F%2Frp.test%2Fbye\
-         &_csrf={csrf}"
+        "name=renamed-rp&redirect_uri_0=https%3A%2F%2Frp.test%2Fnew-cb\
+         &post_logout_uri_0=https%3A%2F%2Frp.test%2Fbye\
+         &save=1&_csrf={csrf}"
     );
     let router = build_router(state.clone());
     let req = Request::builder()
@@ -110,6 +110,9 @@ async fn client_edit_then_authorize_uses_new_scope_policy() {
             allowed_scopes: "", // initially permissive
             post_logout_redirect_uris: &[],
             consent_policy: sui_id_store::models::ConsentPolicy::default(),
+            homepage_uri: None,
+            privacy_policy_uri: None,
+            tos_uri: None,
         },
         &state.caches,
     )
@@ -144,9 +147,8 @@ async fn client_edit_then_authorize_uses_new_scope_policy() {
     // Tighten via the edit page.
     let csrf = fetch_csrf(&state, &session).await;
     let body = format!(
-        "name=rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb\
-         &allowed_scopes=openid&post_logout_redirect_uris=\
-         &_csrf={csrf}"
+        "name=rp&redirect_uri_0=https%3A%2F%2Frp.test%2Fcb\
+         &save=1&_csrf={csrf}"
     );
     let router = build_router(state.clone());
     let req = Request::builder()

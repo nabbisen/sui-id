@@ -26,8 +26,8 @@ async fn create_handler_applies_the_submitted_consent_policy() {
 
     let router = build_router(state.clone());
     let body = format!(
-        "name=consent-on-create&redirect_uris=https%3A%2F%2Frp.test%2Fcb&confidential=true\
-         &consent_policy=first_time&_csrf={csrf}"
+        "name=consent-on-create&redirect_uri_0=https%3A%2F%2Frp.test%2Fcb&confidential=true\
+         &consent_policy=first_time&save=1&_csrf={csrf}"
     );
     let req = Request::builder()
         .method(Method::POST)

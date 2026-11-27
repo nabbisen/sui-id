@@ -49,11 +49,11 @@ async fn clients_edit_post_updates_app_identity_and_is_audited() {
         .expect("count");
 
     let body = format!(
-        "name=rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb\
+        "name=rp&redirect_uri_0=https%3A%2F%2Frp.test%2Fcb\
          &homepage_uri=https%3A%2F%2Frp.test%2F\
          &privacy_policy_uri=https%3A%2F%2Frp.test%2Fprivacy\
          &tos_uri=https%3A%2F%2Frp.test%2Ftos\
-         &_csrf={csrf}"
+         &save=1&_csrf={csrf}"
     );
     let router = build_router(state.clone());
     let req = Request::builder()
@@ -158,9 +158,9 @@ async fn clients_edit_post_does_not_blank_logo_uri() {
 
     let (csrf, _) = get_edit_csrf(&state, &session, &client_id).await;
     let body = format!(
-        "name=rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb\
+        "name=rp&redirect_uri_0=https%3A%2F%2Frp.test%2Fcb\
          &homepage_uri=https%3A%2F%2Frp.test%2F\
-         &_csrf={csrf}"
+         &save=1&_csrf={csrf}"
     );
     let router = build_router(state.clone());
     let req = Request::builder()
@@ -209,9 +209,9 @@ async fn clients_edit_post_rejects_a_non_https_homepage_uri() {
     let (csrf, _) = get_edit_csrf(&state, &session, &client_id).await;
 
     let body = format!(
-        "name=rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb\
+        "name=rp&redirect_uri_0=https%3A%2F%2Frp.test%2Fcb\
          &homepage_uri=http%3A%2F%2Flocalhost%3A8080%2F\
-         &_csrf={csrf}"
+         &save=1&_csrf={csrf}"
     );
     let router = build_router(state.clone());
     let req = Request::builder()

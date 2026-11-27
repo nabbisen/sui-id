@@ -708,6 +708,13 @@ pub struct Strings {
     /// About this server: the storage paths.
     pub help_about_storage_paths: &'static str,
     pub help_storage_paths_body: &'static str,
+    /// The app form (RFC 149 Q4): what a redirect URI is.
+    pub help_about_redirect_uri: &'static str,
+    pub help_redirect_uri_body: &'static str,
+    /// The app form (RFC 149 Q4): additional scopes, for an operator's
+    /// own API.
+    pub help_about_additional_scopes: &'static str,
+    pub help_additional_scopes_body: &'static str,
     // ---- Admin: Dashboard (RFC 029) ----
     pub dashboard_title: &'static str,
     pub dashboard_lede: &'static str,
@@ -1034,7 +1041,10 @@ pub struct Strings {
     pub client_edit_label_client_id: &'static str,
     pub client_edit_label_kind: &'static str,
     pub client_edit_label_status: &'static str,
-    pub client_edit_post_logout_hint: &'static str,
+    // RFC 149 Q4 §3: "the dates" among the fields that exist only
+    // after creation.
+    pub client_edit_label_created_at: &'static str,
+    pub client_edit_label_updated_at: &'static str,
 
     // ---- Admin: Clients (RFC 029) ----
     pub clients_title: &'static str,
@@ -1050,23 +1060,46 @@ pub struct Strings {
     pub clients_table_th_client_id: &'static str,
     pub clients_count_caption: fn(usize) -> String,
     pub clients_label_app_name: &'static str,
-    pub clients_label_redirect_uris: &'static str,
-    pub clients_hint_redirect_uris: &'static str,
-    pub clients_label_allowed_scopes: &'static str,
-    pub clients_hint_scopes_intro: &'static str,
-    pub clients_hint_scopes_openid_note: &'static str,
-    pub clients_hint_scopes_profile_note: &'static str,
-    pub clients_hint_scopes_email_note: &'static str,
-    pub clients_hint_scopes_offline_note: &'static str,
-    pub clients_hint_scopes_default: &'static str,
-    pub clients_label_post_logout_uris: &'static str,
-    pub clients_hint_one_per_line: &'static str,
     pub clients_label_confidential_checkbox: &'static str,
     pub clients_button_register: &'static str,
     // ---- Clients page: application-identity links (RFC 140 stage 1) ----
     pub clients_label_homepage_uri: &'static str,
     pub clients_label_privacy_policy_uri: &'static str,
     pub clients_label_tos_uri: &'static str,
+    // ---- The app form (RFC 149 Q4) ----
+    pub clients_section_about: &'static str,
+    pub clients_section_redirect_uris: &'static str,
+    pub clients_label_post_logout_uris: &'static str,
+    pub clients_section_scopes: &'static str,
+    /// RFC 149 Q4's review: an app whose stored scope list is empty
+    /// permits any scope; the form cannot show that as checkboxes.
+    pub clients_scopes_empty_notice: &'static str,
+    /// "Redirect URI {n}" — the row's own accessible name; `n` is
+    /// 1-based, recomputed from the row's position every render.
+    pub clients_uri_redirect_label: fn(usize) -> String,
+    pub clients_uri_post_logout_label: fn(usize) -> String,
+    /// Same text as `clients_uri_redirect_label`/`clients_uri_post_logout_label`,
+    /// as a `{n}` template instead of a function -- `uri-rows.js` has no
+    /// localized strings of its own, so a row it adds in place gets its
+    /// accessible name by substituting into this instead.
+    pub clients_uri_redirect_label_template: &'static str,
+    pub clients_uri_post_logout_label_template: &'static str,
+    pub clients_uri_empty_suffix: &'static str,
+    pub clients_button_add_another: &'static str,
+    pub clients_button_remove: &'static str,
+    pub clients_scope_openid_desc: &'static str,
+    pub clients_scope_profile_desc: &'static str,
+    pub clients_scope_email_desc: &'static str,
+    pub clients_scope_offline_access_desc: &'static str,
+    pub clients_label_additional_scopes: &'static str,
+    pub clients_hint_additional_scopes: &'static str,
+    pub clients_error_additional_scope_syntax: fn(&str) -> String,
+    pub clients_error_additional_scope_is_standard: fn(&str) -> String,
+    pub clients_error_additional_scope_near_miss: fn(&str, &str) -> String,
+    pub clients_error_name_required: &'static str,
+    pub clients_error_redirect_uri_not_url: &'static str,
+    pub clients_error_redirect_uri_scheme: &'static str,
+    pub clients_error_redirect_uri_fragment: &'static str,
 
     // ---- Admin: Audit log (RFC 029) ----
     pub audit_lede: &'static str,
