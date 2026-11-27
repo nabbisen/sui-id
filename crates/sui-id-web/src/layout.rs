@@ -412,11 +412,12 @@ fn AccountNav(lang: sui_id_i18n::Locale, csrf_token: String, username: String) -
 /// [`AccountNav`] (in the top bar) — the same contents either way;
 /// only where it sits differs. Signed-out pages render neither, so they
 /// have no theme selector (§3).
-fn account_menu(
-    t: &'static sui_id_i18n::Strings,
-    username: String,
-    csrf_token: String,
-) -> impl IntoView {
+///
+/// Returns [`AnyView`], erasing the nested element types: rendered inside
+/// [`sidebar_content`] twice, a typed tree here overflowed the compiler's
+/// query depth on the project's oldest supported toolchain (1.95) while
+/// building on stable (Q2's landing, CI run 45910338462).
+fn account_menu(t: &'static sui_id_i18n::Strings, username: String, csrf_token: String) -> AnyView {
     view! {
         <details class="user-menu">
             <summary class="app-nav__link user-menu__toggle">
@@ -446,6 +447,7 @@ fn account_menu(
             </ul>
         </details>
     }
+    .into_any()
 }
 
 /// RFC 149 §3: the theme selector, as one account-menu row — a visible
@@ -457,7 +459,7 @@ fn account_menu(
 /// `aria-pressed` are attached by `/static/theme-init.js`, keyed off
 /// `data-theme-value` — unchanged by this move. With JavaScript off,
 /// the no-js note (hidden once `js` loads) replaces the buttons.
-fn theme_selector_item(t: &'static sui_id_i18n::Strings) -> impl IntoView {
+fn theme_selector_item(t: &'static sui_id_i18n::Strings) -> AnyView {
     view! {
         <li class="user-menu__theme">
             <span class="user-menu__theme-label" aria-hidden="true">
@@ -487,6 +489,7 @@ fn theme_selector_item(t: &'static sui_id_i18n::Strings) -> impl IntoView {
             <p class="theme-no-js-note muted">{t.theme_noscript_note}</p>
         </li>
     }
+    .into_any()
 }
 
 #[cfg(test)]
