@@ -264,6 +264,7 @@ async fn authentication_data(
         password_min_length_ceiling: sui_id_store::commands::PASSWORD_MIN_LEN_CEILING as usize,
         is_dev_mode: app.is_dev_mode,
         password_min_length_dev_floor: effective,
+        hibp_mode: server_settings.hibp_mode,
         password_argon2id: "Argon2id".into(),
         totp_enabled_per_user: true,
         webauthn_enabled_per_user: true,
@@ -340,6 +341,196 @@ pub async fn password_min_len_post(
         }
         Err(e) => Err(HttpError::html(CoreError::from(e))),
     }
+}
+
+// ---------- パスワード漏洩チェック (RFC 149 Q3b) ----------
+
+/// `POST /admin/settings/authentication/hibp-mode` — the direct save
+/// route. Strengthening (or no change) saves immediately, like
+/// `password_min_len_post`. A weakening is never saved here: the
+/// direction is decided from the *stored* mode and the submitted one,
+/// inside this request, never from anything the form claims about
+/// itself (RFC 149 Q3b §2) — so it redirects to the confirm screen
+/// instead, carrying only the mode the person picked.
+#[derive(Debug, serde::Deserialize)]
+pub struct HibpModeForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+    pub hibp_mode: String,
+}
+
+pub async fn hibp_mode_post(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id, _, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    jar: CookieJar,
+    axum::Form(form): axum::Form<HibpModeForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
+
+    let Some(new_mode) = sui_id_store::models::HibpMode::parse(form.hibp_mode.trim()) else {
+        let t = lang.strings();
+        let data = authentication_data(&app, true, username).await?;
+        let flash = Some(sui_id_web::Flash {
+            kind: sui_id_web::FlashKind::Error,
+            text: t.settings_auth_hibp_invalid.to_owned(),
+        });
+        let token = csrf::ensure_token(&jar);
+        let html = sui_id_web::render_settings_authentication(data, flash, token.clone(), lang);
+        return Ok(with_csrf_cookie(
+            (axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response(),
+            &app,
+            &token,
+        ));
+    };
+
+    let current = sui_id_store::repos::server_settings::get(&app.db)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?
+        .hibp_mode;
+
+    match sui_id_store::models::classify_hibp_mode_change(current, new_mode) {
+        sui_id_store::models::HibpModeChange::Unchanged => {
+            Ok(Redirect::to("/admin/settings/authentication").into_response())
+        }
+        sui_id_store::models::HibpModeChange::Strengthened => {
+            let now = app.clock.now();
+            // The command re-decides the direction inside its own
+            // transaction. If another administrator raised the mode since
+            // `current` was read, this save is now a weakening: it is
+            // refused there, and the person is sent to the confirmation.
+            match sui_id_store::commands::change_hibp_mode(
+                &app.db,
+                admin_id,
+                new_mode,
+                sui_id_store::commands::HibpModeAuthority::StrengthenOnly,
+                now,
+            )
+            .await
+            {
+                Ok(_) => Ok(Redirect::to("/admin/settings/authentication").into_response()),
+                Err(sui_id_store::StoreError::Conflict) => Ok(Redirect::to(&format!(
+                    "/admin/settings/authentication/hibp-mode-confirm?mode={}",
+                    new_mode.as_str()
+                ))
+                .into_response()),
+                Err(e) => Err(HttpError::html(CoreError::from(e))),
+            }
+        }
+        sui_id_store::models::HibpModeChange::Weakened => Ok(Redirect::to(&format!(
+            "/admin/settings/authentication/hibp-mode-confirm?mode={}",
+            new_mode.as_str()
+        ))
+        .into_response()),
+    }
+}
+
+/// `GET /admin/settings/authentication/hibp-mode-confirm?mode=<new>` —
+/// RFC 058's confirmation screen for a weakening. No step-up is asked
+/// to view it; the confirm `POST` asks for one, immediately before it
+/// saves (same split `users_disable_confirm_get`/`users_set_disabled`
+/// use).
+pub async fn hibp_mode_confirm_get(
+    state_ext: AppStateExt,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    jar: CookieJar,
+    axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(crate::errors::HttpError::html_403_auditor());
+    }
+    let State(app) = state_ext;
+    let t = lang.strings();
+    let mode_str = q.get("mode").cloned().unwrap_or_default();
+    let new_mode = sui_id_store::models::HibpMode::parse(mode_str.trim())
+        .ok_or_else(|| HttpError::html(CoreError::BadRequest("invalid hibp mode".into())))?;
+    let current = sui_id_store::repos::server_settings::get(&app.db)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?
+        .hibp_mode;
+    let impact = match new_mode {
+        sui_id_store::models::HibpMode::Warn => t.settings_auth_hibp_confirm_impact_to_warn,
+        // `Off` and the unreachable `Block` (never a weakening target,
+        // §2) share the "no longer checked" sentence rather than a
+        // third arm for a case that cannot occur through the save
+        // route above.
+        _ => t.settings_auth_hibp_confirm_impact_to_off,
+    };
+    let token = crate::csrf::ensure_token(&jar);
+    let data = sui_id_web::SettingsHibpModeConfirmData {
+        old_label: sui_id_web::hibp_mode_label(current, t).to_owned(),
+        new_label: sui_id_web::hibp_mode_label(new_mode, t).to_owned(),
+        new_mode: new_mode.as_str().to_owned(),
+        impact: impact.to_owned(),
+        csrf_token: token.clone(),
+        admin_username,
+    };
+    let resp = Html(sui_id_web::render_settings_hibp_mode_confirm(
+        data,
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
+}
+
+/// `POST /admin/settings/authentication/hibp-mode-confirm` — CSRF,
+/// `_confirmed=1`, a fresh step-up (returning to the confirm screen,
+/// not auto-saving, if it isn't fresh), then the same direction check
+/// the save route uses: re-derived from the *current* stored mode, so
+/// a second change racing this one cannot be saved as a weakening it
+/// no longer is, and saving the mode already stored writes nothing.
+#[derive(Debug, serde::Deserialize)]
+pub struct HibpModeConfirmForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+    #[serde(default)]
+    pub confirmed: String,
+    pub mode: String,
+}
+
+pub async fn hibp_mode_confirm_post(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id, _, _username): CurrentAdmin,
+    ctx: crate::handlers::SessionContext,
+    jar: CookieJar,
+    axum::Form(form): axum::Form<HibpModeConfirmForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
+    crate::handlers::require_confirmed(&form.confirmed)?;
+    let return_to = format!(
+        "/admin/settings/authentication/hibp-mode-confirm?mode={}",
+        form.mode
+    );
+    if let Err(redirect) = crate::handlers::require_fresh_step_up(&app, &ctx, &return_to).await {
+        return Ok(redirect);
+    }
+    let new_mode = sui_id_store::models::HibpMode::parse(form.mode.trim())
+        .ok_or_else(|| HttpError::html(CoreError::BadRequest("invalid hibp mode".into())))?;
+    let current = sui_id_store::repos::server_settings::get(&app.db)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?
+        .hibp_mode;
+    if !matches!(
+        sui_id_store::models::classify_hibp_mode_change(current, new_mode),
+        sui_id_store::models::HibpModeChange::Unchanged
+    ) {
+        let now = app.clock.now();
+        sui_id_store::commands::change_hibp_mode(
+            &app.db,
+            admin_id,
+            new_mode,
+            // Confirmed, and stepped up just above (RFC 058).
+            sui_id_store::commands::HibpModeAuthority::MayWeaken,
+            now,
+        )
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    }
+    Ok(Redirect::to("/admin/settings/authentication").into_response())
 }
 
 // ---------- ログ ----------

@@ -241,3 +241,25 @@ password = "toml-pw-strong"
     assert_eq!(seed.admin.password, "flag-overrides-toml");
     assert!(source.contains("TOML"));
 }
+
+/// RFC 149 Q3b §7 item 3: dev mode's seeding writes `hibp_mode = off`
+/// directly — the three dev-mode texts ("HIBP off") were false before
+/// this, since nothing wrote it and the column's own default is
+/// `warn`.
+#[tokio::test]
+async fn dev_mode_seed_stores_hibp_mode_off() {
+    use sui_id::dev_mode::{DevSeed, apply_seed, open_dev_db};
+
+    let db = open_dev_db(None).expect("open in-memory dev db");
+    let setup_token = "test-dev-setup-token";
+    let seed = DevSeed::default();
+    let clock = sui_id_core::time::system_clock();
+    let _outcome = apply_seed(&db, &clock, setup_token, &seed)
+        .await
+        .expect("apply_seed");
+
+    let settings = sui_id_store::repos::server_settings::get(&db)
+        .await
+        .expect("settings");
+    assert_eq!(settings.hibp_mode, sui_id_store::models::HibpMode::Off);
+}

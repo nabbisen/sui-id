@@ -473,7 +473,7 @@ setup wizard too).
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `settings.default_language.changed` | The server default language was changed, from the admin settings page or the setup wizard (command `S01`) | admin user id | — | `old`, `new` (both required) | A |
-| `settings.hibp_mode.changed` | The breach-password (HIBP) check mode was changed, from the setup wizard only (command `S02`; no defect closed — already atomic before sealing) | admin user id | — | `old`, `new` (both required) | A |
+| `settings.hibp_mode.changed` | The breach-password (HIBP) check mode was changed, from the setup wizard or Sign-in settings (command `S02`; no defect closed — already atomic before sealing; RFC 149 Q3b widened the second caller) | admin user id | — | `old`, `new` (both required) | A |
 | `settings.idle_timeout.changed` | The idle-session-timeout value was changed, from the admin settings page (command `S03`) | admin user id | — | `old`, `new` (both required) | A |
 | `settings.max_sessions.changed` | The concurrent-session cap was changed, from the admin settings page (command `S04`) | admin user id | — | `old`, `new` (both required) | A |
 | `settings.metrics_token.rotated` | The `/metrics` endpoint's bearer token was rotated, from the CLI only (command `S05`) | — (no authenticated actor; CLI, master-key authority) | — | none — neither the new nor the old hash may be recorded | A |

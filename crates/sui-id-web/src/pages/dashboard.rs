@@ -363,7 +363,15 @@ pub fn render_dashboard(
                                 // Q3 §2 "no prompt twice": suppressed while the
                                 // first-run path already says step 2 is open.
                                 {smtp_item_shown.then(|| view! { <li>{t.dashboard_warn_smtp}</li> })}
-                                {warn_hibp_off.then(|| view! { <li>{t.dashboard_warn_hibp}</li> })}
+                                {warn_hibp_off.then(|| view! {
+                                    <li>
+                                        {t.dashboard_warn_hibp}
+                                        " "
+                                        <a href=NavItem::SignInSettings.href()>
+                                            {NavItem::SignInSettings.label(t)}
+                                        </a>
+                                    </li>
+                                })}
                                 {warn_cookie_insecure.then(|| view! { <li>{t.dashboard_warn_cookie_insecure}</li> })}
                                 // RFC 073 (existing): operational signals
                                 {(outbox_stuck_count > 0).then(|| view! {

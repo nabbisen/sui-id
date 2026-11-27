@@ -398,6 +398,9 @@ fn expected_current_for(path_template: &str) -> Option<&'static str> {
         "/admin/settings/security" => Some("/admin/settings/security"),
         "/admin/audit" => Some("/admin/audit"),
         "/admin/settings/authentication" => Some("/admin/settings/authentication"),
+        "/admin/settings/authentication/hibp-mode-confirm" => {
+            Some("/admin/settings/authentication")
+        }
         "/admin/settings/logs" => Some("/admin/settings/logs"),
         "/admin/settings/other" => Some("/admin/settings/other"),
         "/admin/settings/email" => Some("/admin/settings/email"),

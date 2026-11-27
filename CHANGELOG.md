@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The password breach check can now be changed after setup**, from
+  *Sign-in settings*. Raising it (`off` → `warn`, `off`/`warn` → `block`)
+  saves immediately; lowering it asks for a confirmation screen and a
+  fresh step-up first, and records the change with the old and new
+  mode. An auditor sees the current mode and no form.
+
 ### Changed
 
 - **The dashboard's "Getting started" checklist is now a 5-step path**,
@@ -56,6 +64,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preference is set from the account menu, where their other personal
   settings are. A signed-out page (sign-in, setup, an error) no longer
   offers one: it follows the saved theme, or the device's.
+- **For anyone building against `sui-id-store`:** `change_hibp_mode`
+  takes a `HibpModeAuthority`. With `StrengthenOnly`, a change that would
+  lower the stored mode is refused (`StoreError::Conflict`) inside the
+  command's transaction, so no read made before it can turn a raise into
+  an unconfirmed lowering.
 - **For anyone building against `sui-id-web`:** a console page now names
   its place in the navigation as `Chrome::Console { username, item }`,
   so an admin page cannot render the console without one; the person's
@@ -89,6 +102,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removed it, leaving only the hover tint to show where focus was.
 - **At a large font size, the skip link no longer widens every page**
   (at 375px wide and 200% font, it was 484px wide).
+- **`sui-id dev` claimed the password breach check was off, and it was
+  not** — nothing ever wrote the setting, so it stayed at its ordinary
+  default (`warn`), and dev mode made live breach-check requests.
+  Seeding now turns it off, as the terminal banner and the Quick Start
+  say. The console's dev banner no longer states it, since the mode can
+  be changed afterwards on *Sign-in settings*.
 
 ### Removed
 

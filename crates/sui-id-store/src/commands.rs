@@ -5332,15 +5332,42 @@ impl SealedCommandEvent<S02> for S02Event {
     }
 }
 
+/// What a caller of [`change_hibp_mode`] has established before asking.
+///
+/// RFC 058 makes lowering the breach check a dangerous action: a
+/// confirmation and a fresh step-up come first. Which way a change goes
+/// is decided **inside the command's transaction**, against the mode it
+/// is about to replace, never against a value a caller read earlier: a
+/// second administrator's change in between could otherwise turn a
+/// "strengthening" save into an unconfirmed weakening (Q3b's review).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HibpModeAuthority {
+    /// The caller did not confirm or step up: a change that would weaken
+    /// the stored mode is refused with [`StoreError::Conflict`], and
+    /// nothing is written or recorded.
+    StrengthenOnly,
+    /// The caller completed RFC 058's confirmation and step-up, or is the
+    /// setup wizard making the first choice.
+    MayWeaken,
+}
+
 /// Run S02 (change HIBP mode) through the Class-A runner.
 pub async fn change_hibp_mode(
     db: &crate::Database,
     admin: UserId,
     mode: crate::models::HibpMode,
+    authority: HibpModeAuthority,
     now: DateTime<Utc>,
 ) -> StoreResult<crate::registry::Audited<(crate::models::HibpMode, crate::models::HibpMode)>> {
     let context = AuthorizedCommandContext::<S02>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, S02>| {
+        let current = crate::repos::server_settings::get_within_tx(tx.tx())?.hibp_mode;
+        if authority == HibpModeAuthority::StrengthenOnly
+            && crate::models::classify_hibp_mode_change(current, mode)
+                == crate::models::HibpModeChange::Weakened
+        {
+            return Err(StoreError::Conflict);
+        }
         let old = crate::repos::server_settings::update_hibp_mode_within_tx(tx.tx(), mode, now)?;
         Ok(((old, mode), S02Event::Changed { old, new: mode }))
     })

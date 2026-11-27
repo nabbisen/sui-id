@@ -865,6 +865,40 @@ impl HibpMode {
             _ => None,
         }
     }
+
+    /// `Off` < `Warn` < `Block` — the check's own strength, used to
+    /// classify a change as weakening or strengthening (RFC 149 Q3b
+    /// §2), never from anything the caller claims about itself.
+    fn strength(self) -> u8 {
+        match self {
+            Self::Off => 0,
+            Self::Warn => 1,
+            Self::Block => 2,
+        }
+    }
+}
+
+/// RFC 149 Q3b §2: lowering the check weakens every account's next
+/// password, and RFC 058 treats that as a dangerous action; raising
+/// it, or leaving it alone, is not. The **one** function that decides
+/// which — every caller asks this, rather than comparing the two
+/// modes itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HibpModeChange {
+    Unchanged,
+    Strengthened,
+    Weakened,
+}
+
+/// Classify a proposed `HibpMode` change. Pure, and total over every
+/// pair of modes — a third mode added later still classifies, by its
+/// own `strength()`, without this function changing.
+pub fn classify_hibp_mode_change(old: HibpMode, new: HibpMode) -> HibpModeChange {
+    match new.strength().cmp(&old.strength()) {
+        std::cmp::Ordering::Equal => HibpModeChange::Unchanged,
+        std::cmp::Ordering::Greater => HibpModeChange::Strengthened,
+        std::cmp::Ordering::Less => HibpModeChange::Weakened,
+    }
 }
 
 // ---------- Server settings (v0.23.0) ----------
@@ -1138,3 +1172,7 @@ pub struct FederationWebauthnCeremonyRow {
     pub pending_expires_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod tests;

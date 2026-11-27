@@ -73,10 +73,15 @@ async fn s02_change_hibp_mode_appends_exactly_one_audit_row() {
     let (admin, _session) = an_admin_session(&db).await;
     let before = audit_rows(&db).await;
 
-    let audited =
-        crate::commands::change_hibp_mode(&db, admin, crate::models::HibpMode::Block, Utc::now())
-            .await
-            .expect("change hibp mode");
+    let audited = crate::commands::change_hibp_mode(
+        &db,
+        admin,
+        crate::models::HibpMode::Block,
+        crate::commands::HibpModeAuthority::MayWeaken,
+        Utc::now(),
+    )
+    .await
+    .expect("change hibp mode");
     assert_eq!(
         audited.into_inner(),
         (
@@ -109,9 +114,14 @@ async fn s02_injected_failure_before_append_rolls_back_the_change() {
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result =
-        crate::commands::change_hibp_mode(&db, admin, crate::models::HibpMode::Block, Utc::now())
-            .await;
+    let result = crate::commands::change_hibp_mode(
+        &db,
+        admin,
+        crate::models::HibpMode::Block,
+        crate::commands::HibpModeAuthority::MayWeaken,
+        Utc::now(),
+    )
+    .await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     let after_mode = crate::repos::server_settings::get(&db)
@@ -121,6 +131,65 @@ async fn s02_injected_failure_before_append_rolls_back_the_change() {
     assert_eq!(after_mode, before_mode, "the setting must not have changed");
     assert_eq!(latest_audit_action(&db).await, before_audit);
     record_rollback_coverage("S02");
+}
+
+/// Q3b's review: the direction is decided inside the transaction. With
+/// `block` stored, a `StrengthenOnly` change to `warn` (what a handler
+/// would send after reading `off` a moment earlier) is refused, and
+/// nothing is written or recorded.
+#[tokio::test]
+async fn s02_strengthen_only_refuses_a_weakening_of_the_stored_mode() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    crate::commands::change_hibp_mode(
+        &db,
+        admin,
+        crate::models::HibpMode::Block,
+        crate::commands::HibpModeAuthority::MayWeaken,
+        Utc::now(),
+    )
+    .await
+    .expect("set block");
+    let before = audit_rows(&db).await;
+
+    let result = crate::commands::change_hibp_mode(
+        &db,
+        admin,
+        crate::models::HibpMode::Warn,
+        crate::commands::HibpModeAuthority::StrengthenOnly,
+        Utc::now(),
+    )
+    .await;
+    assert!(
+        matches!(result, Err(StoreError::Conflict)),
+        "a weakening must be refused without MayWeaken"
+    );
+    let after = crate::repos::server_settings::get(&db)
+        .await
+        .expect("get settings")
+        .hibp_mode;
+    assert_eq!(after, crate::models::HibpMode::Block, "nothing written");
+    assert_eq!(audit_rows(&db).await, before, "nothing recorded");
+
+    // A strengthening with the same authority still goes through.
+    crate::commands::change_hibp_mode(
+        &db,
+        admin,
+        crate::models::HibpMode::Warn,
+        crate::commands::HibpModeAuthority::MayWeaken,
+        Utc::now(),
+    )
+    .await
+    .expect("weaken with authority");
+    crate::commands::change_hibp_mode(
+        &db,
+        admin,
+        crate::models::HibpMode::Block,
+        crate::commands::HibpModeAuthority::StrengthenOnly,
+        Utc::now(),
+    )
+    .await
+    .expect("strengthen without it");
 }
 
 // ── S03 — change idle session timeout ────────────────────────────────────

@@ -315,6 +315,15 @@ pub fn build_router(app: AppState) -> Router {
             post(crate::handlers::settings::password_min_len_post),
         )
         .route(
+            "/admin/settings/authentication/hibp-mode",
+            post(crate::handlers::settings::hibp_mode_post),
+        )
+        .route(
+            "/admin/settings/authentication/hibp-mode-confirm",
+            get(crate::handlers::settings::hibp_mode_confirm_get)
+                .post(crate::handlers::settings::hibp_mode_confirm_post),
+        )
+        .route(
             "/admin/settings/logs",
             get(crate::handlers::settings::logs_get),
         )

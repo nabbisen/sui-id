@@ -237,7 +237,11 @@ pub fn Shell(
                 {dev_mode.unwrap_or(false).then(|| view! {
                     <div class="dev-banner" role="alert">
                         <strong>"DEV MODE"</strong>
-                        " — not for production. cookie_secure=false, HIBP off."
+                        // Only what the page cannot change: the breach check
+                        // starts off in dev mode but can be changed on Sign-in
+                        // settings, so a fixed banner cannot state it (Q3b's
+                        // review). The terminal banner says it, at start.
+                        " — not for production. cookie_secure=false."
                     </div>
                 })}
                 {match nav {

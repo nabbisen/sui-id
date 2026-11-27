@@ -422,6 +422,24 @@ pub async fn apply_seed(
     .context("creating dev-mode admin")?;
     let admin_id = created.user_id;
 
+    // RFC 149 Q3b §7 item 3: the three dev-mode claims ("HIBP off") were
+    // false — nothing ever wrote `hibp_mode`, so it stayed at the
+    // column's own default, `warn`. Writing it directly, not through
+    // the audited `S02`/`change_hibp_mode`: seeding is provisioning a
+    // starting condition, not an administrator's decision about it —
+    // the same reasoning RFC 115 D6 (below, for the seeded users' own
+    // credentials) already gives for a direct write outside the
+    // command built for a human's own choice. It can still be changed
+    // from Sign-in settings until the next start, since the dev
+    // database is fresh each one.
+    sui_id_store::repos::server_settings::update_hibp_mode(
+        db,
+        sui_id_store::models::HibpMode::Off,
+        clock.now(),
+    )
+    .await
+    .context("seeding dev-mode hibp_mode=off")?;
+
     for u in &seed.users {
         let created = create_user(
             db,

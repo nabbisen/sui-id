@@ -628,6 +628,66 @@ pub fn render_settings_email_confirm(
     })
 }
 
+// ── RFC 149 Q3b: weakening the password breach check ─────────────────────────
+
+pub struct SettingsHibpModeConfirmData {
+    /// The stored mode's own label, already resolved by the caller
+    /// (`pages::settings::authentication::hibp_mode_label` — kept
+    /// `pub(super)` there, not re-exported, so this struct carries
+    /// the resolved text rather than a second copy of the match).
+    pub old_label: String,
+    pub new_label: String,
+    /// `"off"` / `"warn"` / `"block"` — carried through as a hidden
+    /// field; the confirm POST re-derives the direction itself
+    /// rather than trusting this came from a weakening request.
+    pub new_mode: String,
+    /// The consequence sentence for this specific target mode (two
+    /// shapes: to `warn`, or to `off` — never to `block`, which is
+    /// never a weakening target).
+    pub impact: String,
+    pub csrf_token: String,
+    /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
+    /// the account menu.
+    pub admin_username: String,
+}
+
+pub fn render_settings_hibp_mode_confirm(
+    data: SettingsHibpModeConfirmData,
+    dev_mode: bool,
+    lang: sui_id_i18n::Locale,
+) -> String {
+    render(move || {
+        let t = lang.strings();
+        let admin_username = data.admin_username.clone();
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.settings_auth_hibp_confirm_title.into(),
+                identity: (t.settings_auth_hibp_confirm_identity)(&data.old_label, &data.new_label),
+                impact: Some(data.impact.clone()),
+                impact_count: None,
+                impact_link: None,
+                badge: Some(ReversibilityKind::Recoverable),
+                reversibility_text: Some(t.settings_auth_hibp_confirm_scope_note.into()),
+                action_url: "/admin/settings/authentication/hibp-mode-confirm".into(),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![("mode".into(), data.new_mode.clone())],
+                include_reason_field: false,
+                reason_required: false,
+                notice: None,
+                button_label: t.settings_auth_hibp_confirm_button.into(),
+                button_danger: true,
+                cancel_url: "/admin/settings/authentication".into(),
+            },
+            lang,
+        );
+        view! {
+            <Shell title=t.settings_auth_hibp_confirm_title.to_string() nav=Chrome::Console{username: admin_username, item: NavItem::SignInSettings} dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+                {body}
+            </Shell>
+        }
+    })
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests;

@@ -43,6 +43,12 @@ input[type="tel"], textarea, select {
    * not a fixed height. */
   min-height: 2.75rem;
 }
+/* A fieldset's default min-inline-size is min-content, so its choices
+ * could never be narrower than their own content: at 375px with a 200%
+ * font, the breach-check choices widened the page (Q3b's review). */
+fieldset {
+  min-inline-size: 0;
+}
 input:hover, textarea:hover, select:hover {
   border-color: var(--fg-muted);
 }

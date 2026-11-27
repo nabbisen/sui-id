@@ -15,6 +15,10 @@ pub struct SettingsAuthenticationData {
     /// Dev mode's own fixed minimum (8) -- computed by the caller,
     /// which depends on `sui-id-core`; this crate does not.
     pub password_min_length_dev_floor: usize,
+    /// RFC 149 Q3b §1: the stored `server_settings.hibp_mode`. Dev
+    /// mode seeds this to `Off` (§7), so `is_dev_mode` above is also
+    /// this section's own dev note.
+    pub hibp_mode: sui_id_store::models::HibpMode,
     pub password_argon2id: String,
     pub totp_enabled_per_user: bool,
     pub webauthn_enabled_per_user: bool,
@@ -30,6 +34,23 @@ pub struct SettingsAuthenticationData {
     /// RFC 144 (Refresh, §4): the signed-in administrator's name, for
     /// the account menu.
     pub username: String,
+}
+
+/// The mode's own label — an exhaustive match, so a new `HibpMode`
+/// variant cannot compile without one here. Public: the confirm
+/// page (`pages::confirm`) resolves both the old and new mode's
+/// labels through this same function, not a second copy of the
+/// match.
+pub fn hibp_mode_label(
+    mode: sui_id_store::models::HibpMode,
+    t: &'static sui_id_i18n::Strings,
+) -> &'static str {
+    use sui_id_store::models::HibpMode;
+    match mode {
+        HibpMode::Off => t.settings_auth_hibp_off_label,
+        HibpMode::Warn => t.settings_auth_hibp_warn_label,
+        HibpMode::Block => t.settings_auth_hibp_block_label,
+    }
 }
 
 fn fmt_lifetime(t: &'static sui_id_i18n::Strings, secs: i64) -> String {
@@ -58,6 +79,7 @@ pub fn render_settings_authentication(
             password_min_length_ceiling,
             is_dev_mode,
             password_min_length_dev_floor,
+            hibp_mode,
             password_argon2id,
             totp_enabled_per_user,
             webauthn_enabled_per_user,
@@ -111,6 +133,61 @@ pub fn render_settings_authentication(
             }
             .into_any()
         };
+        let csrf_for_hibp = csrf_token.clone();
+        let hibp_row = if can_write {
+            use sui_id_store::models::HibpMode;
+            let off_checked = hibp_mode == HibpMode::Off;
+            let warn_checked = hibp_mode == HibpMode::Warn;
+            let block_checked = hibp_mode == HibpMode::Block;
+            view! {
+                <form method="post" action="/admin/settings/authentication/hibp-mode" class="stack">
+                    <input type="hidden" name="_csrf" value=csrf_for_hibp />
+                    <fieldset class="button-reset">
+                        <div class="stack gap-3">
+                            <label class="card clickable-block">
+                                <div class="row row-gap2-center">
+                                    <input type="radio" name="hibp_mode" value="off" checked=off_checked />
+                                    <strong>{t.settings_auth_hibp_off_label}</strong>
+                                </div>
+                                <p class="muted radio-hint">{t.settings_auth_hibp_off_desc}</p>
+                            </label>
+                            <label class="card clickable-block">
+                                <div class="row row-gap2-center">
+                                    <input type="radio" name="hibp_mode" value="warn" checked=warn_checked />
+                                    <strong>{t.settings_auth_hibp_warn_label}</strong>
+                                </div>
+                                <p class="muted radio-hint">{t.settings_auth_hibp_warn_desc}</p>
+                            </label>
+                            <label class="card clickable-block">
+                                <div class="row row-gap2-center">
+                                    <input type="radio" name="hibp_mode" value="block" checked=block_checked />
+                                    <strong>{t.settings_auth_hibp_block_label}</strong>
+                                </div>
+                                <p class="muted radio-hint">{t.settings_auth_hibp_block_desc}</p>
+                            </label>
+                        </div>
+                    </fieldset>
+                    {is_dev_mode.then(|| view! {
+                        <p class="muted mt-2-mb-0">{t.settings_auth_hibp_dev_note}</p>
+                    })}
+                    <div>
+                        <button type="submit">{t.button_save}</button>
+                    </div>
+                </form>
+            }
+            .into_any()
+        } else {
+            view! {
+                <div class="table-wrap">
+                    <table>
+                        <tbody>
+                            {kv_text(t.settings_auth_hibp_section, hibp_mode_label(hibp_mode, t).to_string())}
+                        </tbody>
+                    </table>
+                </div>
+            }
+            .into_any()
+        };
         view! {
             <Shell title=NavItem::SignInSettings.label(t).to_string() nav=Chrome::Console{username, item: NavItem::SignInSettings} lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
@@ -145,6 +222,11 @@ pub fn render_settings_authentication(
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">{t.settings_auth_hibp_section}</h3>
+                    {hibp_row}
                 </div>
 
                 <div class="card">

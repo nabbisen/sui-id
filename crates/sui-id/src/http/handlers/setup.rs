@@ -448,9 +448,17 @@ pub async fn hibp_post(
     };
     // Disabling the breach-password check is a change of security posture: it
     // is audited with the old and the new value, in the same transaction.
-    sui_id_store::commands::change_hibp_mode(&app.db, admin_id, mode, app.clock.now())
-        .await
-        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    sui_id_store::commands::change_hibp_mode(
+        &app.db,
+        admin_id,
+        mode,
+        // The first choice of a fresh installation, not a change to an
+        // administrator's earlier one.
+        sui_id_store::commands::HibpModeAuthority::MayWeaken,
+        app.clock.now(),
+    )
+    .await
+    .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(Redirect::to("/setup/done").into_response())
 }
 

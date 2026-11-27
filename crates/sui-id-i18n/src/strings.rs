@@ -814,6 +814,22 @@ pub struct Strings {
     /// RFC 149 §1: likewise its own lede, not `settings_basic_description`.
     pub settings_authentication_lede: &'static str,
     pub settings_auth_password_section: &'static str,
+    // Password breach check (RFC 149 Q3b)
+    pub settings_auth_hibp_section: &'static str,
+    pub settings_auth_hibp_off_label: &'static str,
+    pub settings_auth_hibp_off_desc: &'static str,
+    pub settings_auth_hibp_warn_label: &'static str,
+    pub settings_auth_hibp_warn_desc: &'static str,
+    pub settings_auth_hibp_block_label: &'static str,
+    pub settings_auth_hibp_block_desc: &'static str,
+    pub settings_auth_hibp_dev_note: &'static str,
+    pub settings_auth_hibp_invalid: &'static str,
+    pub settings_auth_hibp_confirm_title: &'static str,
+    pub settings_auth_hibp_confirm_identity: fn(&str, &str) -> String,
+    pub settings_auth_hibp_confirm_impact_to_warn: &'static str,
+    pub settings_auth_hibp_confirm_impact_to_off: &'static str,
+    pub settings_auth_hibp_confirm_scope_note: &'static str,
+    pub settings_auth_hibp_confirm_button: &'static str,
     pub settings_auth_mfa_section: &'static str,
     pub settings_auth_oidc_section: &'static str,
     // Logs tab sections
