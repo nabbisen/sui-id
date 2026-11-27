@@ -1,7 +1,7 @@
 # Cycles Q and R: `0.95.0` and `0.96.0`, the plan
 
-> ## Whose turn it is: **the implementation role's, on Q3** ([dispatch](0.95.0-q3-help-and-the-dashboard-2026-11-27.md)).
-> Q2 landed (`57c80d1`). No decision is pending now. §1 lists four questions still to come, three before Q6 and one before
+> ## Whose turn it is: **the implementation role's, on Q3b** ([dispatch](0.95.0-q3b-the-breach-check-can-be-changed-2026-11-27.md)).
+> Q2 landed (`57c80d1`), and Q3 (`420001b`). No decision is pending now. §1 lists four questions still to come, three before Q6 and one before
 > R3, each with the architect's proposed answer. Two decisions for Q3 were taken on 2026-11-27 (§1).
 
 **Authorized 2026-11-26.** `@nabbisen`, on the split proposed in this plan's first version (`6577468`): *"Yes. Scope them, the
@@ -31,6 +31,11 @@ before its stage.
   prerequisite is met**, and it moves to `done/` at `0.95.0`'s cut.
 - **Q2 landed** (`57c80d1`): the grouped sidebar, the account menu, and the footer reduced to the version inside the console.
   Its review folded in what a browser walk found at 200% font, and put each page's item into `Chrome::Console`'s type.
+- **Q3 landed** (`420001b`): help in three layers, the first-run path, the dashboard's attention items, the DNS labels, and
+  one language chain. It closes RFC 149's second and third conditions. Its review corrected four help texts against the code,
+  and found two things outside RFC 149, decided the same day (§1).
+- **`main` was red on Rust 1.95 between `099da5c` and `2d947cd`**, from Q2's review fold-in. An incremental 1.95 build had
+  passed it. Every console stage now builds `sui-id-web` from clean on 1.95 before its matrix.
 - **RFC 151** was built in `0.94.0`. **Its last condition is met by Q2**: the minimum is raised *"from the *Sign-in*
   settings"*, asserted by `q2_navigation::rfc151_closure_the_minimum_length_is_under_sign_in`. It moves to `done/` at
   `0.95.0`'s cut.
@@ -57,6 +62,13 @@ before its stage.
   without the cookie and `Accept-Language`.
 
 None of these blocks Q2 to Q5. Each is settled before the stage named.
+
+**Decided 2026-11-27 on Q3's review**, by `@nabbisen`:
+- **the password-breach (HIBP) mode can be changed in the console**: *"Small stage in 0.95.0 (Recommended)"*. That is
+  **Q3b**, on Sign-in settings. Weakening it is a dangerous action (RFC 058): confirmation, step-up, audit note;
+- **`backup create` with the key from `SUI_ID_MASTER_KEY`**: *"Include it only encrypted (Recommended)"*. The key is
+  included only with `--encrypt`; without it, the command refuses and says why. It never writes an environment secret to
+  disk in plain text. **Scheduled in cycle R** (§3).
 
 **Before Q6** (RFC 152's three open questions):
 
@@ -95,6 +107,7 @@ rendered pages, and each test is mutated.**
 | **Q1** | the first run in a real terminal | RFC 148 ✔ (landed; CI ✔) |
 | **Q2** | **the chrome.** The grouped sidebar, generated from one list. The account menu gains Language and the theme selector. The footer goes; the version stays, shown only inside the console. The settings tabs give way to the sidebar's items. `.kv-list` is styled; the dead `/me` page is deleted; `tempfile` is removed. Every URL is kept | RFC 149: *every admin page belongs to exactly one group*. RFC 151's *Sign-in* condition |
 | **Q3** | **help and the dashboard.** §3's three layers on every console page: a purpose line, `<details>` **?** with *Learn more*, and no `title=` tooltip anywhere. §2's first-run path, and a *needs attention* section for an overdue kept backup and for a federation provider that requires review. The DNS deny reasons' localized labels | RFC 149: *the first-run path*; *the help policy, no hover-only tooltip* |
+| **Q3b** | **the password-breach check can be changed**, on Sign-in settings; weakening it is a dangerous action | — (a finding of Q3's review) |
 | **Q4** | **the app form.** §4's scope checkboxes; additional scopes, validated, with near misses refused; one input per redirect URI and per post-logout URI, working with JavaScript off; create and edit as one form; C01 records the consent policy | RFC 149: *§4's editors work with JavaScript off* |
 | **Q5** | **the lists.** §5: every list states its count and its page, and none truncates silently; the audit log keeps its five columns and its header in view | RFC 149 §5 (not a closure condition, but in its scope) |
 | **Q6** | **RFC 152, the request.** D1: every parameter that states a requirement is honoured or refused. D2: `max_age`, and `auth_time` in every ID token, with a migration so that the code and the refresh token carry it. D3: `prompt`, with §1's answer for `select_account` | RFC 152 D1–D3 |
@@ -113,6 +126,8 @@ surprise:
 - **Q6, `prompt=login` and `max_age`.** The new sign-in creates a new session and ends the old one in one transaction,
   whoever signs in. One browser never holds two sessions, and a different user signing in is an account switch, not a
   merge.
+- **Q7, a retired key's deletion.** The help says to wait the longer of the two token lifetimes (Q3's review). The page
+  offers *Delete* at once. Q7 rebuilds this page for D5, and says per key whether tokens it signed can still be valid.
 - **Q7, a fresh installation.** No key has been published for 300 seconds, so the rule *"the newest key published at least
   that long ago"* chooses none. The rule is completed so that the oldest published key signs. A key that is signing, or due
   to sign next, cannot be deleted.
@@ -142,6 +157,7 @@ This cycle edits a user and gives an email address its lifecycle.
 
 | Stage | What | Closes |
 |---|---|---|
+| **R0** | **`backup create` with the key from `SUI_ID_MASTER_KEY`**: included only with `--encrypt`; otherwise a refusal that says so. Decided 2026-11-27 (§1) | — (a finding of Q3's review) |
 | **R1** | **RFC 150 §1 and §1a.** The display name and the language, one Class-A command each, edited in one form on the user's own page. An unchanged field writes nothing. A directory user's name and email are read-only, with RFC 150's one line, and the command refuses them. The test that fails on any production call to `users::update_email` | RFC 150: *name and language*; *directory user read-only*; *no direct email write* |
 | **R2** | **RFC 150 §2 and §5.** A rename, with step-up, recording the old and the new name. The table of retired names (a migration), checked when a user is created or renamed. `admin.username.released`, with step-up and its confirmation page, for one name at a time. The test that fails if any other path frees a name | RFC 150: *rename*; *a retired name is released only deliberately* |
 | **R3** | **RFC 101 D1, D5, D6 and §6.4/§6.5: verifying the current address.** A single-use, hashed, expiring token, sent to the address itself. Consuming it sets `email_verified_at` (Class-A, audited). The OIDC `email_verified` claim follows it. Signed-in users are prompted, never blocked. **From this stage, password reset sends a link only to a verified address**, with no transition period. Requests are rate-limited as forgot-password is. The command inventory gains RFC 101's rows | RFC 101: *a user can verify an address*; *`email_verified` reflects reality* |
