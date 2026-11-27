@@ -23,7 +23,8 @@ use sui_id_web::{
 
 pub async fn clients_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -48,14 +49,14 @@ pub async fn clients_delete_confirm_get(
         csrf_token: token.clone(),
         admin_username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_delete_client(data, app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 pub async fn clients_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role, ref read_actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, role, ref read_actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -90,7 +91,6 @@ pub async fn clients_get(
         })
         .collect();
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_clients(
         role.is_admin(),
         summaries,
@@ -108,7 +108,8 @@ pub async fn clients_get(
 /// `GET /admin/clients/new` — isolated register-client form.
 pub async fn clients_new_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     if !actor.can_write() {
@@ -116,7 +117,6 @@ pub async fn clients_new_get(
     }
     let State(app) = state_ext;
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_clients_new(
         None,
         token.clone(),
@@ -151,7 +151,8 @@ pub struct CreateClientForm {
 
 pub async fn clients_create(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, ref admin_actor, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<CreateClientForm>,
 ) -> Result<Response, HttpError> {
@@ -240,7 +241,6 @@ pub async fn clients_create(
         .generated_secret
         .map(|s| (created.row.id.to_string(), s));
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_clients(
         true,
         summaries,
@@ -329,7 +329,8 @@ pub async fn clients_delete(
 
 pub async fn clients_edit_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref read_actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref read_actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
@@ -370,7 +371,7 @@ pub async fn clients_edit_get(
         },
         None,
         token.clone(),
-        crate::handlers::resolve_admin_locale(&app, admin_id).await,
+        lang,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -492,7 +493,8 @@ pub async fn clients_edit_post(
 
 pub async fn clients_rotate_secret_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, ref admin_actor, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -548,7 +550,7 @@ pub async fn clients_rotate_secret_post(
         },
         None,
         token.clone(),
-        crate::handlers::resolve_admin_locale(&app, admin_id).await,
+        lang,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))

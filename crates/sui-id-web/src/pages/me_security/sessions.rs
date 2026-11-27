@@ -78,12 +78,12 @@ pub fn render_me_sessions(
             <Shell title=t.me_security_sessions_section.to_string() nav=Chrome::for_person(shell.username, shell.role) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_security_sessions_section}</h1>
+                    <p class="page-header__lede">{t.me_security_sessions_lede}</p>
                 </header>
                 {tabs}
                 {flash_banner(flash)}
                 <div class="stack mt-4">
                     <section class="card">
-                        <p class="muted">{t.me_security_sessions_lede}</p>
                         {if session_rows.is_empty() {
                             view! { <p class="muted">{t.me_security_sessions_lede}</p> }.into_any()
                         } else {

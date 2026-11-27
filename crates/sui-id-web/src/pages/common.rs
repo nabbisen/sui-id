@@ -145,16 +145,14 @@ pub(super) fn copy_btn(
     value: String,
     noun: &'static str,
 ) -> impl IntoView {
-    let phrase = t.copy_button_aria_template.replace("{noun}", noun);
-    let aria = phrase.clone();
+    let aria = t.copy_button_aria_template.replace("{noun}", noun);
     view! {
         <button
             type="button"
             class="copy-btn"
             data-copy=value
             data-copy-done=t.copy_button_label_done
-            aria-label=aria
-            title=phrase>
+            aria-label=aria>
             {t.copy_button_label}
         </button>
     }

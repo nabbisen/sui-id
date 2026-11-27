@@ -111,6 +111,7 @@ pub fn render_me_overview(
             <Shell title=t.me_tab_overview.to_string() nav=Chrome::for_person(shell.username, shell.role) lang=lang csrf_token=data.csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_tab_overview}</h1>
+                    <p class="page-header__lede">{t.me_overview_lede}</p>
                     {last_login_line}
                     {recovery_event_line}
                 </header>

@@ -980,3 +980,27 @@ fn chosen_option_label_reaches_44px() {
         failures.join("\n")
     );
 }
+
+/// RFC 149 §3 / Q3 §3, test 11: the dashboard's range tabs — measured at
+/// 401px wide at a 375px viewport (Q2's own return, re-measured by Q2's
+/// review) because `.flex-0-auto` keeps the row from shrinking — now
+/// wrap at the narrow breakpoint instead of forcing the page to scroll
+/// sideways. Asserts the markup/CSS allow it; the architect re-measures
+/// the real rendered width in a browser.
+#[test]
+fn the_dashboard_range_tabs_wrap_at_the_narrow_breakpoint() {
+    let css = crate::components::components_css();
+    assert!(
+        css.contains(".sparkline-header {\n    flex-wrap: wrap;\n  }"),
+        ".sparkline-header must wrap at the narrow breakpoint, so its nav \
+         can drop to its own row"
+    );
+    assert!(
+        css.contains(
+            ".sparkline-header .app-nav.flex-0-auto {\n    flex-basis: 100%;\n    flex-wrap: wrap;"
+        ),
+        ".sparkline-header .app-nav.flex-0-auto must both take the full \
+         row width and allow its own links to wrap — .flex-0-auto's \
+         nowrap behaviour is what caused the 401px overflow"
+    );
+}

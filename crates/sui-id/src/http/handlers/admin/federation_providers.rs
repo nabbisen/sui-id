@@ -160,12 +160,31 @@ fn transport_cause_text(c: &TransportCause, t: &'static sui_id_i18n::Strings) ->
         TransportCause::DnsAnswerRejected { host, count } => {
             (t.fed_cause_dns_over_cap)(&bounded(host), *count, crate::resolver::MAX_ANSWERS)
         }
-        TransportCause::DnsDenied { host, reason } => {
-            (t.fed_cause_dns_denied)(&bounded(host), reason)
+        TransportCause::DnsDenied { host, class } => {
+            (t.fed_cause_dns_denied)(&bounded(host), dns_class_label(*class, t))
         }
         TransportCause::Tls => t.fed_cause_tls.to_owned(),
         TransportCause::Timeout => t.fed_cause_timeout.to_owned(),
         TransportCause::Unreachable => t.fed_cause_unreachable.to_owned(),
+    }
+}
+
+/// RFC 149 §4 / Q3 §4: one label per [`crate::resolver::DeniedPrefixClass`]
+/// variant — an exhaustive match, so a new variant cannot compile without
+/// one. Never the IANA registry row name itself.
+fn dns_class_label(
+    class: crate::resolver::DeniedPrefixClass,
+    t: &'static sui_id_i18n::Strings,
+) -> &'static str {
+    use crate::resolver::DeniedPrefixClass;
+    match class {
+        DeniedPrefixClass::PrivateNetwork => t.dns_class_private_network,
+        DeniedPrefixClass::Loopback => t.dns_class_loopback,
+        DeniedPrefixClass::LinkLocal => t.dns_class_link_local,
+        DeniedPrefixClass::Documentation => t.dns_class_documentation,
+        DeniedPrefixClass::BroadcastOrUnspecified => t.dns_class_broadcast_or_unspecified,
+        DeniedPrefixClass::TranslationOrTunnel => t.dns_class_translation_or_tunnel,
+        DeniedPrefixClass::ReservedForSpecialUse => t.dns_class_reserved_for_special_use,
     }
 }
 
@@ -299,7 +318,8 @@ async fn provider_summary(
 
 pub async fn federation_providers_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role, _, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, role, _, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     Query(q): Query<FederationProvidersListQuery>,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
@@ -312,7 +332,6 @@ pub async fn federation_providers_get(
         summaries.push(provider_summary(&app, row).await);
     }
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let flash = list_flash(&q, lang.strings());
     let resp = Html(render_federation_providers(
         role.is_admin(),
@@ -329,7 +348,8 @@ pub async fn federation_providers_get(
 
 pub async fn federation_providers_enable_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -350,7 +370,6 @@ pub async fn federation_providers_enable_confirm_get(
         .await
         .map_err(|e| HttpError::html(CoreError::Store(e)))?;
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let data = ConfirmEnableFederationProviderData {
         provider_id: id,
         display_name: row.display_name,
@@ -369,7 +388,8 @@ pub async fn federation_providers_enable_confirm_get(
 
 pub async fn federation_providers_enable_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, ref admin_actor, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -392,7 +412,6 @@ pub async fn federation_providers_enable_post(
             Ok(crate::handlers::step_up_redirect(&return_to))
         }
         Err(e) => {
-            let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
             render_enable_confirm_with_error(&app, &jar, id, provider_id, e, lang, username).await
         }
     }
@@ -400,7 +419,8 @@ pub async fn federation_providers_enable_post(
 
 pub async fn federation_providers_check_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, _, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Path(id): Path<String>,
     Form(form): Form<super::forms::CsrfOnlyForm>,
@@ -409,7 +429,6 @@ pub async fn federation_providers_check_post(
     crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let provider_id = parse_provider_id(&id)?;
     let id = provider_id.to_string();
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let row = federation_provider::get(&app.db, provider_id)
         .await
         .map_err(|e| HttpError::html(CoreError::Store(e)))?;
@@ -477,7 +496,8 @@ async fn render_enable_confirm_with_error(
 
 pub async fn federation_providers_disable_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -498,7 +518,6 @@ pub async fn federation_providers_disable_confirm_get(
         .await
         .map_err(|e| HttpError::html(CoreError::Store(e)))?;
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let data = ConfirmDisableFederationProviderData {
         provider_id: id,
         display_name: row.display_name,
@@ -517,7 +536,8 @@ pub async fn federation_providers_disable_confirm_get(
 
 pub async fn federation_providers_disable_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, ref admin_actor, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -557,7 +577,6 @@ pub async fn federation_providers_disable_post(
             Ok(crate::handlers::step_up_redirect(&return_to))
         }
         Err(e) => {
-            let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
             let row = federation_provider::get(&app.db, provider_id)
                 .await
                 .map_err(|e| HttpError::html(CoreError::Store(e)))?;
@@ -587,7 +606,8 @@ pub async fn federation_providers_disable_post(
 
 pub async fn federation_providers_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -611,7 +631,6 @@ pub async fn federation_providers_delete_confirm_get(
         .await
         .map_err(|e| HttpError::html(CoreError::Store(e)))?;
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let data = ConfirmDeleteFederationProviderData {
         provider_id: id,
         display_name: row.display_name,
@@ -631,7 +650,8 @@ pub async fn federation_providers_delete_confirm_get(
 
 pub async fn federation_providers_delete_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, ref admin_actor, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -652,7 +672,6 @@ pub async fn federation_providers_delete_post(
             Ok(crate::handlers::step_up_redirect(&return_to))
         }
         Err(e) => {
-            let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
             let row = federation_provider::get(&app.db, provider_id)
                 .await
                 .map_err(|e| HttpError::html(CoreError::Store(e)))?;

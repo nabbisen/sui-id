@@ -558,8 +558,8 @@ After `setup` exits with code 0, start the server normally with
      the admin panel and login screens (default: Japanese). You can
      change this after setup in the admin settings.
    - **Step 4 — password security policy**: choose an HIBP mode
-     (`off` / `warn` / `block`; default: `warn`). You can change
-     this after setup in the admin settings.
+     (`off` / `warn` / `block`; default: `warn`). It cannot yet be
+     changed after setup.
    - **Step 5 — done**: confirmation that the admin account exists
      and the first signing key has been generated. The wizard logs
      you in automatically; the "管理画面へ進む" button lands you

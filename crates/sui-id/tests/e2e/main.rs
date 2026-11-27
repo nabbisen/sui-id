@@ -61,6 +61,7 @@ mod oidc_flow;
 mod password_change;
 mod password_min_len;
 mod q2_navigation;
+mod q3_help_and_dashboard;
 mod r094_cycle_i_u20_revoke_idempotent;
 mod r094_cycle_j_stage10_fix_round_gc;
 mod r094_cycle_j_stage10_r1_must_attempt;

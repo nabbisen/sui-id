@@ -40,18 +40,64 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 
+/// RFC 149 §4 / Q3 §4: a kind a reader understands, for the few dozen
+/// rows below — never shown the registry `name` itself (some of those
+/// run to a full sentence; see `fed_cause_dns_denied`'s own history).
+/// Exhaustive everywhere it is matched, so a new variant cannot compile
+/// without a label (`dns_class_label` in
+/// `handlers/admin/federation_providers.rs`) and without being assigned
+/// to at least one row here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeniedPrefixClass {
+    /// RFC 1918 private-use space and RFC 6598 Shared Address Space
+    /// (CGN) on the IPv4 side; RFC 4193 Unique-Local on the IPv6 side —
+    /// all three are "not routed on the public Internet", the same
+    /// practical fact an administrator needs.
+    PrivateNetwork,
+    Loopback,
+    LinkLocal,
+    /// Address blocks reserved for documentation/examples (TEST-NET-1/2/3,
+    /// the IPv6 documentation prefixes) — never a real destination.
+    Documentation,
+    /// The unspecified address, "this network"/"this host on this
+    /// network", and the limited-broadcast address — addresses that
+    /// name no single reachable host.
+    BroadcastOrUnspecified,
+    /// IPv4/IPv6 transition and tunnelling mechanisms: 6to4, Teredo,
+    /// NAT64 (both forms), IPv4-mapped, IPv4-compatible, and the
+    /// anycast relay addresses those mechanisms use.
+    TranslationOrTunnel,
+    /// Everything else IANA reserves for a specific protocol or
+    /// operational purpose (IETF protocol assignments, PCP/TURN/AMT/
+    /// AS112/DNS-SD anycast, benchmarking, dummy/discard-only ranges,
+    /// ORCHID, Segment Routing SIDs, Drone Remote ID) — narrow,
+    /// named purposes, none of them a route to a real federation
+    /// partner.
+    ReservedForSpecialUse,
+}
+
 /// One denied prefix, traceable to its source.
 pub struct DeniedPrefix {
     pub network: IpAddr,
     pub prefix_len: u8,
     pub name: &'static str,
+    pub class: DeniedPrefixClass,
 }
 
-const fn v4(a: u8, b: u8, c: u8, d: u8, prefix_len: u8, name: &'static str) -> DeniedPrefix {
+const fn v4(
+    a: u8,
+    b: u8,
+    c: u8,
+    d: u8,
+    prefix_len: u8,
+    name: &'static str,
+    class: DeniedPrefixClass,
+) -> DeniedPrefix {
     DeniedPrefix {
         network: IpAddr::V4(Ipv4Addr::new(a, b, c, d)),
         prefix_len,
         name,
+        class,
     }
 }
 
@@ -67,18 +113,28 @@ const fn v6(
     h: u16,
     prefix_len: u8,
     name: &'static str,
+    class: DeniedPrefixClass,
 ) -> DeniedPrefix {
     DeniedPrefix {
         network: IpAddr::V6(Ipv6Addr::new(a, b, c, d, e, f, g, h)),
         prefix_len,
         name,
+        class,
     }
 }
 
 /// IANA IPv4 Special-Purpose Address Registry, every row, "Last Updated"
 /// 2025-10-09 — <https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml>.
 pub static IPV4_DENIED: &[DeniedPrefix] = &[
-    v4(0, 0, 0, 0, 8, "\"This network\" -- RFC 791 S3.2"),
+    v4(
+        0,
+        0,
+        0,
+        0,
+        8,
+        "\"This network\" -- RFC 791 S3.2",
+        DeniedPrefixClass::BroadcastOrUnspecified,
+    ),
     v4(
         0,
         0,
@@ -86,12 +142,53 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         0,
         32,
         "\"This host on this network\" -- RFC 1122 S3.2.1.3",
+        DeniedPrefixClass::BroadcastOrUnspecified,
     ),
-    v4(10, 0, 0, 0, 8, "Private-Use -- RFC 1918"),
-    v4(100, 64, 0, 0, 10, "Shared Address Space -- RFC 6598"),
-    v4(127, 0, 0, 0, 8, "Loopback -- RFC 1122 S3.2.1.3"),
-    v4(169, 254, 0, 0, 16, "Link Local -- RFC 3927"),
-    v4(172, 16, 0, 0, 12, "Private-Use -- RFC 1918"),
+    v4(
+        10,
+        0,
+        0,
+        0,
+        8,
+        "Private-Use -- RFC 1918",
+        DeniedPrefixClass::PrivateNetwork,
+    ),
+    v4(
+        100,
+        64,
+        0,
+        0,
+        10,
+        "Shared Address Space -- RFC 6598",
+        DeniedPrefixClass::PrivateNetwork,
+    ),
+    v4(
+        127,
+        0,
+        0,
+        0,
+        8,
+        "Loopback -- RFC 1122 S3.2.1.3",
+        DeniedPrefixClass::Loopback,
+    ),
+    v4(
+        169,
+        254,
+        0,
+        0,
+        16,
+        "Link Local -- RFC 3927",
+        DeniedPrefixClass::LinkLocal,
+    ),
+    v4(
+        172,
+        16,
+        0,
+        0,
+        12,
+        "Private-Use -- RFC 1918",
+        DeniedPrefixClass::PrivateNetwork,
+    ),
     v4(
         192,
         0,
@@ -99,6 +196,7 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         0,
         24,
         "IETF Protocol Assignments -- RFC 6890 S2.1",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v4(
         192,
@@ -107,8 +205,17 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         0,
         29,
         "IPv4 Service Continuity Prefix -- RFC 7335",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
-    v4(192, 0, 0, 8, 32, "IPv4 dummy address -- RFC 7600"),
+    v4(
+        192,
+        0,
+        0,
+        8,
+        32,
+        "IPv4 dummy address -- RFC 7600",
+        DeniedPrefixClass::ReservedForSpecialUse,
+    ),
     v4(
         192,
         0,
@@ -116,6 +223,7 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         9,
         32,
         "Port Control Protocol Anycast -- RFC 7723 (Global=True in registry; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v4(
         192,
@@ -124,6 +232,7 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         10,
         32,
         "Traversal Using Relays around NAT Anycast -- RFC 8155 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v4(
         192,
@@ -132,6 +241,7 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         170,
         32,
         "NAT64/DNS64 Discovery -- RFC 8880, RFC 7050",
+        DeniedPrefixClass::TranslationOrTunnel,
     ),
     v4(
         192,
@@ -140,8 +250,17 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         171,
         32,
         "NAT64/DNS64 Discovery -- RFC 8880, RFC 7050",
+        DeniedPrefixClass::TranslationOrTunnel,
     ),
-    v4(192, 0, 2, 0, 24, "Documentation (TEST-NET-1) -- RFC 5737"),
+    v4(
+        192,
+        0,
+        2,
+        0,
+        24,
+        "Documentation (TEST-NET-1) -- RFC 5737",
+        DeniedPrefixClass::Documentation,
+    ),
     v4(
         192,
         31,
@@ -149,6 +268,7 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         0,
         24,
         "AS112-v4 -- RFC 7535 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v4(
         192,
@@ -157,6 +277,7 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         0,
         24,
         "AMT -- RFC 7450 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v4(
         192,
@@ -165,9 +286,26 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         0,
         24,
         "Deprecated (6to4 Relay Anycast) -- RFC 7526",
+        DeniedPrefixClass::TranslationOrTunnel,
     ),
-    v4(192, 88, 99, 2, 32, "6a44-relay anycast address -- RFC 6751"),
-    v4(192, 168, 0, 0, 16, "Private-Use -- RFC 1918"),
+    v4(
+        192,
+        88,
+        99,
+        2,
+        32,
+        "6a44-relay anycast address -- RFC 6751",
+        DeniedPrefixClass::TranslationOrTunnel,
+    ),
+    v4(
+        192,
+        168,
+        0,
+        0,
+        16,
+        "Private-Use -- RFC 1918",
+        DeniedPrefixClass::PrivateNetwork,
+    ),
     v4(
         192,
         175,
@@ -175,8 +313,17 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         0,
         24,
         "Direct Delegation AS112 Service -- RFC 7534 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
-    v4(198, 18, 0, 0, 15, "Benchmarking -- RFC 2544"),
+    v4(
+        198,
+        18,
+        0,
+        0,
+        15,
+        "Benchmarking -- RFC 2544",
+        DeniedPrefixClass::ReservedForSpecialUse,
+    ),
     v4(
         198,
         51,
@@ -184,9 +331,26 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         0,
         24,
         "Documentation (TEST-NET-2) -- RFC 5737",
+        DeniedPrefixClass::Documentation,
     ),
-    v4(203, 0, 113, 0, 24, "Documentation (TEST-NET-3) -- RFC 5737"),
-    v4(240, 0, 0, 0, 4, "Reserved -- RFC 1112 S4"),
+    v4(
+        203,
+        0,
+        113,
+        0,
+        24,
+        "Documentation (TEST-NET-3) -- RFC 5737",
+        DeniedPrefixClass::Documentation,
+    ),
+    v4(
+        240,
+        0,
+        0,
+        0,
+        4,
+        "Reserved -- RFC 1112 S4",
+        DeniedPrefixClass::ReservedForSpecialUse,
+    ),
     v4(
         255,
         255,
@@ -194,6 +358,7 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
         255,
         32,
         "Limited Broadcast -- RFC 8190, RFC 919",
+        DeniedPrefixClass::BroadcastOrUnspecified,
     ),
 ];
 
@@ -202,7 +367,19 @@ pub static IPV4_DENIED: &[DeniedPrefix] = &[
 /// — plus one explicit addition the matrix names that neither registry
 /// carries: IPv4-compatible (`::/96`, last entry below).
 pub static IPV6_DENIED: &[DeniedPrefix] = &[
-    v6(0, 0, 0, 0, 0, 0, 0, 1, 128, "Loopback Address -- RFC 4291"),
+    v6(
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        128,
+        "Loopback Address -- RFC 4291",
+        DeniedPrefixClass::Loopback,
+    ),
     v6(
         0,
         0,
@@ -214,6 +391,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         128,
         "Unspecified Address -- RFC 4291",
+        DeniedPrefixClass::BroadcastOrUnspecified,
     ),
     v6(
         0,
@@ -226,6 +404,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         96,
         "IPv4-mapped Address -- RFC 4291",
+        DeniedPrefixClass::TranslationOrTunnel,
     ),
     v6(
         0x64,
@@ -238,6 +417,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         96,
         "IPv4-IPv6 Translat. (NAT64 #1) -- RFC 6052 (Global=True; denied anyway)",
+        DeniedPrefixClass::TranslationOrTunnel,
     ),
     v6(
         0x64,
@@ -250,6 +430,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         48,
         "IPv4-IPv6 Translat. (NAT64 #2) -- RFC 8215",
+        DeniedPrefixClass::TranslationOrTunnel,
     ),
     v6(
         0x100,
@@ -262,6 +443,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         64,
         "Discard-Only Address Block -- RFC 6666",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x100,
@@ -274,6 +456,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         64,
         "Dummy IPv6 Prefix -- RFC 9780",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x2001,
@@ -286,6 +469,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         23,
         "IETF Protocol Assignments -- RFC 2928",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x2001,
@@ -298,6 +482,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         32,
         "TEREDO -- RFC 4380, RFC 8190",
+        DeniedPrefixClass::TranslationOrTunnel,
     ),
     v6(
         0x2001,
@@ -310,6 +495,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         1,
         128,
         "Port Control Protocol Anycast -- RFC 7723 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x2001,
@@ -322,6 +508,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         2,
         128,
         "Traversal Using Relays around NAT Anycast -- RFC 8155 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x2001,
@@ -334,8 +521,21 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         3,
         128,
         "DNS-SD Service Registration Protocol Anycast -- RFC 9665 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
-    v6(0x2001, 2, 0, 0, 0, 0, 0, 0, 48, "Benchmarking -- RFC 5180"),
+    v6(
+        0x2001,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        48,
+        "Benchmarking -- RFC 5180",
+        DeniedPrefixClass::ReservedForSpecialUse,
+    ),
     v6(
         0x2001,
         3,
@@ -347,6 +547,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         32,
         "AMT -- RFC 7450 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x2001,
@@ -359,6 +560,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         48,
         "AS112-v6 -- RFC 7535 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x2001,
@@ -371,6 +573,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         28,
         "Deprecated (previously ORCHID) -- RFC 4843",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x2001,
@@ -383,6 +586,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         28,
         "ORCHIDv2 -- RFC 7343 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x2001,
@@ -395,6 +599,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         28,
         "Drone Remote ID Protocol Entity Tags (DETs) Prefix -- RFC 9374 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0x2001,
@@ -407,8 +612,21 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         32,
         "Documentation -- RFC 3849",
+        DeniedPrefixClass::Documentation,
     ),
-    v6(0x2002, 0, 0, 0, 0, 0, 0, 0, 16, "6to4 -- RFC 3056"),
+    v6(
+        0x2002,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        16,
+        "6to4 -- RFC 3056",
+        DeniedPrefixClass::TranslationOrTunnel,
+    ),
     v6(
         0x2620,
         0x4f,
@@ -420,8 +638,21 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         48,
         "Direct Delegation AS112 Service -- RFC 7534 (Global=True; denied anyway)",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
-    v6(0x3fff, 0, 0, 0, 0, 0, 0, 0, 20, "Documentation -- RFC 9637"),
+    v6(
+        0x3fff,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        20,
+        "Documentation -- RFC 9637",
+        DeniedPrefixClass::Documentation,
+    ),
     v6(
         0x5f00,
         0,
@@ -433,6 +664,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         16,
         "Segment Routing (SRv6) SIDs -- RFC 9602",
+        DeniedPrefixClass::ReservedForSpecialUse,
     ),
     v6(
         0xfc00,
@@ -445,6 +677,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         7,
         "Unique-Local -- RFC 4193, RFC 8190",
+        DeniedPrefixClass::PrivateNetwork,
     ),
     v6(
         0xfe80,
@@ -457,6 +690,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         10,
         "Link-Local Unicast -- RFC 4291",
+        DeniedPrefixClass::LinkLocal,
     ),
     v6(
         0,
@@ -469,6 +703,7 @@ pub static IPV6_DENIED: &[DeniedPrefix] = &[
         0,
         96,
         "IPv4-compatible Address -- RFC 4291 S2.5.5.1 (not an IANA registry row -- the matrix's own explicit deny-list entry, distinct from IPv4-mapped above)",
+        DeniedPrefixClass::TranslationOrTunnel,
     ),
 ];
 
@@ -501,24 +736,24 @@ fn ipv6_in(addr: Ipv6Addr, network: Ipv6Addr, prefix_len: u8) -> bool {
 /// against the IPv4 table too. Belt and braces: if either `/96` row were
 /// ever narrowed, the embedded check still catches a dangerous embedded
 /// address on its own account.
-pub fn denied_by(addr: IpAddr) -> Option<&'static str> {
+pub fn denied_by(addr: IpAddr) -> Option<(&'static str, DeniedPrefixClass)> {
     match addr {
         IpAddr::V4(v4) => IPV4_DENIED
             .iter()
             .find(|p| matches!(p.network, IpAddr::V4(n) if ipv4_in(v4, n, p.prefix_len)))
-            .map(|p| p.name),
+            .map(|p| (p.name, p.class)),
         IpAddr::V6(v6) => {
             if let Some(hit) = IPV6_DENIED
                 .iter()
                 .find(|p| matches!(p.network, IpAddr::V6(n) if ipv6_in(v6, n, p.prefix_len)))
             {
-                return Some(hit.name);
+                return Some((hit.name, hit.class));
             }
             if let Some(embedded) = v6.to_ipv4() {
                 return IPV4_DENIED
                     .iter()
                     .find(|p| matches!(p.network, IpAddr::V4(n) if ipv4_in(embedded, n, p.prefix_len)))
-                    .map(|p| p.name);
+                    .map(|p| (p.name, p.class));
             }
             None
         }
@@ -541,6 +776,7 @@ enum ResolveError {
         name: String,
         addr: IpAddr,
         reason: &'static str,
+        class: DeniedPrefixClass,
     },
 }
 
@@ -553,7 +789,9 @@ impl std::fmt::Display for ResolveError {
                     "resolving {name:?}: {count} addresses (must be 1-{MAX_ANSWERS})"
                 )
             }
-            Self::Denied { name, addr, reason } => {
+            Self::Denied {
+                name, addr, reason, ..
+            } => {
                 write!(f, "resolving {name:?}: {addr} is denied ({reason})")
             }
         }
@@ -568,8 +806,14 @@ impl std::error::Error for ResolveError {}
 /// deliberately not exposed past this conversion).
 #[derive(Debug)]
 pub(crate) enum DnsOutcome {
-    AnswerRejected { host: String, count: usize },
-    Denied { host: String, reason: &'static str },
+    AnswerRejected {
+        host: String,
+        count: usize,
+    },
+    Denied {
+        host: String,
+        class: DeniedPrefixClass,
+    },
 }
 
 impl From<&ResolveError> for DnsOutcome {
@@ -579,9 +823,9 @@ impl From<&ResolveError> for DnsOutcome {
                 host: name.clone(),
                 count: *count,
             },
-            ResolveError::Denied { name, reason, .. } => DnsOutcome::Denied {
+            ResolveError::Denied { name, class, .. } => DnsOutcome::Denied {
                 host: name.clone(),
-                reason,
+                class: *class,
             },
         }
     }
@@ -661,12 +905,13 @@ fn validate_answer(name: &str, addrs: Vec<IpAddr>) -> Result<IpAddr, ResolveErro
     }
 
     for addr in &addrs {
-        if let Some(reason) = denied_by(*addr) {
-            tracing::warn!(name = %name, addr = %addr, reason, "federation DNS answer rejected");
+        if let Some((reason, class)) = denied_by(*addr) {
+            tracing::warn!(name = %name, addr = %addr, reason, ?class, "federation DNS answer rejected");
             return Err(ResolveError::Denied {
                 name: name.to_owned(),
                 addr: *addr,
                 reason,
+                class,
             });
         }
     }

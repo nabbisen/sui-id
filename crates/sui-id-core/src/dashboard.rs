@@ -68,16 +68,6 @@ impl SparklineRange {
         }
     }
 
-    /// Human-readable label for the UI, matching the screen-design
-    /// memo's Japanese copy.
-    pub fn label_ja(&self) -> &'static str {
-        match self {
-            Self::Last24Hours => "過去 24 時間",
-            Self::Last7Days => "過去 7 日間",
-            Self::Last30Days => "過去 30 日間",
-        }
-    }
-
     pub fn all() -> &'static [Self] {
         &[Self::Last24Hours, Self::Last7Days, Self::Last30Days]
     }

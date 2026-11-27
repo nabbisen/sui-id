@@ -125,7 +125,18 @@ pub fn render_settings_authentication(
                 {flash_banner(flash)}
 
                 <div class="card">
-                    <h3 class="card__title">{t.settings_auth_password_section}</h3>
+                    <h3 class="card__title">
+                        {t.settings_auth_password_section}
+                        {crate::components::help_details(
+                            t,
+                            t.help_about_min_length.to_string(),
+                            t.help_min_length_body,
+                            concat!(
+                                crate::github_doc_url!("docs/src/guides/operators.md"),
+                                "#password-minimum-length",
+                            ),
+                        )}
+                    </h3>
                     {min_length_row}
                     <div class="table-wrap">
                         <table>
@@ -137,7 +148,18 @@ pub fn render_settings_authentication(
                 </div>
 
                 <div class="card">
-                    <h3 class="card__title">{t.settings_auth_mfa_section}</h3>
+                    <h3 class="card__title">
+                        {t.settings_auth_mfa_section}
+                        {crate::components::help_details(
+                            t,
+                            t.help_about_two_step.to_string(),
+                            t.help_two_step_body,
+                            concat!(
+                                crate::github_doc_url!("docs/src/guides/operators.md"),
+                                "#multi-factor-authentication",
+                            ),
+                        )}
+                    </h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>

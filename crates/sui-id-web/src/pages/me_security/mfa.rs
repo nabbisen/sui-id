@@ -75,6 +75,7 @@ pub fn render_me_mfa(
             <Shell title=t.me_tab_mfa.to_string() nav=Chrome::for_person(shell.username, shell.role) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_tab_mfa}</h1>
+                    <p class="page-header__lede">{t.me_mfa_lede}</p>
                 </header>
                 {tabs}
                 {flash_banner(flash)}

@@ -388,6 +388,8 @@ pub struct Strings {
     pub profile_subtitle_template: &'static str,
     pub profile_recovery_save_now: &'static str,
     pub profile_recovery_save_lede: &'static str,
+    /// RFC 149 §3 / Q3 §1 layer 1: the MFA tab's own purpose line.
+    pub me_mfa_lede: &'static str,
     pub profile_mfa_section: &'static str,
     pub profile_mfa_totp_card_title: &'static str,
     pub profile_mfa_status_label: &'static str,
@@ -676,6 +678,36 @@ pub struct Strings {
     pub audit_event_signing_key_delete: &'static str,
     pub audit_event_admin_master_key_rotated: &'static str,
     pub audit_event_setup_create_initial_admin: &'static str,
+    // ---- Help, layer 2: on request (RFC 149 §3 / Q3 §1) ----
+    /// The *Learn more* link's label, shared by every help block.
+    pub help_learn_more: &'static str,
+    /// Signing keys: rotation.
+    pub help_about_rotation: &'static str,
+    pub help_rotation_body: &'static str,
+    /// Sessions and lockout: session limits.
+    pub help_about_session_limits: &'static str,
+    pub help_session_limits_body: &'static str,
+    /// Sessions and lockout: lockout.
+    pub help_about_lockout: &'static str,
+    pub help_lockout_body: &'static str,
+    /// Sign-in settings: the minimum password length.
+    pub help_about_min_length: &'static str,
+    pub help_min_length_body: &'static str,
+    /// Sign-in settings: two-step verification.
+    pub help_about_two_step: &'static str,
+    pub help_two_step_body: &'static str,
+    /// Email: SMTP and TLS.
+    pub help_about_smtp_tls: &'static str,
+    pub help_smtp_tls_body: &'static str,
+    /// Federation providers: what "requires review" means.
+    pub help_about_requires_review: &'static str,
+    pub help_requires_review_body: &'static str,
+    /// Audit log: the chain check.
+    pub help_about_chain_check: &'static str,
+    pub help_chain_check_body: &'static str,
+    /// About this server: the storage paths.
+    pub help_about_storage_paths: &'static str,
+    pub help_storage_paths_body: &'static str,
     // ---- Admin: Dashboard (RFC 029) ----
     pub dashboard_title: &'static str,
     pub dashboard_lede: &'static str,
@@ -705,11 +737,31 @@ pub struct Strings {
     pub dashboard_warn_admins_no_mfa: fn(usize) -> String,
     pub dashboard_warn_old_signing_key: fn(i64) -> String,
     pub dashboard_warn_outbox_stuck: fn(usize) -> String,
+    /// The dashboard's sign-in chart ranges (RFC 149 Q3's review: these
+    /// were Japanese whatever the reader's language).
+    pub dashboard_range_24h: &'static str,
+    pub dashboard_range_7d: &'static str,
+    pub dashboard_range_30d: &'static str,
+    /// System → Email's connection test result (Q3's review: hard-coded
+    /// Japanese in the handler).
+    pub settings_email_test_passed: &'static str,
+    pub settings_email_test_failed: fn(&str) -> String,
     pub dashboard_warn_pending_resets: fn(usize) -> String,
-    pub dashboard_getting_started_title: &'static str,
-    pub dashboard_getting_started_smtp: &'static str,
-    pub dashboard_getting_started_first_app: &'static str,
-    pub dashboard_getting_started_admin_mfa: &'static str,
+    // ---- RFC 149 §2 / Q3 §2: the first-run path (replaces the old
+    // three-item "getting started" checklist) ----
+    pub dashboard_gs_title: &'static str,
+    pub dashboard_gs_done: &'static str,
+    pub dashboard_gs_step1: &'static str,
+    pub dashboard_gs_step2: &'static str,
+    pub dashboard_gs_step3: &'static str,
+    pub dashboard_gs_step4: &'static str,
+    pub dashboard_gs_step5: &'static str,
+    pub dashboard_gs_status_done: &'static str,
+    pub dashboard_gs_status_recommended: &'static str,
+    pub dashboard_gs_status_optional: &'static str,
+    // ---- RFC 149 §3 / Q3 §3: two more dashboard action items ----
+    pub dashboard_warn_backup_overdue: fn(&str, &str) -> String,
+    pub dashboard_warn_federation_requires_review: fn(usize) -> String,
     // ---- Admin: User detail page (RFC 035) ----
     pub user_detail_back: &'static str,
     pub user_detail_auth_section: &'static str,
@@ -832,6 +884,8 @@ pub struct Strings {
     pub me_tab_sessions: &'static str,
     pub me_tab_language: &'static str,
     // Overview tab
+    /// RFC 149 §3 / Q3 §1 layer 1: the page's own purpose line.
+    pub me_overview_lede: &'static str,
     pub me_overview_section_status: &'static str,
     pub me_overview_section_activity: &'static str,
     /// v0.48.2: status row label for "MFA (TOTP)" — was a hardcoded
@@ -855,6 +909,8 @@ pub struct Strings {
     /// language picker (`<nav>` containing 3 language links).
     pub setup_welcome_lang_picker_label: &'static str,
     // Passkey tab
+    /// RFC 149 §3 / Q3 §1 layer 1: the passkey tab's own purpose line.
+    pub me_passkey_lede: &'static str,
     pub me_passkey_origin_warning: &'static str,
     pub me_passkey_section_title: &'static str,
     pub me_passkey_button_rename: &'static str,
@@ -1028,9 +1084,6 @@ pub struct Strings {
     // ---- Signing keys extensions (RFC 051) ----
     pub signing_keys_count_caption: fn(usize) -> String,
     pub signing_keys_th_key_id: &'static str,
-    pub signing_keys_rotate_explanation_1: &'static str,
-    pub signing_keys_rotate_explanation_2: &'static str,
-    pub signing_keys_rotate_explanation_3: &'static str,
     // ---- Dangerous operation confirmation screens (RFC 030) ----
     pub confirm_cancel: &'static str,
     pub badge_recoverable: &'static str,
@@ -1228,7 +1281,20 @@ pub struct Strings {
     pub fed_cause_no_ca_certificates: &'static str,
     /// Host, the count it answered with, and the cap (`MAX_ANSWERS`).
     pub fed_cause_dns_over_cap: fn(&str, usize, usize) -> String,
+    /// Host, and the denied range's class's own localized label
+    /// (`dns_class_*`, below) — never the IANA registry row name.
     pub fed_cause_dns_denied: fn(&str, &str) -> String,
+    // RFC 149 §4 / Q3 §4: one label per `DeniedPrefixClass` variant, an
+    // exhaustive match (`dns_class_label`,
+    // `handlers/admin/federation_providers.rs`) so a new variant cannot
+    // compile without one.
+    pub dns_class_private_network: &'static str,
+    pub dns_class_loopback: &'static str,
+    pub dns_class_link_local: &'static str,
+    pub dns_class_documentation: &'static str,
+    pub dns_class_broadcast_or_unspecified: &'static str,
+    pub dns_class_translation_or_tunnel: &'static str,
+    pub dns_class_reserved_for_special_use: &'static str,
     pub fed_cause_tls: &'static str,
     pub fed_cause_timeout: &'static str,
     pub fed_cause_unreachable: &'static str,

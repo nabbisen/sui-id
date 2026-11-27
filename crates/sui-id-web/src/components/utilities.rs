@@ -82,7 +82,9 @@ pub const UTILITIES_RFC067_CSS: &str = r#"
 
 .grid-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  /* min(…, 100%): a 15rem floor alone is 480px at a 200% font, wider
+   * than a phone, and made the dashboard scroll sideways (Q3's review). */
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
   gap: var(--space-3);
 }
 
@@ -351,8 +353,7 @@ pub fn copy_field(
     aria_label: &'static str,
 ) -> impl leptos::prelude::IntoView {
     use leptos::prelude::*;
-    let phrase = t.copy_button_aria_template.replace("{noun}", noun);
-    let aria = phrase.clone();
+    let aria = t.copy_button_aria_template.replace("{noun}", noun);
     let v2 = value.clone();
     view! {
         <div class="copy-field">
@@ -369,8 +370,7 @@ pub fn copy_field(
                 class="copy-btn"
                 data-copy=v2
                 data-copy-done=t.copy_button_label_done
-                aria-label=aria
-                title=phrase>
+                aria-label=aria>
                 {t.copy_button_label}
             </button>
         </div>

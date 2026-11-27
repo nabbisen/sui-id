@@ -208,7 +208,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     setup_done_next_steps_title: "后续步骤",
     setup_done_next_step_register_clients: "注册 OIDC 客户端。",
     setup_done_next_step_enable_mfa: "使用通行密钥或认证器应用启用双重认证。",
-    setup_done_next_step_review_settings: "在设置选项卡中查看当前有效配置。",
+    setup_done_next_step_review_settings: "接下来需要设置的内容会列在仪表板上。",
     setup_done_enter_admin: "进入管理控制台",
     setup_not_complete_title: "设置未完成",
     setup_not_complete_lede: "管理员账户尚未创建，请从头开始设置。",
@@ -263,6 +263,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     profile_subtitle_template: "{username} 的安全设置",
     profile_recovery_save_now: "立即保存这些恢复码，它们不会再次显示。",
     profile_recovery_save_lede: "每个恢复码只能使用一次，请妥善保存。如果无法访问认证器应用，可以用任意一个恢复码代替 6 位验证码登录。",
+    me_mfa_lede: "设置或移除你自己的两步验证：身份验证器应用（TOTP）和恢复代码。",
     profile_mfa_section: "双重认证",
     profile_mfa_totp_card_title: "认证器应用（TOTP）",
     profile_mfa_status_label: "状态：",
@@ -488,6 +489,27 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     audit_event_admin_master_key_rotated: "轮换主密钥",
     audit_event_setup_create_initial_admin: "创建初始管理员",
 
+    // 帮助，第二层：按需显示 (RFC 149 §3 / Q3 §1)
+    help_learn_more: "了解更多",
+    help_about_rotation: "关于轮换",
+    help_rotation_body: "轮换后，此后由新密钥签名，当前密钥退役并保留在 JWKS 中，因此由它签名的令牌仍可验证。请在它签名的所有令牌都过期后再删除退役密钥，即自轮换起经过访问令牌与 ID 令牌有效期中较长的一个（两者均在配置的 [tokens] 中设定）。过早删除会使这些令牌在所有应用中验证失败。",
+    help_about_session_limits: "关于会话限制",
+    help_session_limits_body: "空闲超时会在会话闲置达到此时长后将其结束；设为 0 可禁用。并发会话上限会在某人持有的活动会话数超过此值时，优先淘汰最旧的会话；设为 0 可禁用该上限。",
+    help_about_lockout: "关于锁定",
+    help_lockout_body: "连续登录失败会使账户被锁定逐步变长的时间，但不会超过此值，因此反复失败也不会造成永久锁定。管理员可使用「sui-id admin user unlock」立即解除锁定。",
+    help_about_min_length: "关于最小长度",
+    help_min_length_body: "每个新密码——无论是在创建账户、重置密码，还是自助修改密码时设置——都必须达到此字符数。该值最高可提高到 128，且不能低于 12；在开发模式下，无论此设置如何，始终为 8。",
+    help_about_two_step: "关于两步验证",
+    help_two_step_body: "两步验证（身份验证器应用或通行密钥）由本人在自己的账户页面开启，而不是在此处作为服务器级别的开关设置。注册时签发的恢复代码可在丢失第二因素时用于登录。",
+    help_about_smtp_tls: "关于 SMTP 与 TLS",
+    help_smtp_tls_body: "STARTTLS（587）以明文开始并升级为 TLS；隐式 TLS（465）从第一个字节起就是加密的。sui-id 从此地址发送两类邮件：密码重置链接，以及密码已更改的通知。",
+    help_about_requires_review: "关于「需要审核」",
+    help_requires_review_body: "提供方在通过检查并被启用之前一直处于「待审核」：刚添加时、信任策略更改后、被停用后都是如此。「检查并启用」会运行全部检查，只有全部通过才会启用。「仅检查」运行相同的检查，不做任何更改。",
+    help_about_chain_check: "关于链校验",
+    help_chain_check_body: "每一行的哈希由该行内容和上一行的哈希计算得出，因此各行连成一条链。此检查重新计算最近各行的链接，并报告第一个不匹配的行，从而发现在 sui-id 之外被修改或删除的行。但它无法防范能够写入数据库的人：他们可以重新计算被修改行之后的所有链接。",
+    help_about_storage_paths: "关于存储路径",
+    help_storage_paths_body: "数据库保存所有账户和设置，其中的机密由主密钥解密：设置了 SUI_ID_MASTER_KEY 时从中读取，否则从此处显示的密钥文件读取。请使用 sui-id backup create 备份：它在服务器运行时也能得到一致的副本，并包含密钥文件，因此在备份离开本机之前请加上 --encrypt。没有密钥的数据库文件副本会丢失其中的所有机密。",
+
     // Admin: 仪表盘 (RFC 029)
     dashboard_title: "仪表盘",
     dashboard_lede: "系统概览和近期活动。",
@@ -514,17 +536,36 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     },
 
     // 仪表盘：操作员提示 (RFC 031)
-    dashboard_warn_smtp: "密码重置邮件已禁用，请在设置 → 邮件中配置 SMTP。",
-    dashboard_warn_hibp: "密码泄露检查已关闭，建议在设置 → 认证中启用。",
-    dashboard_warn_cookie_insecure: "Cookie Secure 标志已关闭，生产环境请在设置 → 安全中启用。",
+    dashboard_warn_smtp: "密码重置邮件已禁用，请在 系统 → 邮件 中配置 SMTP。",
+    dashboard_warn_hibp: "密码泄露检查已关闭。它是在设置向导中选择的，目前还无法在控制台中更改。",
+    dashboard_warn_cookie_insecure: "Cookie Secure 标志已关闭。生产环境请在配置文件的 [server] 中设置 cookie_secure = true。",
     dashboard_warn_admins_no_mfa: |n| format!("{n}个管理员账户未启用MFA。"),
     dashboard_warn_old_signing_key: |age| format!("最早的签名密钥已存在{age}天 — 建议轮换。"),
     dashboard_warn_outbox_stuck: |n| format!("{n}封邮件已排队超过一小时。"),
+    dashboard_range_24h: "过去 24 小时",
+    dashboard_range_7d: "过去 7 天",
+    dashboard_range_30d: "过去 30 天",
+    settings_email_test_passed: "SMTP 连接测试成功。",
+    settings_email_test_failed: |e| format!("SMTP 连接测试失败：{e}"),
     dashboard_warn_pending_resets: |n| format!("{n}个未使用的密码重置链接。"),
-    dashboard_getting_started_title: "快速入门",
-    dashboard_getting_started_smtp: "配置SMTP — 用户接收密码重置邮件所需",
-    dashboard_getting_started_first_app: "添加您的第一个OIDC应用",
-    dashboard_getting_started_admin_mfa: "为管理员账户启用MFA",
+    dashboard_gs_title: "快速入门",
+    dashboard_gs_done: "快速入门：已完成",
+    dashboard_gs_step1: "保护您的管理员账户",
+    dashboard_gs_step2: "设置邮件（密码重置和找回账户需要）",
+    dashboard_gs_step3: "添加您的第一个应用",
+    dashboard_gs_step4: "查看登录和会话设置",
+    dashboard_gs_step5: "添加联合登录提供方",
+    dashboard_gs_status_done: "已完成",
+    dashboard_gs_status_recommended: "推荐",
+    dashboard_gs_status_optional: "可选",
+    dashboard_warn_backup_overdue: |review_at, custody_reference| {
+        format!(
+            "保留的轮换前主密钥备份已超过其审查日期（{review_at}），保管参考为 {custody_reference:?}。请使用 `sui-id admin master-key backup remove`（在已停用或已重新加密后）或 `sui-id admin master-key backup renew` 处理。"
+        )
+    },
+    dashboard_warn_federation_requires_review: |n| {
+        format!("有 {n} 个联合登录提供方在启用前需要审核。")
+    },
 
     // Admin: 用户管理 (RFC 029)
     users_title: "用户管理",
@@ -625,9 +666,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     // Signing keys extensions (RFC 051)
     signing_keys_count_caption: |n| format!("已登记 {n} 个。"),
     signing_keys_th_key_id: "Key ID",
-    signing_keys_rotate_explanation_1: "执行轮换将签发新的签名密钥，并将当前密钥移至「退役」状态。",
-    signing_keys_rotate_explanation_2: "退役密钥仍保留在 JWKS 中，确保已签发但未过期的令牌仍可验证。",
-    signing_keys_rotate_explanation_3: "待这些令牌到期之后，可在本页安全地删除退役密钥。",
 
     // 危险操作确认页面 (RFC 030)
     confirm_cancel: "取消",
@@ -714,7 +752,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     settings_page_title_template: "设置",
     settings_basic_description: "查看当前有效配置。如需修改，请编辑 sui-id.toml 并重启。",
     // Settings: Basic extensions (RFC 051)
-    settings_basic_default_lang_hint: "当未设置用户偏好且浏览器 Accept-Language 不匹配支持的语言时，使用此值作为回退。",
+    settings_basic_default_lang_hint: "当未设置用户偏好、未设置语言 Cookie，且浏览器的 Accept-Language 不匹配受支持的语言时，使用此值作为回退。适用于包括本控制台在内的每个页面。",
     settings_basic_kv_issuer: "Issuer",
     settings_basic_kv_listen: "监听地址",
     settings_basic_kv_cookie_secure: "Cookie Secure 标志",
@@ -841,6 +879,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     me_tab_passkey: "通行密钥",
     me_tab_sessions: "会话",
     me_tab_language: "语言",
+    me_overview_lede: "你的账户概览：两步验证、通行密钥、活动会话以及最近的活动记录。",
     me_overview_section_status: "安全状态",
     me_overview_section_activity: "最近活动",
     me_overview_label_mfa_totp: "MFA（TOTP）",
@@ -854,6 +893,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     me_overview_recovery_completed_by_admin: "您的密码已于 {date} 使用管理员签发的链接重置。",
     me_overview_recovery_completed_by_operator: "您的密码已于 {date} 使用运维人员签发的链接重置。",
     setup_welcome_lang_picker_label: "语言选择",
+    me_passkey_lede: "已在你账户中注册的通行密钥——可在此添加或移除。",
     me_passkey_origin_warning: "通行密钥需要 HTTPS 或 localhost。",
     me_passkey_section_title: "已注册的通行密钥",
     me_passkey_button_rename: "重命名",
@@ -996,6 +1036,13 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     fed_cause_dns_denied: |host, reason| {
         format!("{host}解析到了一个sui-id从不连接的地址（{reason}）。")
     },
+    dns_class_private_network: "私有网络地址",
+    dns_class_loopback: "环回地址",
+    dns_class_link_local: "链路本地地址",
+    dns_class_documentation: "文档/示例用地址",
+    dns_class_broadcast_or_unspecified: "广播或未指定地址",
+    dns_class_translation_or_tunnel: "IPv4/IPv6 转换或隧道用地址",
+    dns_class_reserved_for_special_use: "为特定协议用途保留的地址",
     fed_cause_tls: "与上游的TLS握手失败。请检查此主机的CA证书和上游的证书。",
     fed_cause_timeout: "对上游的请求超时。请检查此主机的网络状况以及上游的可用性。",
     fed_cause_unreachable: "无法连接到上游。请检查此主机的网络和DNS，并查看服务器日志。",

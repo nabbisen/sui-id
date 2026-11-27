@@ -137,14 +137,18 @@ pub fn render_signing_keys(
                 {can_write.then(|| view! {
                     <section id="rotate-key">
                         <div class="card">
-                            <h3 class="card__title">{t.signing_keys_rotate_section}</h3>
-                            <p class="muted">
-                                {t.signing_keys_rotate_explanation_1}
-                                " "
-                                {t.signing_keys_rotate_explanation_2}
-                                " "
-                                {t.signing_keys_rotate_explanation_3}
-                            </p>
+                            <h3 class="card__title">
+                                {t.signing_keys_rotate_section}
+                                {crate::components::help_details(
+                                    t,
+                                    t.help_about_rotation.to_string(),
+                                    t.help_rotation_body,
+                                    concat!(
+                                        crate::github_doc_url!("docs/src/guides/operators.md"),
+                                        "#signing-key-rotation",
+                                    ),
+                                )}
+                            </h3>
                             <div class="card__footer">
                                 <form method="post" action="/admin/signing-keys/rotate">
                                     <input type="hidden" name="_csrf" value=csrf_for_form />

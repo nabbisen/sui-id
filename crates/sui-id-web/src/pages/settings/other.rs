@@ -67,7 +67,18 @@ pub fn render_settings_other(
                 </div>
 
                 <div class="card">
-                    <h3 class="card__title">{t.settings_advanced_storage_section}</h3>
+                    <h3 class="card__title">
+                        {t.settings_advanced_storage_section}
+                        {crate::components::help_details(
+                            t,
+                            t.help_about_storage_paths.to_string(),
+                            t.help_storage_paths_body,
+                            concat!(
+                                crate::github_doc_url!("docs/src/guides/operators.md"),
+                                "#backup-and-restore",
+                            ),
+                        )}
+                    </h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>

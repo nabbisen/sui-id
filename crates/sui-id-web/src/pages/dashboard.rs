@@ -32,6 +32,35 @@ pub struct DashboardEventRow {
     pub result: String,
 }
 
+/// RFC 149 §2 / Q3 §2: the first-run path's five steps' own done-ness.
+/// Step 4 (review sign-in and session settings) has no done state — it
+/// always shows *Recommended* — so it carries no field here.
+pub struct GettingStartedData {
+    pub mfa_done: bool,
+    pub smtp_done: bool,
+    pub first_app_done: bool,
+    pub federation_done: bool,
+}
+
+impl GettingStartedData {
+    /// True once every step that *can* be done (1, 2, 3) is — the
+    /// condition under which the path folds to one line (§2: steps 4
+    /// and 5 never hold it open).
+    pub fn required_done(&self) -> bool {
+        self.mfa_done && self.smtp_done && self.first_app_done
+    }
+}
+
+/// RFC 149 §3 / Q3 §3: a kept pre-rotation master-key backup past its
+/// own review date, read fresh on every dashboard request (never
+/// cached) so a `backup renew`/`backup remove` made while the server
+/// runs is reflected without a restart. No filesystem path — the
+/// operator's own command report has that.
+pub struct KeptBackupOverdue {
+    pub review_at: chrono::DateTime<chrono::Utc>,
+    pub custody_reference: String,
+}
+
 pub struct DashboardData {
     pub admin_username: String,
     pub user_count: usize,
@@ -47,32 +76,43 @@ pub struct DashboardData {
     pub oldest_active_key_age_days: Option<i64>,
     pub outbox_stuck_count: usize,
     pub pending_password_resets: usize,
-    // RFC 073: getting-started checklist (v0.58.0). All five fields
-    // visible only on a fresh instance; the checklist disappears
-    // entirely once every field is `true`.
-    pub gs_smtp_configured: bool,
-    pub gs_first_app_added: bool,
-    pub gs_admin_mfa: bool,
+    // RFC 149 §3 / Q3 §3: two more action items.
+    pub kept_backup_overdue: Option<KeptBackupOverdue>,
+    pub federation_providers_requiring_review: usize,
+    /// RFC 149 §2 / Q3 §2: who sees the first-run path — an auditor
+    /// cannot do steps 2 to 5, so they see none of it.
+    pub is_administrator: bool,
+    pub getting_started: GettingStartedData,
     // RFC 043: last N important audit events shown on dashboard
     pub recent_important: Vec<DashboardEventRow>,
 }
 
 impl DashboardData {
-    /// True iff at least one Getting-Started item is incomplete.
-    /// When false, the checklist disappears from the dashboard.
-    pub fn getting_started_visible(&self) -> bool {
-        !(self.gs_smtp_configured && self.gs_first_app_added && self.gs_admin_mfa)
-    }
-    /// True iff any RFC-073 action item should render. Used to decide
-    /// whether to draw the "Action items" section header at all.
+    /// True iff any RFC-073 action item, or either of the two Q3 ones,
+    /// should render. Used to decide whether to draw the "Action
+    /// items" section header at all.
     pub fn has_action_items(&self) -> bool {
-        self.warn_smtp_not_configured
+        self.smtp_item_shown()
             || self.warn_hibp_off
             || self.warn_cookie_insecure
             || self.admins_without_mfa > 0
             || self.oldest_active_key_age_days.is_some_and(|d| d >= 330)
             || self.outbox_stuck_count > 0
             || self.pending_password_resets >= 5
+            || self.kept_backup_overdue.is_some()
+            || self.federation_providers_requiring_review > 0
+    }
+
+    /// Q3 §2 "no prompt twice": the standalone SMTP action item is
+    /// suppressed exactly when the first-run path is shown (an
+    /// administrator) *and* step 2 on it is not done — the path
+    /// already says so. An auditor, who never sees the path, still
+    /// sees this item.
+    fn smtp_item_shown(&self) -> bool {
+        if !self.warn_smtp_not_configured {
+            return false;
+        }
+        !(self.is_administrator && !self.getting_started.smtp_done)
     }
 }
 
@@ -189,26 +229,29 @@ pub fn render_dashboard(
 ) -> String {
     render(move || {
         let t = lang.strings();
-        // RFC 073: compute visibility flags before destructuring so we
-        // do not need to keep `data` around or borrow it after move.
-        let getting_started_visible = data.getting_started_visible();
+        // RFC 073 / RFC 149 §2-§3: compute visibility flags before
+        // destructuring so we do not need to keep `data` around or
+        // borrow it after move.
+        let smtp_item_shown = data.smtp_item_shown();
         let has_action_items = data.has_action_items();
+        let is_administrator = data.is_administrator;
         let DashboardData {
             admin_username,
             user_count,
             client_count,
             active_session_count,
             sparkline,
-            warn_smtp_not_configured,
+            warn_smtp_not_configured: _warn_smtp_not_configured,
             warn_hibp_off,
             warn_cookie_insecure,
             admins_without_mfa,
             oldest_active_key_age_days,
             outbox_stuck_count,
             pending_password_resets,
-            gs_smtp_configured,
-            gs_first_app_added,
-            gs_admin_mfa,
+            kept_backup_overdue,
+            federation_providers_requiring_review,
+            is_administrator: _is_administrator,
+            getting_started,
             recent_important,
         } = data;
 
@@ -248,23 +291,61 @@ pub fn render_dashboard(
                 </header>
                 {flash_banner(flash)}
 
-                // RFC 073: Getting Started checklist for fresh instances.
-                // Disappears entirely once all three items are done.
-                {getting_started_visible.then(|| view! {
-                    <section class="callout callout--info mb-4" aria-label=t.dashboard_getting_started_title>
-                        <h2 class="callout__title">{t.dashboard_getting_started_title}</h2>
-                        <ul class="checklist">
-                            <li class=if gs_smtp_configured { "done" } else { "" }>
-                                {t.dashboard_getting_started_smtp}
-                            </li>
-                            <li class=if gs_first_app_added { "done" } else { "" }>
-                                {t.dashboard_getting_started_first_app}
-                            </li>
-                            <li class=if gs_admin_mfa { "done" } else { "" }>
-                                {t.dashboard_getting_started_admin_mfa}
-                            </li>
-                        </ul>
-                    </section>
+                // RFC 149 §2 / Q3 §2: the first-run path. An auditor
+                // cannot do steps 2 to 5, so sees none of it. Steps 1
+                // to 3 fold the path to one line once all three are
+                // done; steps 4 and 5 never hold it open.
+                {is_administrator.then(|| {
+                    let open = !getting_started.required_done();
+                    // A step that *can* be done: "Done" in a solid badge,
+                    // or no status word at all — never "to do" (§2).
+                    let done_step = |done: bool, label: &'static str, href: &'static str| view! {
+                        <li class=done.then_some("done")>
+                            {done.then(|| view! { <span class="badge badge--ok">{t.dashboard_gs_status_done}</span> })}
+                            <a href=href>{label}</a>
+                        </li>
+                    };
+                    view! {
+                        <details class="callout callout--info mb-4" open=open>
+                            <summary class="callout__title">
+                                {if open { t.dashboard_gs_title } else { t.dashboard_gs_done }}
+                            </summary>
+                            <ol class="getting-started-path">
+                                {done_step(getting_started.mfa_done, t.dashboard_gs_step1, "/me/security/mfa")}
+                                {done_step(getting_started.smtp_done, t.dashboard_gs_step2, NavItem::Email.href())}
+                                {done_step(getting_started.first_app_done, t.dashboard_gs_step3, "/admin/clients/new")}
+                                <li>
+                                    <span class="badge">{t.dashboard_gs_status_recommended}</span>
+                                    {t.dashboard_gs_step4}
+                                    " — "
+                                    <a href=NavItem::SignInSettings.href()>
+                                        {NavItem::SignInSettings.label(t)}
+                                    </a>
+                                    " · "
+                                    <a href=NavItem::SessionsAndLockout.href()>
+                                        {NavItem::SessionsAndLockout.label(t)}
+                                    </a>
+                                </li>
+                                <li class=getting_started.federation_done.then_some("done")>
+                                    <span class=if getting_started.federation_done { "badge badge--ok" } else { "badge" }>
+                                        {if getting_started.federation_done {
+                                            t.dashboard_gs_status_done
+                                        } else {
+                                            t.dashboard_gs_status_optional
+                                        }}
+                                    </span>
+                                    {t.dashboard_gs_step5}
+                                    " — "
+                                    <a href=concat!(
+                                        crate::github_doc_url!("docs/src/guides/operators.md"),
+                                        "#federated-sign-in-upstream-oidc",
+                                    )>
+                                        {t.help_learn_more}
+                                    </a>
+                                </li>
+                            </ol>
+                        </details>
+                    }
                 })}
 
                 // RFC 073: Action items — appears when any condition is true.
@@ -278,11 +359,13 @@ pub fn render_dashboard(
                                 "⚠ " {t.dashboard_action_required_title}
                             </h2>
                             <ul class="action-items-list">
-                                // From RFC 031 (existing): danger-level config gaps
-                                {warn_smtp_not_configured.then(|| view! { <li>{t.dashboard_warn_smtp}</li> })}
+                                // From RFC 031 (existing): danger-level config gaps.
+                                // Q3 §2 "no prompt twice": suppressed while the
+                                // first-run path already says step 2 is open.
+                                {smtp_item_shown.then(|| view! { <li>{t.dashboard_warn_smtp}</li> })}
                                 {warn_hibp_off.then(|| view! { <li>{t.dashboard_warn_hibp}</li> })}
                                 {warn_cookie_insecure.then(|| view! { <li>{t.dashboard_warn_cookie_insecure}</li> })}
-                                // RFC 073 (new): operational signals
+                                // RFC 073 (existing): operational signals
                                 {(outbox_stuck_count > 0).then(|| view! {
                                     <li>{(t.dashboard_warn_outbox_stuck)(outbox_stuck_count)}</li>
                                 })}
@@ -294,6 +377,34 @@ pub fn render_dashboard(
                                 })}
                                 {(pending_password_resets >= 5).then(|| view! {
                                     <li>{(t.dashboard_warn_pending_resets)(pending_password_resets)}</li>
+                                })}
+                                // RFC 149 §3 / Q3 §3: two more items.
+                                {kept_backup_overdue.map(|b| {
+                                    let text = (t.dashboard_warn_backup_overdue)(
+                                        &fmt_time(b.review_at),
+                                        &b.custody_reference,
+                                    );
+                                    view! {
+                                        <li>
+                                            {text}
+                                            " "
+                                            <a href=concat!(
+                                                crate::github_doc_url!("docs/src/guides/operators.md"),
+                                                "#rotating-the-master-key",
+                                            )>
+                                                {t.help_learn_more}
+                                            </a>
+                                        </li>
+                                    }
+                                })}
+                                {(federation_providers_requiring_review > 0).then(|| view! {
+                                    <li>
+                                        {(t.dashboard_warn_federation_requires_review)(federation_providers_requiring_review)}
+                                        " "
+                                        <a href=NavItem::FederationProviders.href()>
+                                            {NavItem::FederationProviders.label(t)}
+                                        </a>
+                                    </li>
                                 })}
                             </ul>
                         </section>

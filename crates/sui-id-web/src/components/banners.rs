@@ -116,11 +116,9 @@ pub const BANNERS_DEVMODE_CSS: &str = r#"
   font-weight: var(--font-weight-medium);
 }
 
-/* ── Dashboard action items + checklist (RFC 073, v0.58.0) ──────────── */
+/* ── Dashboard action items (RFC 073, v0.58.0) ──────────────────────── */
 /* .action-items-list — flat list of conditional warnings. Each row is */
 /*   a single line: severity dot + message + link.                       */
-/* .checklist         — Getting Started: text-prefixed checkboxes        */
-/*   (☐ / ✓), no colour-only state.                                      */
 .action-items-list {
   list-style: none;
   padding: 0;
@@ -134,30 +132,36 @@ pub const BANNERS_DEVMODE_CSS: &str = r#"
 .action-items-list > li:last-child {
   border-bottom: 0;
 }
-.checklist {
+
+/* ── The first-run path (RFC 149 §2 / Q3 §2) ────────────────────────── */
+/* Replaces the old glyph-only checklist: every step names its status */
+/* in words (a badge), never by colour or a tick alone.                */
+.getting-started-path {
   list-style: none;
   padding: 0;
   margin: 0;
+  counter-reset: step;
 }
-.checklist > li {
-  padding: var(--space-1) 0;
+/* RFC 149 §2: an ordered path, so each step shows its number (the <ol>
+ * already gives the order to assistive technology; the number is for
+ * the eye, since display:flex on the items removes the list marker). */
+.getting-started-path > li::before {
+  counter-increment: step;
+  content: counter(step) ".";
+  min-width: 1.5em;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.getting-started-path > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) 0;
   font-size: var(--font-size-body);
 }
-.checklist > li::before {
-  font-family: monospace;
-  margin-right: var(--space-2);
+.getting-started-path > li.done {
   color: var(--fg-muted);
-  content: "\2610";       /* ☐ ballot box */
-}
-.checklist > li.done {
-  color: var(--fg-muted);
-}
-.checklist > li.done::before {
-  content: "\2713";       /* ✓ check mark */
-  /* RFC 144 refresh rule 3: the done state is carried by the glyph
-     itself and the muted text (.checklist > li.done, above), not by
-     colouring the glyph green. */
-  color: var(--fg-default);
 }
 
 "#;

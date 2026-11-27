@@ -33,7 +33,10 @@ pub fn render_me_language(
         let cur4 = cur.clone();
         view! {
             <Shell title=t.me_language_title.to_string() nav=Chrome::for_person(shell.username, shell.role) lang=lang csrf_token=csrf_token.clone()>
-                <header class="page-header"><h1 class="page-header__title">{t.me_language_title}</h1></header>
+                <header class="page-header">
+                    <h1 class="page-header__title">{t.me_language_title}</h1>
+                    <p class="page-header__lede">{t.me_language_lede}</p>
+                </header>
                 {tabs}
                 {flash_banner(flash)}
                 {just_saved.then(|| view! {
@@ -42,7 +45,6 @@ pub fn render_me_language(
                     </div>
                 })}
                 <div class="card mt-4">
-                    <p class="muted">{t.me_language_lede}</p>
                     <form method="post" action="/me/security/language" class="stack">
                         <input type="hidden" name="_csrf" value=csrf_token/>
                         <div class="field">

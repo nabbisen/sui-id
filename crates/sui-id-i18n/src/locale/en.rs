@@ -206,7 +206,7 @@ pub static STRINGS_EN: Strings = Strings {
     setup_done_next_steps_title: "Next steps",
     setup_done_next_step_register_clients: "Register an OIDC client.",
     setup_done_next_step_enable_mfa: "Enable two-factor authentication with a passkey or authenticator app.",
-    setup_done_next_step_review_settings: "Review the current effective configuration on the Settings tab.",
+    setup_done_next_step_review_settings: "Your dashboard lists what to set up next.",
     setup_done_enter_admin: "Go to admin console",
     setup_not_complete_title: "Setup is not complete",
     setup_not_complete_lede: "The administrator account has not been created yet. Please start setup from the beginning.",
@@ -261,6 +261,7 @@ pub static STRINGS_EN: Strings = Strings {
     profile_subtitle_template: "Security settings for {username}",
     profile_recovery_save_now: "Save these recovery codes now. They will not be shown again.",
     profile_recovery_save_lede: "Each code can be used once. Keep them somewhere safe. If you lose access to your authenticator app, you can enter any one of these codes in place of the 6-digit code to sign in.",
+    me_mfa_lede: "Set up or remove your own two-step verification: an authenticator app (TOTP) and recovery codes.",
     profile_mfa_section: "Two-factor authentication",
     profile_mfa_totp_card_title: "Authenticator app (TOTP)",
     profile_mfa_status_label: "Status:",
@@ -491,6 +492,27 @@ pub static STRINGS_EN: Strings = Strings {
     audit_event_admin_master_key_rotated: "Master key rotated",
     audit_event_setup_create_initial_admin: "Initial admin created",
 
+    // Help, layer 2: on request (RFC 149 §3 / Q3 §1)
+    help_learn_more: "Learn more",
+    help_about_rotation: "About rotation",
+    help_rotation_body: "Rotating creates a new key that signs from then on, and retires the current one, which stays in the JWKS so that tokens it signed still verify. Delete a retired key only once every token it signed has expired: the longer of the access-token and ID-token lifetimes after rotation (both set under [tokens] in the configuration). Deleting it sooner makes those tokens fail at every application.",
+    help_about_session_limits: "About session limits",
+    help_session_limits_body: "The idle timeout ends a session after it sits unused for this long; 0 disables it. The concurrent-session cap evicts the oldest session, first, once a person holds more sessions than this; 0 disables the cap.",
+    help_about_lockout: "About lockout",
+    help_lockout_body: "Failed sign-in attempts lock an account for a progressively longer time, capped at this value, so repeated failures never lock someone out forever. An administrator can clear a lockout immediately with \"sui-id admin user unlock\".",
+    help_about_min_length: "About the minimum length",
+    help_min_length_body: "Every new password — set at account creation, a reset, or a self-service change — must be at least this many characters. It can be raised up to 128 and never set below 12; in dev mode it is always 8, regardless of this setting.",
+    help_about_two_step: "About two-step verification",
+    help_two_step_body: "Two-step verification (an authenticator app, or a passkey) is turned on per account from that person's own account page, not here as a server-wide switch. Recovery codes, issued at enrollment, let someone sign in if they lose their second factor.",
+    help_about_smtp_tls: "About SMTP and TLS",
+    help_smtp_tls_body: "STARTTLS (587) starts in plain text and upgrades to TLS; implicit TLS (465) is encrypted from the first byte. sui-id sends two kinds of email from this address: a password-reset link, and a notice when a password has been changed.",
+    help_about_requires_review: "About \"Requires review\"",
+    help_requires_review_body: "A provider needs review whenever it has not been enabled through a passed check: when it is first added, after its trust policy changes, and after it is disabled. Check and enable runs every check, and enables the provider only if all of them pass. Check only runs the same checks and changes nothing.",
+    help_about_chain_check: "About the chain check",
+    help_chain_check_body: "Each row's hash covers its own content and the previous row's hash, so the rows form a chain. This check recomputes the links of the most recent rows and reports the first that does not match, which reveals a row changed or removed outside sui-id. It is not proof against someone who can write to the database: they could recompute every link after the row they changed.",
+    help_about_storage_paths: "About the storage paths",
+    help_storage_paths_body: "The database holds every account and setting, and the master key decrypts the secrets in it: from SUI_ID_MASTER_KEY when that is set, otherwise from the key file shown here. Back up with sui-id backup create, which takes a consistent copy while the server runs and includes the key file, so add --encrypt before the backup leaves this host. A copy of the database file without its key loses every secret in it.",
+
     // Admin: Dashboard (RFC 029)
     dashboard_title: "Dashboard",
     dashboard_lede: "System overview and recent activity.",
@@ -517,19 +539,38 @@ pub static STRINGS_EN: Strings = Strings {
     },
 
     // Dashboard operator prompts (RFC 031)
-    dashboard_warn_smtp: "Forgot-password email is disabled. Configure SMTP in Settings → Email to enable it.",
-    dashboard_warn_hibp: "Password breach checking is off. Enable it in Settings → Authentication.",
-    dashboard_warn_cookie_insecure: "Cookie Secure flag is off. Set cookie_secure = true in production (Settings → Security).",
+    dashboard_warn_smtp: "Forgot-password email is disabled. Configure SMTP in System → Email to enable it.",
+    dashboard_warn_hibp: "Password breach checking is off. It was chosen during setup, and the console cannot change it yet.",
+    dashboard_warn_cookie_insecure: "Cookie Secure flag is off. In production, set cookie_secure = true under [server] in the configuration file.",
     dashboard_warn_admins_no_mfa: |n| format!("{n} admin account(s) without MFA."),
     dashboard_warn_old_signing_key: |age| {
         format!("Oldest signing key is {age} days old — rotation recommended.")
     },
     dashboard_warn_outbox_stuck: |n| format!("{n} email(s) have been queued for over an hour."),
+    dashboard_range_24h: "Last 24 hours",
+    dashboard_range_7d: "Last 7 days",
+    dashboard_range_30d: "Last 30 days",
+    settings_email_test_passed: "The SMTP connection test passed.",
+    settings_email_test_failed: |e| format!("The SMTP connection test failed: {e}"),
     dashboard_warn_pending_resets: |n| format!("{n} password-reset link(s) outstanding."),
-    dashboard_getting_started_title: "Getting Started",
-    dashboard_getting_started_smtp: "Configure SMTP so users can receive password-reset emails",
-    dashboard_getting_started_first_app: "Add your first OIDC application",
-    dashboard_getting_started_admin_mfa: "Enable MFA on your admin account",
+    dashboard_gs_title: "Getting started",
+    dashboard_gs_done: "Getting started: done",
+    dashboard_gs_step1: "Protect your administrator account",
+    dashboard_gs_step2: "Set up email (password reset and recovery need it)",
+    dashboard_gs_step3: "Add your first app",
+    dashboard_gs_step4: "Review sign-in and session settings",
+    dashboard_gs_step5: "Add a federation provider",
+    dashboard_gs_status_done: "Done",
+    dashboard_gs_status_recommended: "Recommended",
+    dashboard_gs_status_optional: "Optional",
+    dashboard_warn_backup_overdue: |review_at, custody_reference| {
+        format!(
+            "A kept pre-rotation master-key backup is past its review date ({review_at}), under custody reference {custody_reference:?}. Settle it with `sui-id admin master-key backup remove` (once retired or re-encrypted) or `sui-id admin master-key backup renew`."
+        )
+    },
+    dashboard_warn_federation_requires_review: |n| {
+        format!("{n} federation provider(s) require review before they can be enabled.")
+    },
 
     // Admin: Users (RFC 029)
     users_title: "Users",
@@ -633,9 +674,6 @@ pub static STRINGS_EN: Strings = Strings {
     // Signing keys extensions (RFC 051)
     signing_keys_count_caption: |n| format!("{n} registered."),
     signing_keys_th_key_id: "Key ID",
-    signing_keys_rotate_explanation_1: "Rotating issues a new signing key and moves the current one to the retired state.",
-    signing_keys_rotate_explanation_2: "Retired keys stay in JWKS so tokens issued before rotation remain verifiable until they expire.",
-    signing_keys_rotate_explanation_3: "Once those tokens have expired, you can safely delete the retired key from this page.",
 
     // Dangerous operation confirmation screens (RFC 030)
     confirm_cancel: "Cancel",
@@ -729,7 +767,7 @@ pub static STRINGS_EN: Strings = Strings {
     settings_page_title_template: "Settings",
     settings_basic_description: "Review the current effective configuration. To change values, edit sui-id.toml and restart.",
     // Settings: Basic extensions (RFC 051)
-    settings_basic_default_lang_hint: "Used as a fallback when no per-user preference is set and Accept-Language does not match a supported locale.",
+    settings_basic_default_lang_hint: "Used as a fallback when no per-user preference is set, no language cookie is set, and the browser's Accept-Language matches no supported language. Applies to every page, including this console.",
     settings_basic_kv_issuer: "Issuer",
     settings_basic_kv_listen: "Listen address",
     settings_basic_kv_cookie_secure: "Cookie Secure flag",
@@ -856,6 +894,7 @@ pub static STRINGS_EN: Strings = Strings {
     me_tab_passkey: "Passkeys",
     me_tab_sessions: "Sessions",
     me_tab_language: "Language",
+    me_overview_lede: "Your account, at a glance: two-step verification, passkeys, active sessions, and recent activity.",
     me_overview_section_status: "Security status",
     me_overview_section_activity: "Recent activity",
     me_overview_label_mfa_totp: "MFA (TOTP)",
@@ -869,6 +908,7 @@ pub static STRINGS_EN: Strings = Strings {
     me_overview_recovery_completed_by_admin: "Your password was reset on {date}, using a link an administrator issued.",
     me_overview_recovery_completed_by_operator: "Your password was reset on {date}, using a link the host operator issued.",
     setup_welcome_lang_picker_label: "Language picker",
+    me_passkey_lede: "The passkeys registered to your own account — add or remove them here.",
     me_passkey_origin_warning: "Passkeys require HTTPS or localhost.",
     me_passkey_section_title: "Registered passkeys",
     me_passkey_button_rename: "Rename",
@@ -1041,6 +1081,13 @@ pub static STRINGS_EN: Strings = Strings {
     fed_cause_dns_denied: |host, reason| {
         format!("{host} resolves to an address sui-id never connects to ({reason}).")
     },
+    dns_class_private_network: "a private network address",
+    dns_class_loopback: "a loopback address",
+    dns_class_link_local: "a link-local address",
+    dns_class_documentation: "a documentation/example address",
+    dns_class_broadcast_or_unspecified: "a broadcast or unspecified address",
+    dns_class_translation_or_tunnel: "an IPv4/IPv6 translation or tunnelling address",
+    dns_class_reserved_for_special_use: "an address reserved for a specific protocol purpose",
     fed_cause_tls: "The TLS handshake with the upstream failed. Check this host's CA certificates and the upstream's certificate.",
     fed_cause_timeout: "The request to the upstream timed out. Check this host's network and the upstream's availability.",
     fed_cause_unreachable: "The upstream could not be reached. Check this host's network and DNS, and see the server log.",

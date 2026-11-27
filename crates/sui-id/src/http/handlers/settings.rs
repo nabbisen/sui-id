@@ -41,7 +41,8 @@ pub async fn index_redirect() -> Redirect {
 
 pub async fn basic_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -62,7 +63,6 @@ pub async fn basic_get(
         can_write: actor.can_write(),
         username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_basic(data, None, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -82,7 +82,8 @@ pub struct BasicLangForm {
 
 pub async fn basic_lang_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, ref admin_actor, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     axum::Form(form): axum::Form<BasicLangForm>,
 ) -> Result<Response, HttpError> {
@@ -123,7 +124,6 @@ pub async fn basic_lang_post(
         csrf_token: token.clone(),
         username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_basic(data, flash, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -133,7 +133,8 @@ pub async fn basic_lang_post(
 
 pub async fn security_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -156,7 +157,6 @@ pub async fn security_get(
         csrf_token: token.clone(),
         username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_security(data, None, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -229,13 +229,13 @@ pub async fn max_sessions_post(
 
 pub async fn authentication_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let data = authentication_data(&app, actor.can_write(), username).await?;
     let token = csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_authentication(data, None, token.clone(), lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -298,12 +298,12 @@ pub struct PasswordMinLenForm {
 pub async fn password_min_len_post(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id, _, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     axum::Form(form): axum::Form<PasswordMinLenForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
 
     let parsed = form.password_min_len.trim().parse::<i64>().ok();
     let outcome = match parsed {
@@ -346,7 +346,8 @@ pub async fn password_min_len_post(
 
 pub async fn logs_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -390,7 +391,6 @@ pub async fn logs_get(
         username,
     };
     let token = csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_logs(data, None, token.clone(), lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -400,7 +400,8 @@ pub async fn logs_get(
 
 pub async fn other_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -435,7 +436,6 @@ pub async fn other_get(
         username,
     };
     let token = csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_other(data, None, token.clone(), lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -467,7 +467,8 @@ pub struct EmailSettingsForm {
 
 pub async fn email_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -478,7 +479,6 @@ pub async fn email_get(
     data.can_write = actor.can_write();
     data.admin_username = username;
     let token = csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_email(data, token.clone(), None, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -606,7 +606,8 @@ pub struct EmailTestForm {
 
 pub async fn email_test(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, _, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     axum::Form(form): axum::Form<EmailTestForm>,
 ) -> Result<Response, HttpError> {
@@ -633,18 +634,17 @@ pub async fn email_test(
     let flash = match &result {
         Ok(()) => Some(sui_id_web::Flash {
             kind: sui_id_web::FlashKind::Info,
-            text: "SMTP 接続テストが成功しました。".into(),
+            text: lang.strings().settings_email_test_passed.into(),
         }),
         Err(sui_id_core::CoreError::BadRequest(msg)) => Some(sui_id_web::Flash {
             kind: sui_id_web::FlashKind::Error,
-            text: format!("SMTP 接続テストに失敗しました: {msg}"),
+            text: (lang.strings().settings_email_test_failed)(msg),
         }),
         Err(e) => Some(sui_id_web::Flash {
             kind: sui_id_web::FlashKind::Error,
-            text: format!("SMTP 接続テストに失敗しました: {e}"),
+            text: (lang.strings().settings_email_test_failed)(&e.to_string()),
         }),
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_email(data, token.clone(), flash, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -654,7 +654,8 @@ pub async fn email_test(
 /// pending SMTP settings change (RFC 090).
 pub async fn email_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, _, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Response, HttpError> {
@@ -682,7 +683,6 @@ pub async fn email_confirm_get(
             "This pending change has expired or is no longer valid.".into(),
         ))
     })?;
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let data = sui_id_web::SettingsEmailConfirmData {
         pending_change_id: id_str,
         summary,
@@ -710,7 +710,8 @@ pub struct EmailConfirmForm {
 
 pub async fn email_confirm_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor, _): CurrentAdmin,
+    CurrentAdmin(_admin_id, ref admin_actor, _): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     axum::Form(form): axum::Form<EmailConfirmForm>,
@@ -742,7 +743,6 @@ pub async fn email_confirm_post(
     )
     .await
     .map_err(HttpError::html)?;
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let flash = sui_id_web::Flash {
         kind: sui_id_web::FlashKind::Info,
         text: "Email settings saved.".to_owned(),

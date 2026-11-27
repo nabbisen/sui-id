@@ -282,7 +282,7 @@ fn every_transport_cause() -> Vec<TransportCause> {
         },
         TransportCause::DnsDenied {
             host: "www.example.com".to_owned(),
-            reason: "RFC 1918 private range",
+            class: crate::resolver::DeniedPrefixClass::PrivateNetwork,
         },
         TransportCause::Tls,
         TransportCause::Timeout,
@@ -525,4 +525,47 @@ fn discovery_and_jwks_bounds_reach_the_specific_sentence() {
     );
     assert!(d.contains("418"), "{d}");
     assert!(j.contains("418"), "{j}");
+}
+
+/// RFC 149 §4 / Q3 §4, test 9 (part 1): every [`DeniedPrefixClass`]
+/// variant has a non-empty label in every shipped locale.
+#[test]
+fn every_dns_class_has_a_nonempty_label_in_every_locale() {
+    use crate::resolver::DeniedPrefixClass;
+    const CLASSES: [DeniedPrefixClass; 7] = [
+        DeniedPrefixClass::PrivateNetwork,
+        DeniedPrefixClass::Loopback,
+        DeniedPrefixClass::LinkLocal,
+        DeniedPrefixClass::Documentation,
+        DeniedPrefixClass::BroadcastOrUnspecified,
+        DeniedPrefixClass::TranslationOrTunnel,
+        DeniedPrefixClass::ReservedForSpecialUse,
+    ];
+    for locale in Locale::ALL {
+        for class in CLASSES {
+            let label = dns_class_label(class, locale.strings());
+            assert!(!label.is_empty(), "{locale:?}/{class:?}: empty label");
+        }
+    }
+}
+
+/// RFC 149 §4 / Q3 §4, test 9 (part 2): the Japanese page for a denied
+/// host contains no English registry row name — only the class's own
+/// localized label.
+#[test]
+fn the_japanese_denied_page_names_no_registry_row() {
+    use crate::resolver::DeniedPrefixClass;
+    let text = transport_cause_text(
+        &TransportCause::DnsDenied {
+            host: "evil.example".into(),
+            class: DeniedPrefixClass::Loopback,
+        },
+        Locale::Ja.strings(),
+    );
+    // None of the 52 rows' own English registry-name text (an RFC
+    // citation, "Global=True", the row's own English noun) ever
+    // appears in the Japanese rendering — only the class's label.
+    assert!(!text.contains("RFC"), "{text:?}");
+    assert!(!text.contains("Loopback"), "{text:?}");
+    assert!(!text.contains("Global=True"), "{text:?}");
 }

@@ -7,12 +7,16 @@ use axum::extract::State;
 use axum::response::{Html, IntoResponse, Response};
 use axum_extra::extract::cookie::CookieJar;
 use sui_id_core::errors::CoreError;
-use sui_id_store::repos::{clients, users};
-use sui_id_web::{pages::DashboardData, render_dashboard};
+use sui_id_store::repos::{clients, federation_provider, users};
+use sui_id_web::{
+    pages::{DashboardData, GettingStartedData, KeptBackupOverdue},
+    render_dashboard,
+};
 
 pub async fn dashboard(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, role, _, _): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     axum::extract::Query(q): axum::extract::Query<DashboardQuery>,
 ) -> Result<Response, HttpError> {
@@ -58,7 +62,15 @@ pub async fn dashboard(
 
     let range_options = sui_id_core::dashboard::SparklineRange::all()
         .iter()
-        .map(|r| (r.as_query().to_string(), r.label_ja().to_string()))
+        .map(|r| {
+            let t = lang.strings();
+            let label = match r {
+                sui_id_core::dashboard::SparklineRange::Last24Hours => t.dashboard_range_24h,
+                sui_id_core::dashboard::SparklineRange::Last7Days => t.dashboard_range_7d,
+                sui_id_core::dashboard::SparklineRange::Last30Days => t.dashboard_range_30d,
+            };
+            (r.as_query().to_string(), label.to_string())
+        })
         .collect::<Vec<_>>();
 
     let sparkline = sui_id_web::DashboardSparkline {
@@ -106,12 +118,47 @@ pub async fn dashboard(
             .await
             .unwrap_or(0);
 
-    // Getting Started checklist (RFC 073).
-    let gs_smtp_configured = smtp_configured;
-    let gs_first_app_added = clients_n > 0;
+    // RFC 149 §2 / Q3 §2: the first-run path's own done-ness.
     let gs_admin_mfa = sui_id_store::repos::users::has_mfa(&app.db, &admin_id)
         .await
         .unwrap_or(false);
+    let federation_providers = federation_provider::list(&app.db).await.unwrap_or_default();
+    let getting_started = GettingStartedData {
+        mfa_done: gs_admin_mfa,
+        smtp_done: smtp_configured,
+        first_app_done: clients_n > 0,
+        federation_done: !federation_providers.is_empty(),
+    };
+    let federation_providers_requiring_review = federation_providers
+        .iter()
+        .filter(|p| p.validation_status == sui_id_store::models::ValidationStatus::RequiresReview)
+        .count();
+
+    // RFC 149 §3 / Q3 §3: a kept pre-rotation master-key backup past its
+    // own review date, read fresh on every request (never cached) so a
+    // `backup renew`/`backup remove` made while the server runs is
+    // reflected without a restart. Shares `overdue_backup_review` — the
+    // one predicate that decides what counts as overdue — with
+    // `admin master-key rotate --check`'s own report; only the
+    // presentation differs (no filesystem path here).
+    let backup_read_started = std::time::Instant::now();
+    let kept_backup_overdue = sui_id_store::master_key_rotation::read(&app.db)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|row| {
+            let now = app.clock.now();
+            sui_id_store::master_key_rotation::overdue_backup_review(&row, now).map(
+                |(review_at, custody_reference)| KeptBackupOverdue {
+                    review_at,
+                    custody_reference: custody_reference.to_owned(),
+                },
+            )
+        });
+    tracing::trace!(
+        micros = backup_read_started.elapsed().as_micros(),
+        "dashboard: kept-backup-overdue read"
+    );
 
     // RFC 043: fetch last 5 important audit events for the dashboard card.
     let audit_rows = sui_id_store::repos::audit::recent_important(&app.db, 5)
@@ -153,13 +200,13 @@ pub async fn dashboard(
         oldest_active_key_age_days,
         outbox_stuck_count,
         pending_password_resets,
-        gs_smtp_configured,
-        gs_first_app_added,
-        gs_admin_mfa,
+        kept_backup_overdue,
+        federation_providers_requiring_review,
+        is_administrator: role.is_admin(),
+        getting_started,
         recent_important,
     };
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_dashboard(
         data,
         None,

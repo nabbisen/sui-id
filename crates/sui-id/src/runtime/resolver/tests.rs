@@ -189,7 +189,10 @@ fn ipv4_mapped_is_denied_both_directly_and_by_its_embedded_address() {
     // embedded address (127.0.0.1) independently matches Loopback --
     // the "belt and braces" the module doc comment names.
     let mapped = IpAddr::from_str("::ffff:127.0.0.1").unwrap();
-    assert_eq!(denied_by(mapped), Some("IPv4-mapped Address -- RFC 4291"));
+    assert_eq!(
+        denied_by(mapped).map(|(name, _)| name),
+        Some("IPv4-mapped Address -- RFC 4291")
+    );
     let IpAddr::V6(v6) = mapped else {
         unreachable!()
     };
@@ -222,7 +225,7 @@ fn ipv4_mapped_and_ipv4_compatible_ranges_do_not_overlap() {
     // embedded public address is NOT independently denied) -- the
     // point here is *which* row fires.
     assert_eq!(
-        denied_by(compatible_public),
+        denied_by(compatible_public).map(|(name, _)| name),
         Some(
             "IPv4-compatible Address -- RFC 4291 S2.5.5.1 (not an IANA registry row -- the matrix's own explicit deny-list entry, distinct from IPv4-mapped above)"
         )
@@ -352,9 +355,9 @@ async fn classify_dns_finds_a_denied_address_through_a_real_request() {
         .expect("client");
     let err = client.get("http://localhost/").send().await.unwrap_err();
     match classify_dns(&err) {
-        Some(DnsOutcome::Denied { host, reason }) => {
+        Some(DnsOutcome::Denied { host, class }) => {
             assert_eq!(host, "localhost");
-            assert!(reason.contains("Loopback"), "{reason}");
+            assert_eq!(class, DeniedPrefixClass::Loopback);
         }
         other => panic!("expected Denied, got {other:?}"),
     }

@@ -333,6 +333,152 @@ fn no_kv_list_remains() {
     }
 }
 
+/// Q3 §6 test 3: every `crate::components::help_details(...)` call's
+/// `body` argument — read from the `Strings` source, not re-derived here
+/// — has at most three sentences. A period inside a quoted CLI command
+/// or an env var name (neither contains one) would otherwise miscount,
+/// so this also fails loudly if such a thing is ever added rather than
+/// silently undercounting.
+#[test]
+fn every_help_block_is_at_most_three_sentences() {
+    let strings_src = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../sui-id-i18n/src/locale/en.rs"),
+    )
+    .expect("read en.rs");
+    let mut checked = 0usize;
+    for (name, src) in page_sources() {
+        let mut from = 0usize;
+        while let Some(rel) = src[from..].find("crate::components::help_details(") {
+            let pos = from + rel;
+            // The call's third argument, `t.help_*_body` — scan every
+            // `t.help_*` field within the call (the second argument,
+            // `t.help_about_*`, is not it) for the one ending `_body`.
+            let window_end = (pos + 600).min(src.len());
+            let window = &src[pos..window_end];
+            let mut search_from = 0usize;
+            let mut field = None;
+            while let Some(wrel) = window[search_from..].find("t.help_") {
+                let start = search_from + wrel + 2; // past "t."
+                let end = start
+                    + window[start..]
+                        .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+                        .unwrap_or(0);
+                let candidate = &window[start..end];
+                search_from = end;
+                if candidate.ends_with("_body") {
+                    field = Some(candidate.to_owned());
+                    break;
+                }
+            }
+            from = pos + 1;
+            let no_body_msg =
+                format!("{name}: a help_details(...) call has no t.help_*_body argument");
+            let field = field.expect(&no_body_msg);
+            let marker = format!("{field}: \"");
+            let not_found_msg = format!("{name}: {field} not found in en.rs");
+            let val_rel = strings_src.find(&marker).expect(&not_found_msg);
+            let val_start = val_rel + marker.len();
+            let no_close_msg = format!("{name}: {field}'s closing quote not found");
+            let val_end_rel = strings_src[val_start..].find("\",\n").expect(&no_close_msg);
+            let text = &strings_src[val_start..val_start + val_end_rel];
+            let sentences = text.matches(". ").count() + 1;
+            assert!(
+                sentences <= 3,
+                "{name}: {field} has {sentences} sentences (at most three allowed): {text:?}"
+            );
+            checked += 1;
+        }
+    }
+    assert_eq!(
+        checked, 9,
+        "expected 9 help blocks (§1's own list), found {checked} — a page was added, removed, \
+         or stopped calling help_details"
+    );
+}
+
+/// Q3 §6 test 4: every `crate::github_doc_url!("path")` this crate
+/// expands resolves to a real file under the repository root; a
+/// `"#slug"` immediately following it (in the same `concat!`) resolves
+/// to a real heading in that file (mdBook/GitHub's own slug rule:
+/// lowercase, drop everything but letters/digits/spaces/hyphens, spaces
+/// become hyphens).
+#[test]
+fn every_learn_more_link_resolves() {
+    fn repo_root() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repo root")
+    }
+    fn slugify(heading: &str) -> String {
+        let mut out = String::new();
+        for c in heading.chars() {
+            let c = c.to_ascii_lowercase();
+            if c.is_ascii_alphanumeric() {
+                out.push(c);
+            } else if (c == ' ' || c == '-') && !out.ends_with('-') && !out.is_empty() {
+                out.push('-');
+            }
+        }
+        while out.ends_with('-') {
+            out.pop();
+        }
+        out
+    }
+    let root = repo_root();
+    let mut checked = 0usize;
+    for (name, src) in page_sources() {
+        let marker = "crate::github_doc_url!(\"";
+        let mut from = 0usize;
+        while let Some(rel) = src[from..].find(marker) {
+            let path_start = from + rel + marker.len();
+            let path_end = path_start + src[path_start..].find('"').expect("closing quote");
+            let rel_path = &src[path_start..path_end];
+            from = path_end + 1;
+            checked += 1;
+            let file_path = root.join(rel_path);
+            let read_msg = format!("{name}: {rel_path}: could not read this doc file");
+            let content = fs::read_to_string(&file_path).expect(&read_msg);
+
+            // An anchor, if the very next string literal (skipping
+            // whitespace/commas/newlines) starts with '#'.
+            let tail = &src[path_end + 1..];
+            let Some(next_quote_rel) = tail.find('"') else {
+                continue;
+            };
+            let between = &tail[..next_quote_rel];
+            if !between
+                .trim_matches(|c: char| c.is_whitespace() || c == ',')
+                .is_empty()
+            {
+                // Something else sits between — not an adjacent anchor.
+                continue;
+            }
+            let anchor_start = next_quote_rel + 1;
+            let Some(anchor_end_rel) = tail[anchor_start..].find('"') else {
+                continue;
+            };
+            let candidate = &tail[anchor_start..anchor_start + anchor_end_rel];
+            let Some(slug) = candidate.strip_prefix('#') else {
+                continue;
+            };
+            let headings: Vec<String> = content
+                .lines()
+                .filter(|l| l.trim_start().starts_with('#'))
+                .map(|l| slugify(l.trim_start().trim_start_matches('#').trim()))
+                .collect();
+            assert!(
+                headings.iter().any(|h| h == slug),
+                "{name}: {rel_path}#{slug} — no heading slugifies to {slug:?}; headings found: {headings:?}"
+            );
+        }
+    }
+    assert_eq!(
+        checked, 13,
+        "expected 13 github_doc_url! call sites, found {checked} — one was added or removed"
+    );
+}
+
 // ── RFC 144 N2e §2: a password match you can see ──────────────────────────
 
 /// The three forms with a confirmation field (`pages/setup/admin.rs`'s
@@ -366,6 +512,35 @@ fn every_confirmation_field_is_wired_to_the_match_script() {
                 found, *expected_forms,
                 "{file}: expected {expected_forms} {label}(s) ({needle}), found {found}"
             );
+        }
+    }
+}
+
+/// Q3's review: Q2 replaced the settings tab strip with the sidebar, but
+/// four messages still sent the reader to *Settings → …*, a place that
+/// no longer exists (the dashboard's SMTP, HIBP and cookie warnings, and
+/// the setup wizard's last step). No shipped locale may name it again.
+#[test]
+fn no_message_names_the_retired_settings_navigation() {
+    let locale_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sui-id-i18n/src/locale");
+    let retired = [
+        "Settings →",
+        "Settings tab",
+        "設定 →",
+        "設定タブで",
+        "设置 →",
+        "设置选项卡",
+    ];
+    for file in ["en.rs", "ja.rs", "zh_hans.rs"] {
+        let src = fs::read_to_string(locale_dir.join(file)).expect("read locale");
+        for line in src.lines().filter(|l| !l.trim_start().starts_with("//")) {
+            for name in retired {
+                assert!(
+                    !line.contains(name),
+                    "{file}: a message names the retired settings navigation ({name}): {}",
+                    line.trim()
+                );
+            }
         }
     }
 }

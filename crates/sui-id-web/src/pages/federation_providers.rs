@@ -131,7 +131,18 @@ pub fn render_federation_providers(
                                             <th>{t.federation_providers_th_name}</th>
                                             <th>{t.federation_providers_th_issuer}</th>
                                             <th>{t.federation_providers_th_state}</th>
-                                            <th>{t.federation_providers_th_review}</th>
+                                            <th>
+                                                {t.federation_providers_th_review}
+                                                {crate::components::help_details(
+                                                    t,
+                                                    t.help_about_requires_review.to_string(),
+                                                    t.help_requires_review_body,
+                                                    concat!(
+                                                        crate::github_doc_url!("docs/src/guides/operators.md"),
+                                                        "#federated-sign-in-upstream-oidc",
+                                                    ),
+                                                )}
+                                            </th>
                                             <th>{t.federation_providers_th_last_checked}</th>
                                             <th>{t.federation_providers_th_linked_users}</th>
                                             <th></th>

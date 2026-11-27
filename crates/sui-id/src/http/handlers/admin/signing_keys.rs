@@ -18,7 +18,8 @@ use sui_id_web::{
 
 pub async fn signing_keys_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -38,7 +39,6 @@ pub async fn signing_keys_delete_confirm_get(
         csrf_token: token.clone(),
         admin_username: username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_delete_signing_key(
         data,
         app.is_dev_mode,
@@ -58,7 +58,8 @@ pub async fn signing_keys_delete_confirm_get(
 /// only happens when the user submits the confirm POST.
 pub async fn signing_keys_rotate_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
@@ -84,7 +85,6 @@ pub async fn signing_keys_rotate_confirm_get(
         active_key_count,
         admin_username: username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_rotate_signing_key(
         data,
         app.is_dev_mode,
@@ -96,7 +96,8 @@ pub async fn signing_keys_rotate_confirm_get(
 
 pub async fn signing_keys_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role, _, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, role, _, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -114,7 +115,6 @@ pub async fn signing_keys_get(
         })
         .collect();
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_signing_keys(
         role.is_admin(),
         summaries,

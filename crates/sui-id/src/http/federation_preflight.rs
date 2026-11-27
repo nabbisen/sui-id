@@ -58,7 +58,10 @@ pub enum TransportCause {
     DnsAnswerRejected { host: String, count: usize },
     /// The resolved name's answer included an address sui-id never
     /// connects to.
-    DnsDenied { host: String, reason: &'static str },
+    DnsDenied {
+        host: String,
+        class: crate::resolver::DeniedPrefixClass,
+    },
     /// The TLS handshake failed.
     Tls,
     /// The request timed out.
@@ -83,8 +86,8 @@ pub(crate) fn classify_transport(err: &reqwest::Error) -> TransportCause {
             crate::resolver::DnsOutcome::AnswerRejected { host, count } => {
                 TransportCause::DnsAnswerRejected { host, count }
             }
-            crate::resolver::DnsOutcome::Denied { host, reason } => {
-                TransportCause::DnsDenied { host, reason }
+            crate::resolver::DnsOutcome::Denied { host, class } => {
+                TransportCause::DnsDenied { host, class }
             }
         };
     }

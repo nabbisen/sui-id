@@ -81,7 +81,18 @@ pub fn render_settings_email(
                 {flash_banner(flash)}
 
                 <div class="card">
-                    <h3 class="card__title">{t.settings_email_smtp_section}</h3>
+                    <h3 class="card__title">
+                        {t.settings_email_smtp_section}
+                        {crate::components::help_details(
+                            t,
+                            t.help_about_smtp_tls.to_string(),
+                            t.help_smtp_tls_body,
+                            concat!(
+                                crate::github_doc_url!("docs/src/guides/operators.md"),
+                                "#configuring-smtp",
+                            ),
+                        )}
+                    </h3>
                     <form method="post" action="/admin/settings/email" class="stack">
                         <input type="hidden" name="_csrf" value=csrf_save />
                         <div class="field">

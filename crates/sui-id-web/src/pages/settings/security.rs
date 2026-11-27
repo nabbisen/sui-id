@@ -51,7 +51,15 @@ pub fn render_settings_security(
         let csrf_for_cap = csrf_token.clone();
         let session_forms = view! {
             <section class="section">
-                <h2 class="section__title">{t.settings_security_session_section}</h2>
+                <h2 class="section__title">
+                    {t.settings_security_session_section}
+                    {crate::components::help_details(
+                        t,
+                        t.help_about_session_limits.to_string(),
+                        t.help_session_limits_body,
+                        crate::github_doc_url!("docs/src/guides/operators.md"),
+                    )}
+                </h2>
                 <p class="muted">
                     {t.settings_security_session_lede}
                 </p>
@@ -109,7 +117,18 @@ pub fn render_settings_security(
                 {flash_banner(flash)}
 
                 <div class="card">
-                    <h3 class="card__title">{t.settings_security_lockout_section}</h3>
+                    <h3 class="card__title">
+                        {t.settings_security_lockout_section}
+                        {crate::components::help_details(
+                            t,
+                            t.help_about_lockout.to_string(),
+                            t.help_lockout_body,
+                            concat!(
+                                crate::github_doc_url!("docs/src/guides/operators.md"),
+                                "#account-lockout",
+                            ),
+                        )}
+                    </h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>
@@ -121,7 +140,7 @@ pub fn render_settings_security(
                         {t.settings_security_lockout_hint_1}
                         " "
                         {t.settings_security_lockout_hint_2_pre}
-                        <span class="code">"sui-id admin unlock-user"</span>
+                        <span class="code">"sui-id admin user unlock"</span>
                         {t.settings_security_lockout_hint_2_post}
                     </p>
                 </div>

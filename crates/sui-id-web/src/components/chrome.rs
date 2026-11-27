@@ -584,6 +584,19 @@ pub const CHROME_RESPONSIVE_CSS: &str = r#"
   .setup-lang-picker {
     flex-wrap: wrap;
   }
+  /* RFC 149 §3 / Q3 §3: the dashboard's range tabs were measured at
+   * 401px wide at a 375px viewport (Q2's own return, re-measured by
+   * Q2's review) — `.flex-0-auto` keeps the row from shrinking, and
+   * three non-wrapping links don't fit. Dropping to its own full-width
+   * row lets the links wrap instead of forcing the page to scroll. */
+  .sparkline-header {
+    flex-wrap: wrap;
+  }
+  .sparkline-header .app-nav.flex-0-auto {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
 }
 
 /* 480px — small phones (iPhone SE, Galaxy A series). */

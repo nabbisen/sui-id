@@ -32,7 +32,8 @@ use sui_id_web::{
 
 pub async fn users_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role, ref read_actor, username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, role, ref read_actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -57,7 +58,6 @@ pub async fn users_get(
     }
     // summaries already collected in for loop above
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_users(
         role.is_admin(),
         summaries,
@@ -75,6 +75,7 @@ pub async fn users_get(
 pub async fn users_new_get(
     state_ext: AppStateExt,
     CurrentAdminOrAuditor(admin_id, _role, ref actor, username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     // RFC 088: auditors reach a 403 page, not a login redirect.
@@ -83,7 +84,6 @@ pub async fn users_new_get(
     }
     let State(app) = state_ext;
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     // The account is created without a password and activated through a
     // recovery link, and issuing one needs the administrator's own second
     // factor (RFC 103 D6). Say so *before* the form is filled in, not on the
@@ -122,7 +122,8 @@ pub struct CreateUserForm {
 
 pub async fn users_create(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor, username): CurrentAdmin,
+    CurrentAdmin(_admin_id, ref admin_actor, username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<CreateUserForm>,
 ) -> Result<Response, HttpError> {
@@ -177,7 +178,6 @@ pub async fn users_create(
                 kind: FlashKind::Error,
                 text: msg,
             };
-            let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
             let resp = Html(render_users_new(
                 Some(flash),
                 token.clone(),
@@ -287,7 +287,8 @@ pub async fn users_mfa_reset(
 
 pub async fn users_detail_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role, _, admin_username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, role, _, admin_username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
@@ -385,7 +386,6 @@ pub async fn users_detail_get(
     };
 
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let data = UserDetailData {
         user_id: id,
         username: user.username,
@@ -422,7 +422,8 @@ pub async fn users_detail_get(
 
 pub async fn users_disable_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
@@ -443,14 +444,14 @@ pub async fn users_disable_confirm_get(
         csrf_token: token.clone(),
         admin_username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_disable_user(data, app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 pub async fn users_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -475,14 +476,14 @@ pub async fn users_delete_confirm_get(
         csrf_token: token.clone(),
         admin_username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_delete_user(data, app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 pub async fn users_mfa_reset_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -507,7 +508,6 @@ pub async fn users_mfa_reset_confirm_get(
         csrf_token: token.clone(),
         admin_username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_reset_mfa(data, app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
@@ -519,14 +519,13 @@ pub async fn users_mfa_reset_confirm_get(
 /// case.
 async fn recovery_refused_page(
     app: &crate::AppState,
-    admin_id: UserId,
+    lang: sui_id_i18n::Locale,
     admin_username: String,
     jar: &CookieJar,
     target_id: &str,
     kind: RecoveryRefusedKind,
 ) -> Response {
     let token = crate::csrf::ensure_token(jar);
-    let lang = crate::handlers::resolve_admin_locale(app, admin_id).await;
     let status = match kind {
         RecoveryRefusedKind::ReasonRequired
         | RecoveryRefusedKind::ReasonTooLong
@@ -579,6 +578,7 @@ fn refused_kind(why: sui_id_store::errors::RecoveryRefusal) -> RecoveryRefusedKi
 pub async fn users_recovery_link_confirm_get(
     state_ext: AppStateExt,
     CurrentAdminOrAuditor(admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -602,7 +602,7 @@ pub async fn users_recovery_link_confirm_get(
     {
         return Ok(recovery_refused_page(
             &app,
-            admin_id,
+            lang,
             admin_username,
             &jar,
             &id,
@@ -617,7 +617,6 @@ pub async fn users_recovery_link_confirm_get(
         csrf_token: token.clone(),
         admin_username,
     };
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_confirm_recovery_link(data, app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
@@ -630,9 +629,11 @@ pub async fn users_recovery_link_confirm_get(
 /// **The link and the token are rendered directly in this response**, with
 /// `Cache-Control: no-store` and `Referrer-Policy: no-referrer`, and are never
 /// placed in a redirect, a URL, a cookie or a log line.
+#[allow(clippy::too_many_arguments)]
 pub async fn users_recovery_link(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id, ref admin_actor, admin_username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     request_id: Option<axum::Extension<crate::request_id::RequestId>>,
     jar: CookieJar,
@@ -655,7 +656,7 @@ pub async fn users_recovery_link(
         Err(sui_id_store::StoreError::NotFound) => {
             return Ok(recovery_refused_page(
                 &app,
-                admin_id,
+                lang,
                 admin_username,
                 &jar,
                 &id,
@@ -690,7 +691,7 @@ pub async fn users_recovery_link(
             }
             return Ok(recovery_refused_page(
                 &app,
-                admin_id,
+                lang,
                 admin_username,
                 &jar,
                 &id,
@@ -712,7 +713,7 @@ pub async fn users_recovery_link(
             }
             return Ok(recovery_refused_page(
                 &app,
-                admin_id,
+                lang,
                 admin_username,
                 &jar,
                 &id,
@@ -734,7 +735,6 @@ pub async fn users_recovery_link(
     };
 
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = render_recovery_link_issued(
         RecoveryLinkIssuedData {
             user_id: id,
@@ -764,6 +764,7 @@ pub async fn users_recovery_link(
 pub async fn users_set_role(
     State(app): AppStateExt,
     CurrentAdmin(admin_id, ref admin_actor, _): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Path(id): Path<String>,
     Form(form): Form<CsrfRoleForm>,
@@ -797,7 +798,6 @@ pub async fn users_set_role(
         },
     ) == sui_id_core::authz::Decision::Deny
     {
-        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
         return Err(HttpError::html(CoreError::BadRequest(
             lang.strings().user_detail_role_last_admin.to_owned(),
         )));
@@ -859,7 +859,8 @@ async fn provider_display_name_or_default(
 
 pub async fn users_unlink_federation_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_admin_id, _role, ref actor, admin_username): CurrentAdminOrAuditor,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path((user_id, provider_id)): Path<(String, String)>,
@@ -894,7 +895,6 @@ pub async fn users_unlink_federation_confirm_get(
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let data = ConfirmUnlinkFederationData {
         user_id,
         username: user.username,
@@ -916,7 +916,8 @@ pub async fn users_unlink_federation_confirm_get(
 
 pub async fn users_unlink_federation_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor, admin_username): CurrentAdmin,
+    CurrentAdmin(_admin_id, ref admin_actor, admin_username): CurrentAdmin,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path((user_id, provider_id)): Path<(String, String)>,
@@ -946,7 +947,6 @@ pub async fn users_unlink_federation_post(
             Ok(crate::handlers::step_up_redirect(&return_to))
         }
         Err(e) => {
-            let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
             let user = users::get(&app.db, target)
                 .await
                 .map_err(|e| HttpError::html(CoreError::from(e)))?;

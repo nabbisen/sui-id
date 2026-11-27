@@ -91,7 +91,10 @@ pub fn render_me_passkey(
         }).collect();
         view! {
             <Shell title=t.me_passkey_section_title.to_string() nav=Chrome::for_person(shell.username, shell.role) lang=lang csrf_token=csrf_token.clone()>
-                <header class="page-header"><h1 class="page-header__title">{t.me_passkey_section_title}</h1></header>
+                <header class="page-header">
+                    <h1 class="page-header__title">{t.me_passkey_section_title}</h1>
+                    <p class="page-header__lede">{t.me_passkey_lede}</p>
+                </header>
                 {tabs}
                 {flash_banner(flash)}
                 {warning}

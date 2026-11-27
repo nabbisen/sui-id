@@ -255,7 +255,18 @@ async fn audit_filter_by_event_prefix() {
 
 // ---------- RFC 031: dashboard operator prompts ----------
 
-/// When SMTP is not configured, the dashboard should show the SMTP warning.
+/// When SMTP is not configured, the dashboard should mention it.
+///
+/// RFC 149 Q3 §2 ("no prompt twice"): for an administrator who hasn't
+/// finished the first-run path, this is now said *once*, by the
+/// path's own step 2 — the standalone action item this test used to
+/// name is suppressed exactly here, so it no longer appears. Before
+/// Q3, the assertion below passed because of the standalone item;
+/// after Q3, it still passes, but only because the path's step 2 text
+/// happens to also contain "メール" — which would have let a real
+/// regression (the mention vanishing from both places) through
+/// unnoticed. Tightened to check the path's own text specifically,
+/// and that the standalone item really is gone.
 #[tokio::test]
 async fn dashboard_shows_smtp_warning_when_unconfigured() {
     let state = test_app();
@@ -277,10 +288,14 @@ async fn dashboard_shows_smtp_warning_when_unconfigured() {
     assert_eq!(resp.status(), StatusCode::OK);
     let bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&bytes);
-    // The SMTP warning should appear (any locale).
+    let ja = sui_id_i18n::Locale::Ja.strings();
     assert!(
-        body.contains("SMTP") || body.contains("smtp") || body.contains("メール"),
-        "expected SMTP warning on dashboard"
+        body.contains(ja.dashboard_gs_step2),
+        "expected the first-run path's own step 2 to mention email setup"
+    );
+    assert!(
+        !body.contains(ja.dashboard_warn_smtp),
+        "the standalone SMTP item must be suppressed while the path already says so"
     );
 }
 

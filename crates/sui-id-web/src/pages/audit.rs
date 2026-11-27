@@ -95,9 +95,18 @@ pub fn render_audit(
         };
         let label = chain_status_label(t, &chain);
         let chain_banner_view = view! {
-            <p class=class>
-                {prefix} {label}
-            </p>
+            <div class="row gap1-center">
+                <p class=class>{prefix} {label}</p>
+                {crate::components::help_details(
+                    t,
+                    t.help_about_chain_check.to_string(),
+                    t.help_chain_check_body,
+                    concat!(
+                        crate::github_doc_url!("docs/src/guides/operators.md"),
+                        "#audit-log-integrity",
+                    ),
+                )}
+            </div>
         }
         .into_any();
         view! {

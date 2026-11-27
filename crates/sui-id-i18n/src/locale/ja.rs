@@ -205,7 +205,7 @@ pub static STRINGS_JA: Strings = Strings {
     setup_done_next_steps_title: "次のステップ",
     setup_done_next_step_register_clients: "OIDC クライアントを登録する。",
     setup_done_next_step_enable_mfa: "パスキーや認証アプリで 2 段階認証を有効にする。",
-    setup_done_next_step_review_settings: "設定タブで現在の有効な設定を確認する。",
+    setup_done_next_step_review_settings: "次に設定することは、ダッシュボードに一覧で表示されます。",
     setup_done_enter_admin: "管理画面へ進む",
     setup_not_complete_title: "セットアップは完了していません",
     setup_not_complete_lede: "管理者アカウントの作成がまだ完了していません。セットアップを最初から始めてください。",
@@ -260,6 +260,7 @@ pub static STRINGS_JA: Strings = Strings {
     profile_subtitle_template: "{username} のセキュリティ設定",
     profile_recovery_save_now: "リカバリーコードを今すぐ保存してください。再表示はされません。",
     profile_recovery_save_lede: "各コードは 1 度だけ使えます。安全な場所に保管してください。認証アプリへのアクセスを失った場合、6 桁コードの代わりにこのいずれかを入力してサインインできます。",
+    me_mfa_lede: "自分自身の2段階認証（認証アプリ・TOTP）とリカバリーコードを設定・解除します。",
     profile_mfa_section: "2 段階認証",
     profile_mfa_totp_card_title: "認証アプリ(TOTP)",
     profile_mfa_status_label: "状態:",
@@ -487,6 +488,27 @@ pub static STRINGS_JA: Strings = Strings {
     audit_event_admin_master_key_rotated: "マスターキーローテーション",
     audit_event_setup_create_initial_admin: "初期管理者作成",
 
+    // ヘルプ・レイヤー2: 要求時に表示 (RFC 149 §3 / Q3 §1)
+    help_learn_more: "詳しく見る",
+    help_about_rotation: "ローテーションについて",
+    help_rotation_body: "ローテーションすると、以後は新しい鍵が署名し、現在の鍵は退役して JWKS に残るため、その鍵で署名されたトークンも引き続き検証できます。退役した鍵を削除するのは、それで署名されたトークンがすべて期限切れになってから、つまりローテーションからアクセストークンと ID トークンの有効期間の長いほう（どちらも設定の [tokens] で指定）が過ぎてからにしてください。早く削除すると、それらのトークンはどのアプリでも検証に失敗します。",
+    help_about_session_limits: "セッション制限について",
+    help_session_limits_body: "アイドルタイムアウトは、これだけの時間使用されなかったセッションを終了します。0で無効になります。同時セッション数の上限は、この数を超えて保持された場合に最も古いセッションから順に失効させます。0で上限が無効になります。",
+    help_about_lockout: "ロックアウトについて",
+    help_lockout_body: "サインイン失敗が続くとアカウントは段階的に長くロックされますが、この値を上限として、繰り返しの失敗で永久にロックされることはありません。管理者は「sui-id admin user unlock」で即座にロックアウトを解除できます。",
+    help_about_min_length: "最小文字数について",
+    help_min_length_body: "新しいパスワード（アカウント作成時、リセット時、セルフサービスでの変更時のいずれも）は、この文字数以上である必要があります。最大128まで引き上げ可能で、12未満には設定できません。開発モードではこの設定に関わらず常に8です。",
+    help_about_two_step: "2段階認証について",
+    help_two_step_body: "2段階認証（認証アプリまたはパスキー）は、サーバー全体の切り替えとしてではなく、本人が自分のアカウントページから有効にします。登録時に発行されるリカバリーコードを使うと、2つ目の要素を紛失した場合でもサインインできます。",
+    help_about_smtp_tls: "SMTPとTLSについて",
+    help_smtp_tls_body: "STARTTLS（587）は平文で始まり TLS に切り替わります。暗黙的 TLS（465）は最初のバイトから暗号化されます。sui-id がこのアドレスから送るメールは 2 種類です。パスワード再設定のリンクと、パスワードが変更されたときのお知らせです。",
+    help_about_requires_review: "「レビュー待ち」について",
+    help_requires_review_body: "プロバイダーは、確認に合格して有効化されるまで「レビュー待ち」です。追加した直後、信頼ポリシーを変更した後、無効化した後も同じです。「確認して有効化」はすべての確認を実行し、すべて合格した場合にのみ有効化します。「確認のみ」は同じ確認を実行するだけで、何も変更しません。",
+    help_about_chain_check: "チェーンチェックについて",
+    help_chain_check_body: "各行のハッシュはその行の内容と直前の行のハッシュから計算されるため、行は鎖のようにつながっています。この検査は直近の行のつながりを計算し直し、一致しない最初の行を報告します。これで sui-id の外で変更・削除された行がわかります。ただし、データベースに書き込める人に対する証明にはなりません。その人は、変更した行より後のつながりをすべて計算し直せるからです。",
+    help_about_storage_paths: "保存先パスについて",
+    help_storage_paths_body: "データベースにはすべてのアカウントと設定が入っており、その中の秘密情報はマスターキーで復号されます。マスターキーは SUI_ID_MASTER_KEY が設定されていればそこから、なければここに表示された鍵ファイルから読み込まれます。バックアップには sui-id backup create を使ってください。サーバーの稼働中でも整合したコピーを取り、鍵ファイルも含むため、このホストの外へ持ち出す前に --encrypt を付けてください。鍵のないデータベースファイルのコピーでは、秘密情報はすべて失われます。",
+
     // Admin: ダッシュボード (RFC 029)
     dashboard_title: "ダッシュボード",
     dashboard_lede: "システムの概要と最近のアクティビティ。",
@@ -513,19 +535,38 @@ pub static STRINGS_JA: Strings = Strings {
     },
 
     // ダッシュボード：オペレータープロンプト (RFC 031)
-    dashboard_warn_smtp: "パスワードリセットメールが無効です。設定 → メール で SMTP を設定してください。",
-    dashboard_warn_hibp: "パスワード漏洩チェックがオフです。設定 → 認証 で有効にすることを推奨します。",
-    dashboard_warn_cookie_insecure: "Cookie Secure フラグがオフです。本番環境では設定 → セキュリティ で有効にしてください。",
+    dashboard_warn_smtp: "パスワードリセットメールが無効です。システム → メール で SMTP を設定してください。",
+    dashboard_warn_hibp: "パスワード漏洩チェックがオフです。これはセットアップ時に選んだもので、現在のところ管理画面からは変更できません。",
+    dashboard_warn_cookie_insecure: "Cookie Secure フラグがオフです。本番環境では、設定ファイルの [server] で cookie_secure = true にしてください。",
     dashboard_warn_admins_no_mfa: |n| format!("管理者{n}名にMFA未設定。"),
     dashboard_warn_old_signing_key: |age| {
         format!("最も古い署名鍵は{age}日経過 — ローテーション推奨。")
     },
     dashboard_warn_outbox_stuck: |n| format!("{n}件のメールが1時間以上送信待ち。"),
+    dashboard_range_24h: "過去 24 時間",
+    dashboard_range_7d: "過去 7 日間",
+    dashboard_range_30d: "過去 30 日間",
+    settings_email_test_passed: "SMTP 接続テストが成功しました。",
+    settings_email_test_failed: |e| format!("SMTP 接続テストに失敗しました: {e}"),
     dashboard_warn_pending_resets: |n| format!("未使用のパスワードリセットリンク{n}件。"),
-    dashboard_getting_started_title: "はじめに",
-    dashboard_getting_started_smtp: "SMTPを設定 — パスワードリセットメール送信に必要",
-    dashboard_getting_started_first_app: "最初のOIDCアプリケーションを追加",
-    dashboard_getting_started_admin_mfa: "管理者アカウントにMFAを有効化",
+    dashboard_gs_title: "はじめに",
+    dashboard_gs_done: "はじめに: 完了",
+    dashboard_gs_step1: "管理者アカウントを保護する",
+    dashboard_gs_step2: "メールを設定する（パスワードリセットとリカバリーに必要）",
+    dashboard_gs_step3: "最初のアプリを追加する",
+    dashboard_gs_step4: "サインインとセッションの設定を確認する",
+    dashboard_gs_step5: "フェデレーションプロバイダーを追加する",
+    dashboard_gs_status_done: "完了",
+    dashboard_gs_status_recommended: "推奨",
+    dashboard_gs_status_optional: "任意",
+    dashboard_warn_backup_overdue: |review_at, custody_reference| {
+        format!(
+            "保持されているローテーション前のマスターキーのバックアップがレビュー期限（{review_at}）を過ぎています（カストディ参照: {custody_reference:?}）。`sui-id admin master-key backup remove`（破棄済みまたは再暗号化済みの場合）または `sui-id admin master-key backup renew` で対応してください。"
+        )
+    },
+    dashboard_warn_federation_requires_review: |n| {
+        format!("{n}件のフェデレーションプロバイダーが、有効化前にレビューを必要としています。")
+    },
 
     // Admin: ユーザー管理 (RFC 029)
     users_title: "ユーザー管理",
@@ -626,9 +667,6 @@ pub static STRINGS_JA: Strings = Strings {
     // Signing keys extensions (RFC 051)
     signing_keys_count_caption: |n| format!("{n} 件登録。"),
     signing_keys_th_key_id: "Key ID",
-    signing_keys_rotate_explanation_1: "ローテーションを実行すると、新しい署名キーが発行され、現行キーは「退役」状態に遷移します。",
-    signing_keys_rotate_explanation_2: "退役キーは JWKS に残るため、有効期限内の既発行トークンは検証可能です。",
-    signing_keys_rotate_explanation_3: "それらが期限切れになった後、このページから安全に削除できます。",
 
     // 危険操作の確認画面 (RFC 030)
     confirm_cancel: "キャンセル",
@@ -716,7 +754,7 @@ pub static STRINGS_JA: Strings = Strings {
     settings_page_title_template: "設定",
     settings_basic_description: "現在の有効な設定を確認します。値を変更するには sui-id.toml を編集して再起動してください。",
     // Settings: Basic extensions (RFC 051)
-    settings_basic_default_lang_hint: "ユーザーの言語設定とブラウザの Accept-Language が一致しない場合のフォールバックとして使用されます。",
+    settings_basic_default_lang_hint: "ユーザーごとの設定がなく、言語クッキーもなく、ブラウザの Accept-Language がサポート対象の言語と一致しない場合のフォールバックとして使用されます。このコンソールを含む、すべてのページに適用されます。",
     settings_basic_kv_issuer: "Issuer",
     settings_basic_kv_listen: "Listen address",
     settings_basic_kv_cookie_secure: "Cookie Secure フラグ",
@@ -843,6 +881,7 @@ pub static STRINGS_JA: Strings = Strings {
     me_tab_passkey: "パスキー",
     me_tab_sessions: "セッション",
     me_tab_language: "言語",
+    me_overview_lede: "ご自身のアカウントの概要：2段階認証、パスキー、アクティブなセッション、最近のアクティビティ。",
     me_overview_section_status: "セキュリティ状態",
     me_overview_section_activity: "最近のアクティビティ",
     me_overview_label_mfa_totp: "MFA（TOTP）",
@@ -856,6 +895,7 @@ pub static STRINGS_JA: Strings = Strings {
     me_overview_recovery_completed_by_admin: "{date} に、管理者が発行したリンクを使ってパスワードがリセットされました。",
     me_overview_recovery_completed_by_operator: "{date} に、運用担当者が発行したリンクを使ってパスワードがリセットされました。",
     setup_welcome_lang_picker_label: "言語選択",
+    me_passkey_lede: "ご自身のアカウントに登録されたパスキーです。ここから追加・削除できます。",
     me_passkey_origin_warning: "パスキーは HTTPS または localhost 上でのみ使用できます。",
     me_passkey_section_title: "登録済みパスキー",
     me_passkey_button_rename: "名前を変更",
@@ -1031,6 +1071,13 @@ pub static STRINGS_JA: Strings = Strings {
     fed_cause_dns_denied: |host, reason| {
         format!("{host}はsui-idが接続しないアドレスに解決されます（{reason}）。")
     },
+    dns_class_private_network: "プライベートネットワークアドレス",
+    dns_class_loopback: "ループバックアドレス",
+    dns_class_link_local: "リンクローカルアドレス",
+    dns_class_documentation: "ドキュメント・サンプル用アドレス",
+    dns_class_broadcast_or_unspecified: "ブロードキャストまたは未指定アドレス",
+    dns_class_translation_or_tunnel: "IPv4/IPv6変換またはトンネリング用アドレス",
+    dns_class_reserved_for_special_use: "特定のプロトコル用に予約されたアドレス",
     fed_cause_tls: "アップストリームとのTLSハンドシェイクに失敗しました。このホストのCA証明書とアップストリームの証明書を確認してください。",
     fed_cause_timeout: "アップストリームへのリクエストがタイムアウトしました。このホストのネットワークとアップストリームの可用性を確認してください。",
     fed_cause_unreachable: "アップストリームに到達できませんでした。このホストのネットワークとDNSを確認し、サーバーログも確認してください。",

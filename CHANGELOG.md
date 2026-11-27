@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The dashboard's "Getting started" checklist is now a 5-step path**,
+  each with its own status: protecting the administrator account,
+  setting up email, and adding a first app are marked *Done* once
+  they are; reviewing sign-in and session settings is always
+  *Recommended*; adding a federation provider is *Optional* until one
+  exists. The path folds to one line once the first three steps are
+  done, is shown only to an administrator, and no longer prompts for
+  SMTP twice — the standalone action item is suppressed while the
+  path already names it.
+- **Help, on request.** Nine sections of the console have a small `?`
+  that opens, in place, at most three sentences and a *Learn more*
+  link to the operator's guide; the signing-key rotation explanation
+  that was always shown is now one of them. The copy buttons' hover-only
+  tooltips are gone: no page carries a `title=` attribute any more.
+- **The dashboard shows two more action items**: a kept pre-rotation
+  master-key backup past its own review date (with that date and its
+  custody reference, read fresh on every request so a `backup renew`
+  or `backup remove` is reflected without a restart), and the count of
+  federation providers that require review before they can be
+  enabled.
+- **Every console page now resolves its language the same way every
+  other page already did**: the person's saved preference, then the
+  `sui_id_lang` cookie, then the browser's `Accept-Language`, then the
+  server's default. The console used a shorter chain of its own (the
+  preference, then the server default), so one person could see the
+  console in one language and their own pages in another. **If you
+  relied on the server default to set the console's language**, a
+  browser that asks for another supported language now wins; save a
+  personal language (account menu → *Language*) to fix it.
+- **A denied DNS answer's reason is now a short, understandable
+  label** (for example *a private network address*, *a loopback
+  address*) instead of the deny table's own English registry-row name,
+  in every locale.
 - **The console's navigation is a grouped sidebar**, not a flat row of
   links: *Overview*, *People*, *Applications*, *Sign-in*, *Security*
   and *System*, each with its own items, the current one marked. The
@@ -32,6 +65,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The dashboard no longer scrolls sideways at 375px wide.** The
+  range tabs now wrap instead of forcing a 401px-wide row.
+- **System → General's hint for the default language was false for
+  the console**: it said the browser's `Accept-Language` came first,
+  which the console ignored. It now states the one order every page
+  uses.
+- **Two texts were Japanese whatever the reader's language**: the
+  dashboard's chart ranges, and System → Email's connection-test
+  result. Both now follow the reader.
+- **Four messages pointed to *Settings*, which the sidebar replaced**:
+  the dashboard's SMTP warning now names *System → Email*; its
+  `cookie_secure` warning names the configuration file, where that is
+  set; the setup wizard's last step points to the dashboard. **The
+  password-breach (HIBP) warning told administrators to enable it in
+  the console, which nothing there can do**: the mode is chosen in the
+  setup wizard and cannot yet be changed afterwards. The warning, and
+  the operator's guide, now say so.
+- **At 375px with a 200% font**, the dashboard's summary cards and an
+  open help block no longer widen the page; the help `?` is a 44px
+  target.
 - **The account menu's items show the keyboard focus ring.** A rule
   removed it, leaving only the hover tint to show where focus was.
 - **At a large font size, the skip link no longer widens every page**
@@ -50,7 +103,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `settings_title_basic`, `settings_title_security`,
   `settings_title_authentication`, `settings_title_logs`,
   `settings_title_advanced`, `settings_email_page_title` (the retired
-  settings tab strip and its shared page title).
+  settings tab strip and its shared page title);
+  `signing_keys_rotate_explanation_1/2/3` (folded into the new
+  rotation help text); the four `dashboard_getting_started_*` fields
+  (replaced by the 5-step path's own set).
+- `sui-id`: `resolve_admin_locale` (every console handler now takes
+  `RequestLocale` instead).
+- `sui-id-core`: `SparklineRange::label_ja` (the labels are
+  translated strings now).
 
 ## [0.94.0] — 2026-11-26
 

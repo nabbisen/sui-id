@@ -51,6 +51,7 @@ pub mod cards;
 pub mod chrome;
 pub mod confirm;
 pub mod forms;
+pub mod help;
 pub mod setup;
 pub mod tables;
 pub mod tabs;
@@ -58,6 +59,7 @@ pub mod utilities;
 
 // RFC 092 public re-exports
 pub use forms::error_summary;
+pub use help::help_details;
 pub use utilities::{copy_field, empty_state};
 
 // Backward-compatible re-export for existing call sites. RFC-MI-010
@@ -146,6 +148,8 @@ pub fn components_css() -> &'static str {
             forms::ERROR_SUMMARY_CSS,
             // ---- RFC 144 N2e: a chosen radio option is visible ----
             forms::CHOSEN_OPTION_CSS,
+            // ---- RFC 149 §3 / Q3 §1: on-request help ----
+            help::HELP_CSS,
         ]
         .concat()
     })
