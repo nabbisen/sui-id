@@ -1,7 +1,7 @@
 # Cycles Q and R: `0.95.0` and `0.96.0`, the plan
 
-> ## Whose turn it is: **the implementation role's, on Q3b** ([dispatch](0.95.0-q3b-the-breach-check-can-be-changed-2026-11-27.md)).
-> Q2 landed (`57c80d1`), and Q3 (`420001b`). No decision is pending now. §1 lists four questions still to come, three before Q6 and one before
+> ## Whose turn it is: **the implementation role's, on Q4** ([dispatch](0.95.0-q4-the-app-form-2026-11-27.md)).
+> Q2 (`57c80d1`), Q3 (`420001b`) and Q3b (`18615bd`) have landed. No decision is pending now. §1 lists four questions still to come, three before Q6 and one before
 > R3, each with the architect's proposed answer. Two decisions for Q3 were taken on 2026-11-27 (§1).
 
 **Authorized 2026-11-26.** `@nabbisen`, on the split proposed in this plan's first version (`6577468`): *"Yes. Scope them, the
@@ -34,6 +34,9 @@ before its stage.
 - **Q3 landed** (`420001b`): help in three layers, the first-run path, the dashboard's attention items, the DNS labels, and
   one language chain. It closes RFC 149's second and third conditions. Its review corrected four help texts against the code,
   and found two things outside RFC 149, decided the same day (§1).
+- **Q3b landed** (`18615bd`): the password-breach check can be changed on Sign-in settings. Lowering it is a dangerous
+  action, and the direction is decided inside the command's transaction. Dev mode stores `off` when it seeds, as its texts
+  always said.
 - **`main` was red on Rust 1.95 between `099da5c` and `2d947cd`**, from Q2's review fold-in. An incremental 1.95 build had
   passed it. Every console stage now builds `sui-id-web` from clean on 1.95 before its matrix.
 - **RFC 151** was built in `0.94.0`. **Its last condition is met by Q2**: the minimum is raised *"from the *Sign-in*

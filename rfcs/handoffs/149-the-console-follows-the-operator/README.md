@@ -1,7 +1,7 @@
 # RFC 149 — handoff
 
 **RFC.** [`../../accepted/149-the-console-follows-the-operator.md`](../../accepted/149-the-console-follows-the-operator.md)
-**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). **Being built in cycle Q** (`0.95.0`), on [`cycle-q-and-0.95.0-2026-11-26.md`](cycle-q-and-0.95.0-2026-11-26.md), authorized 2026-11-26. **Q2, the chrome, landed** (`57c80d1`; [dispatch](0.95.0-q2-the-chrome-2026-11-26.md)). **Q3, help and the dashboard, landed** (`420001b`; [dispatch](0.95.0-q3-help-and-the-dashboard-2026-11-27.md)). **Q3b, the password-breach check can be changed, is dispatched**: [`0.95.0-q3b-the-breach-check-can-be-changed-2026-11-27.md`](0.95.0-q3b-the-breach-check-can-be-changed-2026-11-27.md). Q4 and Q5 follow. Each carried item below is placed in a stage, in the plan's §0.
+**Status.** **Accepted 2026-11-15** ([design review record](design-review-2026-11-15.md)). **Being built in cycle Q** (`0.95.0`), on [`cycle-q-and-0.95.0-2026-11-26.md`](cycle-q-and-0.95.0-2026-11-26.md), authorized 2026-11-26. **Q2, the chrome, landed** (`57c80d1`; [dispatch](0.95.0-q2-the-chrome-2026-11-26.md)). **Q3, help and the dashboard, landed** (`420001b`; [dispatch](0.95.0-q3-help-and-the-dashboard-2026-11-27.md)). **Q3b, the password-breach check can be changed, landed** (`18615bd`; [dispatch](0.95.0-q3b-the-breach-check-can-be-changed-2026-11-27.md)). **Q4, the app form, is dispatched**: [`0.95.0-q4-the-app-form-2026-11-27.md`](0.95.0-q4-the-app-form-2026-11-27.md). Q5 follows. Each carried item below is placed in a stage, in the plan's §0.
 
 ## 2026-11-15: the mockups' questions answered
 
