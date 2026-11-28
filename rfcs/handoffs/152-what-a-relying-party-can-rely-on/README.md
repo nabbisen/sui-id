@@ -1,8 +1,13 @@
 # RFC 152 — handoff
 
 **RFC.** [`../../accepted/152-what-a-relying-party-can-rely-on.md`](../../accepted/152-what-a-relying-party-can-rely-on.md)
-**Status.** **Accepted 2026-11-26** ([design review record](design-review-2026-11-26.md)). Not yet dispatched. Its stages are
-Q6 (D1–D3, and D9), **Q6b** (federated freshness, D2), Q7 (D5) and Q8 (D4, D6–D8) of [the plan](../149-the-console-follows-the-operator/cycle-q-and-0.95.0-2026-11-26.md).
+**Status.** **Accepted 2026-11-26** ([design review record](design-review-2026-11-26.md)). Its stages are
+**Q6a** (the sign-in time stored and carried, and D9), Q6 (D1, D2's `max_age`, D3), **Q6b** (federated freshness, D2), Q7
+(D5) and Q8 (D4, D6–D8) of [the plan](../149-the-console-follows-the-operator/cycle-q-and-0.95.0-2026-11-26.md). The plan's
+Q6 was split on 2026-11-28, once measured: the stored half and the request half are separate risks.
+**Q6a dispatched 2026-11-28**: [`0.96.0-q6a-the-sign-in-time-is-carried-2026-11-28.md`](0.96.0-q6a-the-sign-in-time-is-carried-2026-11-28.md).
+Tokens issued before the upgrade have no knowable sign-in time, and are revoked by its migration (`@nabbisen`, 2026-11-28:
+*"Revoke them (Recommended)"*).
 **They ship in `0.96.0`**, since `0.95.0` was cut after RFC 149 on 2026-11-28. **Amended 2026-11-28**: its open questions
 are resolved, and D9 is added ([considered](open-questions-considered-2026-11-28.md)). **Amended 2026-11-26** with D8: what a relying party must do for sui-id's guarantees to reach its users.
 

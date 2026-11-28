@@ -1,6 +1,6 @@
 # Cycles Q and R: `0.95.0` and `0.96.0`, the plan
 
-> ## Whose turn it is: **the architect's, on Q6's dispatch for `0.96.0`.**
+> ## Whose turn it is: **the implementation role's, on Q6a for `0.96.0`** ([dispatch](../152-what-a-relying-party-can-rely-on/0.96.0-q6a-the-sign-in-time-is-carried-2026-11-28.md)).
 > **`0.95.0` was released 2026-11-28** (tag at `93cc6a5`, publish run `46136922636`). RFCs 148, 149 and 151 moved to `done/`
 > ([closure assessment](closure-assessment-0.95.0-2026-11-28.md)).
 > Q2 (`57c80d1`), Q3 (`420001b`), Q3b (`18615bd`), Q4 (`14a0422`) and Q5 (`38f99f0`) have landed. **RFC 149's four closure
@@ -124,7 +124,8 @@ rendered pages, and each test is mutated.**
 | **Q3b** | **the password-breach check can be changed**, on Sign-in settings; weakening it is a dangerous action | — (a finding of Q3's review) |
 | **Q4** | **the app form.** §4's scope checkboxes; additional scopes, validated, with near misses refused; one input per redirect URI and per post-logout URI, working with JavaScript off; create and edit as one form; C01 records the consent policy | RFC 149: *§4's editors work with JavaScript off* |
 | **Q5** | **the lists.** §5: every list states its count and its page, and none truncates silently; the audit log keeps its five columns and its header in view | RFC 149 §5 (not a closure condition, but in its scope) |
-| **Q6** | **RFC 152, the request.** D1: every parameter that states a requirement is honoured or refused. D2: `max_age`, and `auth_time` in every ID token, with a migration so that the code and the refresh token carry it. D3: `prompt`, with §1's answer for `select_account` | RFC 152 D1–D3 |
+| **Q6a** | **RFC 152, what is stored** (split from Q6 on 2026-11-28). D2's sign-in time on the session, carried by the code and the refresh token, and `auth_time` in every ID token. D9: an empty scope list made explicit, with a `CHECK`. One migration, with an audited Rust step. Tokens issued before it are revoked | RFC 152 D2 (stored), D9 |
+| **Q6** | **RFC 152, the request.** D1: every parameter that states a requirement is honoured or refused. D2: `max_age`. D3: `prompt`, with §1's answer for `select_account` | RFC 152 D1–D3 |
 | **Q7** | **RFC 152, the key.** D5: a new signing key is published before it signs. The signer is chosen per token, with one constant shared with the JWKS `Cache-Control`. The signing-keys page says when the new key will start signing | RFC 152 D5 |
 | **Q8** | **RFC 152, claims and the reference.** D4, userinfo's `profile` scope. D6, discovery's claims, generated from the serialized list. D7, the reference's parameter table. D8, the relying party's obligations, each row checked against the code | RFC 152 D4, D6–D8 |
 | **prep** | the release preparation (the mechanical half, as for `0.94.0`) | — |
