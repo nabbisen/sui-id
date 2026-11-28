@@ -234,14 +234,32 @@ the gate it imitates, which is exactly how a release checklist's bare
 in CI. `scripts/check-gate-inputs.sh` (A3.4) asserts that this file contains
 no such restatement.
 
-**Run `scripts/local-matrix.sh` before dispatching the workflow.** It derives
-its own complete set of checks from `.github/workflows/ci.yml`, so it cannot
-go stale the way a hand-enumerated "run these N things" list already has
-(twice). It is not Level B — no local run is — but it catches most of what
-would otherwise only surface after the `workflow_dispatch` round-trip.
+**The full matrix runs on CI, not on a contributor's machine.** Decided
+2026-11-28 by `@nabbisen`, after a preparation's local matrix kept the owner's
+machine hot for a long time: *"The CPU heat should be perhaps respected as well
+as the badget."* The choice was *"CI runs it (Recommended)"*. So:
 
-**`--changed` skips the eleven Rust-build-and-test lanes (G01-G09b) when they
-cannot be affected**, by the same rule CI's own `changes` job applies to a
+- **A stage or a preparation is pushed to a short-lived branch,
+  `stage/<name>`, and `CI` is dispatched there** (`gh workflow run ci.yml
+  --ref stage/<name>`). A `workflow_dispatch` run always runs the complete
+  matrix (RFC 130 D7). Its run id is the return's evidence. GitHub's runners
+  are free for this public repository, and two such runs never share a port.
+- **On the contributor's machine, only the stage's own checks run**: format,
+  lints, and the tests the stage adds or changes. They run at low priority on
+  a quarter of the cores: `nice -n 19`, with `CARGO_BUILD_JOBS` and
+  `RUST_TEST_THREADS` set to a quarter of `nproc`.
+- **`main` is fast-forwarded to the reviewed commit**, so its history stays
+  linear and the commit Level B later runs on is the one CI already passed.
+  The branch is then deleted.
+- **A fix held under `.github/SECURITY.md` cannot be pushed**, so it is the
+  one case that runs `scripts/local-matrix.sh` locally, under the same
+  limits. The script derives its own complete set of checks from
+  `.github/workflows/ci.yml`, so it cannot go stale the way a hand-enumerated
+  "run these N things" list already has (twice). It is not Level B. No local
+  run is.
+
+**In a local run, `--changed` skips the eleven Rust-build-and-test lanes
+(G01-G09b) when they cannot be affected**, by the same rule CI's own `changes` job applies to a
 push — reading `.github/workflows/ci.yml`'s own `needs.changes.outputs.rust`
 condition, not a hand-picked subset. Every other check always runs. **A
 release preparation runs the full matrix, not `--changed`**: a preparation
