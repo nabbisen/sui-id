@@ -12,13 +12,13 @@ mod users;
 
 pub use clients::{
     CreateClientSpec, CreatedClient, create_client, delete_client, get_client, list_clients,
-    rotate_client_secret, set_client_disabled, set_dev_client_secret, update_client_app_identity,
-    update_client_basic, update_client_form,
+    list_clients_page, rotate_client_secret, set_client_disabled, set_dev_client_secret,
+    update_client_app_identity, update_client_basic, update_client_form,
 };
 pub use signing_keys::{delete_signing_key, list_signing_keys, rotate_signing_key};
 pub use users::{
     CreateUserSpec, MfaResetReport, admin_reset_mfa, create_user, delete_user, list_users,
-    operator_reset_mfa, set_user_disabled,
+    list_users_page, operator_reset_mfa, set_user_disabled,
 };
 
 use crate::errors::{CoreError, CoreResult};

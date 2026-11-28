@@ -582,7 +582,7 @@ pub static STRINGS_JA: Strings = Strings {
     users_table_th_mfa: "MFA",
     users_is_admin_label: "管理者権限を付与する",
     // Users extensions (RFC 051)
-    users_count_caption: |n| format!("現在 {n} 名。"),
+    users_count_caption: |from, to, total| format!("{total} 名中 {from}–{to} 名を表示中。"),
     users_label_username: "ユーザー名",
     users_label_display_name: "表示名（任意）",
     users_label_email: "メールアドレス（任意）",
@@ -590,7 +590,7 @@ pub static STRINGS_JA: Strings = Strings {
     users_create_password_note: "ここではパスワードを設定しません。アカウントを作成したあと、復旧リンクを発行します。ユーザー本人がそのリンクを開いて自分のパスワードを決めます。",
 
     // Admin: クライアント編集 (RFC 051)
-    client_edit_title: "クライアントを編集",
+    client_edit_title: "アプリを編集",
     client_edit_basic_section: "基本情報",
     client_edit_basic_note: "Client ID・種別（confidential/public）・client secret は作成時に固定されます。これらを変更したい場合は削除して登録し直してください。",
     client_edit_new_secret_label: "新しい client secret（このページでのみ表示）：",
@@ -601,18 +601,18 @@ pub static STRINGS_JA: Strings = Strings {
     client_edit_label_updated_at: "最終更新",
 
     // Admin: クライアント管理 (RFC 029)
-    clients_title: "クライアント管理",
-    clients_lede: "OIDC クライアントの登録と管理。",
-    clients_create_section: "新しいクライアントを登録",
-    clients_table_section: "登録済みクライアント",
+    clients_title: "アプリ管理",
+    clients_lede: "OIDC アプリの登録と管理。",
+    clients_create_section: "アプリを追加",
+    clients_table_section: "登録済みアプリ",
     clients_secret_once_banner: "クライアント Secret は今だけ表示されます。安全な場所に保存してください。",
     clients_table_th_name: "名前",
     clients_table_th_kind: "種別",
     clients_table_th_status: "状態",
-    clients_single_realm_note: "sui-id は単一レルム IdP です。すべてのユーザーがすべてのクライアントを利用できます。スコープはユーザーを制限するのではなく、クライアントが要求できる情報の範囲を制限します。",
+    clients_single_realm_note: "sui-id は単一レルム IdP です。すべてのユーザーがすべてのアプリを利用できます。スコープはユーザーを制限するのではなく、アプリが要求できる情報の範囲を制限します。",
     // Clients page extensions (RFC 051)
     clients_table_th_client_id: "クライアント ID",
-    clients_count_caption: |n| format!("現在 {n} 件。"),
+    clients_count_caption: |from, to, total| format!("{total} 件中 {from}–{to} 件を表示中。"),
     clients_label_app_name: "アプリケーション名",
     clients_label_confidential_checkbox: "Confidential client（client secret を発行する）",
     clients_button_register: "登録",
@@ -667,7 +667,11 @@ pub static STRINGS_JA: Strings = Strings {
     audit_filter_hint: "例: auth.login",
     audit_export_csv: "CSV でエクスポート",
     // Audit log extensions (RFC 051)
-    audit_entry_count_caption: |n| format!("({n} 件)"),
+    audit_entry_count_caption: |total, per_page| {
+        format!("一致する {total} 件（1 ページあたり最大 {per_page} 件）。")
+    },
+    pager_previous: "← 前へ",
+    pager_next: "次へ →",
     audit_filter_button: "フィルター",
     audit_chain_broken_note: |seq| format!("seq={seq} で不一致を検出。すぐに調査してください。"),
     audit_chain_ok_note: |checked, legacy| {
@@ -715,10 +719,10 @@ pub static STRINGS_JA: Strings = Strings {
     confirm_reset_mfa_impact: "ユーザーの TOTP 認証アプリとすべてのパスキーが削除されます。次回サインイン時に再登録が必要になります。",
     confirm_reset_mfa_reversibility: "この操作後、ユーザーは再登録できます。",
     confirm_reset_mfa_button: "MFA をリセット",
-    confirm_delete_client_title: "クライアントを削除しますか？",
-    confirm_delete_client_impact: "この OIDC クライアントは完全に削除されます。このクライアントに発行されたすべてのセッションとリフレッシュトークンが失効します。",
+    confirm_delete_client_title: "アプリを削除しますか？",
+    confirm_delete_client_impact: "このアプリは完全に削除されます。このアプリに発行されたすべてのセッションとリフレッシュトークンが失効します。",
     confirm_delete_client_reversibility: "この操作は元に戻せません。",
-    confirm_delete_client_button: "クライアントを削除",
+    confirm_delete_client_button: "アプリを削除",
     confirm_delete_signing_key_title: "署名キーを削除しますか？",
     confirm_delete_signing_key_impact: "このキーで署名されたまだ有効期限が切れていないトークンは即座に検証に失敗します。",
     confirm_delete_signing_key_reversibility: "この操作は元に戻せません。トークンがすべて期限切れになった後にのみ削除してください。",
@@ -770,6 +774,7 @@ pub static STRINGS_JA: Strings = Strings {
     user_detail_sessions_th_expires: "期限",
     user_detail_sessions_th_factors: "認証方式",
     user_detail_activity_section: "最近のアクティビティ",
+    user_detail_activity_caption: |n| format!("最新 {n} 件を表示中。"),
     user_detail_danger_zone_body: "これらの操作はユーザーのアクセスに影響し、取り消せない場合があります。各操作には確認が必要です。",
     role_admin: "管理者",
     role_auditor: "監査者",
@@ -908,6 +913,7 @@ pub static STRINGS_JA: Strings = Strings {
     dashboard_recent_events_empty: "重要なイベントはありません。",
 
     dashboard_recent_events_view_all: "全件を見る →",
+    dashboard_recent_events_caption: |n| format!("最新 {n} 件を表示中。"),
 
     // /me/security タブ (RFC 040)
     me_tab_overview: "概要",
@@ -928,6 +934,7 @@ pub static STRINGS_JA: Strings = Strings {
     me_overview_lede: "ご自身のアカウントの概要：2段階認証、パスキー、アクティブなセッション、最近のアクティビティ。",
     me_overview_section_status: "セキュリティ状態",
     me_overview_section_activity: "最近のアクティビティ",
+    me_overview_activity_caption: |n| format!("最新 {n} 件を表示中。"),
     me_overview_label_mfa_totp: "MFA（TOTP）",
     me_overview_label_passkeys: "パスキー",
     me_overview_no_recent_events: "最近の操作はまだ記録されていません。",

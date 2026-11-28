@@ -61,11 +61,17 @@ pub async fn clients_get(
     CurrentAdminOrAuditor(_admin_id, role, ref read_actor, username): CurrentAdminOrAuditor,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
+    axum::extract::Query(query): axum::extract::Query<super::users::PageQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let rows = admin_uc::list_clients(&app.db, read_actor)
-        .await
-        .map_err(HttpError::html)?;
+    let (rows, total, page) = admin_uc::list_clients_page(
+        &app.db,
+        read_actor,
+        query.page.unwrap_or(1),
+        super::users::LIST_PAGE_SIZE,
+    )
+    .await
+    .map_err(HttpError::html)?;
     let summaries: Vec<ClientSummary> = rows
         .into_iter()
         .map(|r| {
@@ -94,9 +100,15 @@ pub async fn clients_get(
         })
         .collect();
     let token = crate::csrf::ensure_token(&jar);
+    let page_info = sui_id_web::components::pager::OffsetPageInfo {
+        page,
+        per_page: super::users::LIST_PAGE_SIZE,
+        total,
+    };
     let resp = Html(render_clients(
         role.is_admin(),
         summaries,
+        page_info,
         None,
         None,
         token.clone(),
@@ -301,9 +313,17 @@ pub async fn clients_create(
     .map_err(HttpError::html)?;
 
     // Re-list and pass the secret through to the page so it is shown once.
-    let rows = admin_uc::list_clients(&app.db, &admin_actor.as_read_only())
-        .await
-        .map_err(HttpError::html)?;
+    // `created_at ASC` puts the just-created client last, so the page
+    // that shows it is the *last* one — `u32::MAX` lands there the
+    // same way a request for any other past-the-end page would.
+    let (rows, total, page) = admin_uc::list_clients_page(
+        &app.db,
+        &admin_actor.as_read_only(),
+        u32::MAX,
+        super::users::LIST_PAGE_SIZE,
+    )
+    .await
+    .map_err(HttpError::html)?;
     let summaries: Vec<ClientSummary> = rows
         .into_iter()
         .map(|r| {
@@ -333,9 +353,15 @@ pub async fn clients_create(
         .generated_secret
         .map(|s| (created.row.id.to_string(), s));
     let token = crate::csrf::ensure_token(&jar);
+    let page_info = sui_id_web::components::pager::OffsetPageInfo {
+        page,
+        per_page: super::users::LIST_PAGE_SIZE,
+        total,
+    };
     let resp = Html(render_clients(
         true,
         summaries,
+        page_info,
         None,
         secret_payload,
         token.clone(),

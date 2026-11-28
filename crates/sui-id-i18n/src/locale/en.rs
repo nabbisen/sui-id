@@ -586,7 +586,7 @@ pub static STRINGS_EN: Strings = Strings {
     users_table_th_mfa: "MFA",
     users_is_admin_label: "Grant admin privileges",
     // Users extensions (RFC 051)
-    users_count_caption: |n| format!("{n} registered."),
+    users_count_caption: |from, to, total| format!("Showing {from}\u{2013}{to} of {total}."),
     users_label_username: "Username",
     users_label_display_name: "Display name (optional)",
     users_label_email: "Email address (optional)",
@@ -595,9 +595,9 @@ pub static STRINGS_EN: Strings = Strings {
 
     // Admin: Clients (RFC 029)
     // Admin: Client edit (RFC 051)
-    client_edit_title: "Edit client",
+    client_edit_title: "Edit app",
     client_edit_basic_section: "Basic information",
-    client_edit_basic_note: "Client ID, kind (confidential/public) and client secret are fixed at creation. To change these, delete the client and register a new one.",
+    client_edit_basic_note: "Client ID, kind (confidential/public) and client secret are fixed at creation. To change these, delete the app and register a new one.",
     client_edit_new_secret_label: "New client secret (shown once):",
     client_edit_label_client_id: "Client ID",
     client_edit_label_kind: "Kind",
@@ -606,18 +606,18 @@ pub static STRINGS_EN: Strings = Strings {
     client_edit_label_updated_at: "Last changed",
 
     // Admin: Clients (RFC 029)
-    clients_title: "Clients",
-    clients_lede: "Register and manage OIDC clients.",
-    clients_create_section: "Register a new client",
-    clients_table_section: "Registered clients",
+    clients_title: "Apps",
+    clients_lede: "Register and manage OIDC apps.",
+    clients_create_section: "Add an app",
+    clients_table_section: "Registered apps",
     clients_secret_once_banner: "The client secret is shown only once. Save it somewhere safe.",
     clients_table_th_name: "Name",
     clients_table_th_kind: "Type",
     clients_table_th_status: "Status",
-    clients_single_realm_note: "sui-id is a single-realm IdP. All users can access all clients. Scopes restrict what information a client can request, not which users can log in.",
+    clients_single_realm_note: "sui-id is a single-realm IdP. All users can access all apps. Scopes restrict what information an app can request, not which users can log in.",
     // Clients page extensions (RFC 051)
     clients_table_th_client_id: "Client ID",
-    clients_count_caption: |n| format!("{n} registered."),
+    clients_count_caption: |from, to, total| format!("Showing {from}\u{2013}{to} of {total}."),
     clients_label_app_name: "Application name",
     clients_label_confidential_checkbox: "Confidential client (issues a client secret)",
     clients_button_register: "Register",
@@ -670,7 +670,11 @@ pub static STRINGS_EN: Strings = Strings {
     audit_filter_hint: "e.g. auth.login",
     audit_export_csv: "Export CSV",
     // Audit log extensions (RFC 051)
-    audit_entry_count_caption: |n| format!("({n})"),
+    audit_entry_count_caption: |total, per_page| {
+        format!("{total} matching entries, up to {per_page} shown per page.")
+    },
+    pager_previous: "\u{2190} Previous",
+    pager_next: "Next \u{2192}",
     audit_filter_button: "Filter",
     audit_chain_broken_note: |seq| {
         format!("Mismatch detected at seq={seq}. Investigate immediately.")
@@ -720,10 +724,10 @@ pub static STRINGS_EN: Strings = Strings {
     confirm_reset_mfa_impact: "The user's TOTP authenticator and all passkeys will be removed. They will need to re-enrol at next sign-in.",
     confirm_reset_mfa_reversibility: "The user can re-enrol after this action.",
     confirm_reset_mfa_button: "Reset MFA",
-    confirm_delete_client_title: "Delete client?",
-    confirm_delete_client_impact: "This OIDC client will be permanently removed. All active sessions and refresh tokens issued to this client will be revoked.",
+    confirm_delete_client_title: "Delete app?",
+    confirm_delete_client_impact: "This app will be permanently removed. All active sessions and refresh tokens issued to it will be revoked.",
     confirm_delete_client_reversibility: "This cannot be undone.",
-    confirm_delete_client_button: "Delete client",
+    confirm_delete_client_button: "Delete app",
     confirm_delete_signing_key_title: "Delete signing key?",
     confirm_delete_signing_key_impact: "Tokens signed by this key that have not yet expired will fail verification immediately.",
     confirm_delete_signing_key_reversibility: "This cannot be undone. Only delete keys whose tokens have all expired.",
@@ -781,6 +785,7 @@ pub static STRINGS_EN: Strings = Strings {
     user_detail_sessions_th_expires: "Expires",
     user_detail_sessions_th_factors: "Factors",
     user_detail_activity_section: "Recent activity",
+    user_detail_activity_caption: |n| format!("Showing the newest {n}."),
     user_detail_danger_zone_body: "These actions affect this user's access and may be permanent. Each leads to a confirmation step.",
     role_admin: "Admin",
     role_auditor: "Auditor",
@@ -919,6 +924,7 @@ pub static STRINGS_EN: Strings = Strings {
     dashboard_recent_events_empty: "No important events.",
 
     dashboard_recent_events_view_all: "View all →",
+    dashboard_recent_events_caption: |n| format!("Showing the newest {n}."),
 
     // /me/security tabs (RFC 040)
     me_tab_overview: "Overview",
@@ -939,6 +945,7 @@ pub static STRINGS_EN: Strings = Strings {
     me_overview_lede: "Your account, at a glance: two-step verification, passkeys, active sessions, and recent activity.",
     me_overview_section_status: "Security status",
     me_overview_section_activity: "Recent activity",
+    me_overview_activity_caption: |n| format!("Showing the newest {n}."),
     me_overview_label_mfa_totp: "MFA (TOTP)",
     me_overview_label_passkeys: "Passkeys",
     me_overview_no_recent_events: "No recent activity to display.",

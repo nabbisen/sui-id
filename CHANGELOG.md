@@ -17,6 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **No list says less than it is.** Users and apps page 50 at a time
+  (`?page=N`), newest-created last, with Previous/Next links and a
+  "Showing X–Y of Z" caption; a page past the end shows the last
+  page. The audit log pages the same way, but by its own event
+  sequence (`?before=`/`?after=`) rather than an offset, so new events
+  arriving between page reads neither shift nor repeat a row; its
+  filter is kept across pages. The audit log reads better too: five
+  columns (its own copy button moved into the target cell), a sticky
+  header, and no sideways scroll at 1280px; the filter form fits at
+  375px with a 200% font. The dashboard's recent events, a user's
+  recent activity, and `/me`'s own now say they show the newest N —
+  the dashboard's also links to the full audit log.
+- **The app pages say *app*, not *client*** — headings, buttons and
+  empty states (*Add an app*, *Edit app*, *Delete app?*). The protocol's
+  own terms (*client ID*, *client secret*, *confidential client*,
+  *public client*) are unchanged, since they are a relying party's
+  documentation's own words, not this console's.
 - **The app form (register/edit a client) is one shared form now**,
   not two. Standard scopes (`openid`, `profile`, `email`,
   `offline_access`) are checkboxes generated from the same list
@@ -109,6 +126,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The audit log's own count read as the total no matter how many
+  entries actually matched** — it counted the (at most 200, then
+  2,000 for the CSV) rows a query happened to return, not every
+  matching row. It now counts with the same filter the page itself
+  uses.
+- **The audit CSV export stopped at 2,000 rows with nothing to say
+  so.** It now exports every matching row, streamed a page at a time
+  so memory stays flat regardless of how many rows match; its own
+  first line states the filter and the time of export.
 - **The dashboard no longer scrolls sideways at 375px wide.** The
   range tabs now wrap instead of forcing a 401px-wide row.
 - **System → General's hint for the default language was false for

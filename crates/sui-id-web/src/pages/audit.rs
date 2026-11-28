@@ -10,19 +10,26 @@ use sui_id_shared::api::AuditLogEntryDto;
 /// columns [`audit_table_head`] heads. A table that shows audit rows takes
 /// both from here, so its header cannot disagree with its rows (the user
 /// detail page once headed six cells with three).
-pub(super) const AUDIT_COLUMNS: usize = 6;
+///
+/// Five, not six (RFC 149 Q5 §3): the row's own copy button moved into
+/// the target cell, beside the truncated value it copies, rather than
+/// owning a column of its own — at 1280px, six columns (one of them a
+/// bare action button) scrolled the table sideways; five fit.
+pub(super) const AUDIT_COLUMNS: usize = 5;
 
 /// The header for a table of [`audit_row_view`] rows: one `<th>` per cell.
+/// `sticky`, inside the table's own scrolling box (`.table-wrap--scroll`
+/// on the caller's wrapper), so it stays in view while a long page
+/// scrolls (RFC 149 Q5 §3).
 pub(super) fn audit_table_head(t: &'static sui_id_i18n::Strings) -> impl IntoView {
     view! {
-        <thead>
+        <thead class="table-head--sticky">
             <tr>
                 <th class="cell-nowrap">{t.audit_col_when}</th>
                 <th class="cell-nowrap">{t.audit_col_actor}</th>
                 <th>{t.audit_col_action}</th>
                 <th>{t.audit_col_target}</th>
                 <th class="cell-nowrap">{t.audit_col_outcome}</th>
-                <th class="cell-actions" aria-hidden="true"></th>
             </tr>
         </thead>
     }
@@ -49,16 +56,19 @@ pub(super) fn audit_row_view(
     );
     let actor_str = e.actor.map(|a| a.to_string()).unwrap_or_else(|| "-".into());
     // RFC-MI-031: cell-nowrap on time/actor (stable columns),
-    // cell-id on target (opaque UUID or resource slug),
-    // cell-actions on the copy button (right-align).
+    // cell-id on target (opaque UUID or resource slug) — RFC 149 Q5
+    // §3: that one cell now also carries the copy button, beside the
+    // truncated value, rather than a `.cell-actions` column of its own.
     view! {
         <tr>
             <td class="muted cell-nowrap">{fmt_time(e.at)}</td>
             <td class="cell-nowrap"><span class="code">{actor_str}</span></td>
             <td class="cell-wrap">{e.action}</td>
-            <td class="cell-id"><span class="code">{e.target.unwrap_or_default()}</span></td>
+            <td class="cell-wrap">
+                <span class="code cell-id-inline">{e.target.unwrap_or_default()}</span>
+                {copy_btn(t, row_id, t.copy_noun_audit_row_id)}
+            </td>
             <td class="cell-nowrap">{result_badge}</td>
-            <td class="cell-actions">{copy_btn(t, row_id, t.copy_noun_audit_row_id)}</td>
         </tr>
     }
 }
@@ -66,8 +76,12 @@ pub(super) fn audit_row_view(
 #[allow(clippy::too_many_arguments)]
 pub fn render_audit(
     entries: Vec<AuditLogEntryDto>,
+    total: i64,
+    per_page: usize,
     chain: ChainStatus,
     filter_query: Option<String>,
+    newer_href: Option<String>,
+    older_href: Option<String>,
     flash: Option<Flash>,
     csrf_token: String,
     dev_mode: bool,
@@ -76,7 +90,7 @@ pub fn render_audit(
 ) -> String {
     render(move || {
         let t = lang.strings();
-        let entry_count = entries.len();
+        let pager = crate::components::pager::seq_pager_view(t, newer_href, older_href);
         let fq = filter_query.clone().unwrap_or_default();
         let csv_href = if fq.is_empty() {
             "/admin/audit.csv".to_string()
@@ -117,7 +131,7 @@ pub fn render_audit(
                         <p class="page-header__lede">
                             {t.audit_lede}
                             " "
-                            {(t.audit_entry_count_caption)(entry_count)}
+                            {(t.audit_entry_count_caption)(total, per_page)}
                         </p>
                     </div>
                 </header>
@@ -135,7 +149,7 @@ pub fn render_audit(
                     </form>
                     <a href=csv_href class="button secondary">{t.audit_export_csv}</a>
                 </div>
-                <div class="table-wrap">
+                <div class="table-wrap table-wrap--scroll">
                     <table>
                         {audit_table_head(t)}
                         {if rows.is_empty() {
@@ -150,6 +164,7 @@ pub fn render_audit(
                         }}
                     </table>
                 </div>
+                {pager}
             </Shell>
         }
     })

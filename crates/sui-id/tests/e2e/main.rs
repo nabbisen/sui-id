@@ -65,6 +65,7 @@ mod q2_navigation;
 mod q3_help_and_dashboard;
 mod q3b_hibp_mode;
 mod q4_app_form;
+mod q5_lists;
 mod r094_cycle_i_u20_revoke_idempotent;
 mod r094_cycle_j_stage10_fix_round_gc;
 mod r094_cycle_j_stage10_r1_must_attempt;

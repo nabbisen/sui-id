@@ -113,8 +113,8 @@ button:disabled, .button.disabled {
   min-height: auto;
 }
 
-/* Wide call-to-action: used for the add-user / register-client button
- * below list tables where a prominent, clearly-labelled action is needed. */
+/* Wide call-to-action: used for the add-user / add-app button below
+ * list tables where a prominent, clearly-labelled action is needed. */
 .button--wide {
   width: 100%;
   padding: var(--space-3) var(--space-4);

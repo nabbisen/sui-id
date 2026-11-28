@@ -779,6 +779,11 @@ pub struct Strings {
     pub user_detail_sessions_th_expires: &'static str,
     pub user_detail_sessions_th_factors: &'static str,
     pub user_detail_activity_section: &'static str,
+    /// "Showing the newest {n}." RFC 149 Q5 §1: no page lists this
+    /// one user's full history (the audit log's own filter matches
+    /// an action-name prefix, not a user), so this excerpt names
+    /// itself as one with no "view all" link to give.
+    pub user_detail_activity_caption: fn(usize) -> String,
     /// Description paragraph inside the user-detail danger zone.
     pub user_detail_danger_zone_body: &'static str,
     pub role_admin: &'static str,
@@ -911,6 +916,10 @@ pub struct Strings {
     pub me_overview_lede: &'static str,
     pub me_overview_section_status: &'static str,
     pub me_overview_section_activity: &'static str,
+    /// "Showing the newest {n}." RFC 149 Q5 §1: no page lists this
+    /// account's full history (the audit log is admin-only, and this
+    /// page is reachable by any signed-in user).
+    pub me_overview_activity_caption: fn(usize) -> String,
     /// v0.48.2: status row label for "MFA (TOTP)" — was a hardcoded
     /// English literal in pages/me_security/overview.rs.
     pub me_overview_label_mfa_totp: &'static str,
@@ -948,6 +957,10 @@ pub struct Strings {
     pub dashboard_recent_events_title: &'static str,
     pub dashboard_recent_events_empty: &'static str,
     pub dashboard_recent_events_view_all: &'static str,
+    /// "Showing the newest {n}." RFC 149 Q5 §1: an excerpt says it is
+    /// one, so it is never mistaken for the whole list this card's
+    /// own "View all" link leads to.
+    pub dashboard_recent_events_caption: fn(usize) -> String,
 
     // ---- Settings: page titles (RFC 039) ----
     pub settings_title_email: &'static str,
@@ -1026,7 +1039,10 @@ pub struct Strings {
     pub users_table_th_mfa: &'static str,
     pub users_is_admin_label: &'static str,
     // ---- Admin: Users extensions (RFC 051) ----
-    pub users_count_caption: fn(usize) -> String,
+    /// "Showing {from}–{to} of {total}." RFC 149 Q5 §1: a full list
+    /// states its total and which rows are on this page, always —
+    /// never only a count of rows the page happened to render.
+    pub users_count_caption: fn(i64, i64, i64) -> String,
     pub users_label_username: &'static str,
     pub users_label_display_name: &'static str,
     pub users_label_email: &'static str,
@@ -1058,7 +1074,9 @@ pub struct Strings {
     pub clients_single_realm_note: &'static str,
     // ---- Clients page extensions (RFC 051) ----
     pub clients_table_th_client_id: &'static str,
-    pub clients_count_caption: fn(usize) -> String,
+    /// "Showing {from}–{to} of {total}." Same rule as
+    /// `users_count_caption` (RFC 149 Q5 §1).
+    pub clients_count_caption: fn(i64, i64, i64) -> String,
     pub clients_label_app_name: &'static str,
     pub clients_label_confidential_checkbox: &'static str,
     pub clients_button_register: &'static str,
@@ -1111,7 +1129,15 @@ pub struct Strings {
     pub audit_filter_hint: &'static str,
     pub audit_export_csv: &'static str,
     // ---- Audit log extensions (RFC 051) ----
-    pub audit_entry_count_caption: fn(usize) -> String,
+    /// "{total} matching entries, up to {per_page} shown per page."
+    /// RFC 149 Q5 §1/§3: the count of what *matches*, not of what one
+    /// page happened to render — the bug this stage's own return
+    /// found and fixed (it used to count the rendered rows).
+    pub audit_entry_count_caption: fn(i64, usize) -> String,
+    // ---- Pagination (RFC 149 Q5 §1/§2): shared by users, apps, and the
+    // audit log's own "older"/"newer" seq-cursor nav. ----
+    pub pager_previous: &'static str,
+    pub pager_next: &'static str,
     pub audit_filter_button: &'static str,
     pub audit_chain_broken_note: fn(i64) -> String,
     pub audit_chain_ok_note: fn(usize, usize) -> String,

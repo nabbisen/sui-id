@@ -135,10 +135,15 @@ pub fn render_me_overview(
                         {if event_rows.is_empty() {
                             view! { <p class="muted">{t.me_overview_no_recent_events}</p> }.into_any()
                         } else {
+                            // RFC 149 Q5 §1: an excerpt says it is one.
+                            let caption = (t.me_overview_activity_caption)(event_rows.len());
                             view! {
+                                <>
+                                <p class="muted mb-2">{caption}</p>
                                 <div class="table-wrap">
                                     <table><tbody>{event_rows}</tbody></table>
                                 </div>
+                                </>
                             }.into_any()
                         }}
                     </section>

@@ -58,7 +58,10 @@ pub const UTILITIES_RFC067_CSS: &str = r#"
 /* Constrained widths used by auth cards and form pages */
 .max-w-card { max-width: 36rem; }
 .max-w-narrow { max-width: 22rem; }
-.min-w-16rem { min-width: 16rem; }
+/* min(…, 100%): a 16rem floor alone is 512px at a 200% font, wider
+ * than a phone, and scrolled the audit filter form sideways (Q3's
+ * review; fixed RFC 149 Q5 §3). */
+.min-w-16rem { min-width: min(16rem, 100%); }
 
 /* Typography */
 .text-caption { font-size: var(--font-size-caption); }

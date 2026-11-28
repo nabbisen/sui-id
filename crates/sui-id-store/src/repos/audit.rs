@@ -298,6 +298,128 @@ pub async fn recent(db: &Database, limit: i64) -> StoreResult<Vec<AuditLogRow>> 
     }).await
 }
 
+/// One row of a keyset-paged read ([`page_filtered`]), carrying its own
+/// `seq` — [`AuditLogRow`] itself doesn't, since most callers (`append`,
+/// every test fixture that builds one by hand) have no `seq` to give it
+/// before the row is written. Paging is the one reader that needs it, to
+/// build the next page's own `before`/`after` cursor.
+#[derive(Debug, Clone)]
+pub struct AuditLogPageRow {
+    pub seq: i64,
+    pub entry: AuditLogRow,
+}
+
+fn map_page_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuditLogPageRow> {
+    Ok(AuditLogPageRow {
+        seq: row.get("seq")?,
+        entry: AuditLogRow {
+            at: row.get("at")?,
+            actor: row
+                .get::<_, Option<String>>("actor")?
+                .map(|s| s.parse())
+                .transpose()
+                .map_err(|e: uuid::Error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        1,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
+            action: row.get("action")?,
+            target: row.get("target")?,
+            result: row.get("result")?,
+            note: row.get("note")?,
+        },
+    })
+}
+
+/// Count of audit rows matching `filter` (the same `action LIKE
+/// '<filter>%'` rule [`recent_filtered`]/[`page_filtered`] use). RFC 149
+/// Q5 §2: the one `COUNT(*)` a page's own caption is built from — never
+/// the number of rows a particular page happened to render.
+pub async fn count_filtered(db: &Database, filter: Option<String>) -> StoreResult<i64> {
+    db.with_read(
+        move |conn| match filter.as_deref().filter(|s| !s.is_empty()) {
+            None => Ok(conn
+                .prepare("SELECT COUNT(*) FROM audit_log")?
+                .query_row([], |r| r.get(0))?),
+            Some(prefix) => {
+                let pattern = format!("{prefix}%");
+                Ok(conn
+                    .prepare("SELECT COUNT(*) FROM audit_log WHERE action LIKE ?1")?
+                    .query_row([pattern], |r| r.get(0))?)
+            }
+        },
+    )
+    .await
+}
+
+/// One page of audit rows, keyset-paged by `seq` rather than `OFFSET`
+/// (RFC 149 Q5 §2): new rows arrive constantly, which would shift every
+/// `OFFSET` page under the reader, and a deep `OFFSET` scans every row
+/// before it. Always newest-first.
+///
+/// `before`/`after` are mutually exclusive (a caller passing both gets
+/// `before`'s own page — there is no third, combined meaning to give
+/// that). `before` is exclusive (`seq < before`): the usual "older"
+/// page, cursor'd from the current page's own lowest `seq`. `after` is
+/// exclusive too (`seq > after`), queried ascending and then reversed
+/// back to the newest-first display order: the "newer" page, cursor'd
+/// from the current page's own highest `seq`. Neither given is the
+/// first page: newest `limit` rows, unconditionally.
+pub async fn page_filtered(
+    db: &Database,
+    filter: Option<String>,
+    before: Option<i64>,
+    after: Option<i64>,
+    limit: i64,
+) -> StoreResult<Vec<AuditLogPageRow>> {
+    db.with_read(move |conn| {
+        let pattern = filter
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(|p| format!("{p}%"));
+        let mut sql = String::from(
+            "SELECT seq, at, actor, action, target, result, note FROM audit_log WHERE 1=1",
+        );
+        if pattern.is_some() {
+            sql.push_str(" AND action LIKE ?");
+        }
+        let ascending = before.is_none() && after.is_some();
+        if before.is_some() {
+            sql.push_str(" AND seq < ?");
+        } else if after.is_some() {
+            sql.push_str(" AND seq > ?");
+        }
+        sql.push_str(if ascending {
+            " ORDER BY seq ASC LIMIT ?"
+        } else {
+            " ORDER BY seq DESC LIMIT ?"
+        });
+        let mut stmt = conn.prepare(&sql)?;
+        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
+        if let Some(p) = &pattern {
+            params.push(p);
+        }
+        let cursor = before.or(after);
+        if let Some(c) = &cursor {
+            params.push(c);
+        }
+        params.push(&limit);
+        let mut rows = stmt
+            .query_map(params.as_slice(), map_page_row)?
+            .collect::<Result<Vec<_>, _>>()?;
+        if ascending {
+            // Queried ascending to get the `limit` rows closest to the
+            // cursor; reversed back to the newest-first order every
+            // other page (and the rendered table) uses.
+            rows.reverse();
+        }
+        Ok(rows)
+    })
+    .await
+}
+
 /// Fetch recent audit rows, optionally filtered by event-name prefix.
 ///
 /// `filter` is matched as `action LIKE '<filter>%'`. An empty or None

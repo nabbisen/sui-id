@@ -581,7 +581,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     users_table_th_mfa: "双重认证",
     users_is_admin_label: "授予管理员权限",
     // Users extensions (RFC 051)
-    users_count_caption: |n| format!("当前 {n} 名。"),
+    users_count_caption: |from, to, total| format!("共 {total} 名中，显示第 {from}–{to} 名。"),
     users_label_username: "用户名",
     users_label_display_name: "显示名（可选）",
     users_label_email: "邮箱地址（可选）",
@@ -590,7 +590,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
 
     // Admin: 客户端管理 (RFC 029)
     // Admin: 客户端编辑 (RFC 051)
-    client_edit_title: "编辑客户端",
+    client_edit_title: "编辑应用",
     client_edit_basic_section: "基本信息",
     client_edit_basic_note: "Client ID、类型（confidential/public）和 client secret 在创建时固定。如需修改，请删除后重新注册。",
     client_edit_new_secret_label: "新的 client secret（仅此页面显示一次）：",
@@ -601,18 +601,18 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     client_edit_label_updated_at: "最近更改",
 
     // Admin: 客户端管理 (RFC 029)
-    clients_title: "客户端管理",
-    clients_lede: "注册和管理 OIDC 客户端。",
-    clients_create_section: "注册新客户端",
-    clients_table_section: "已注册客户端",
+    clients_title: "应用管理",
+    clients_lede: "注册和管理 OIDC 应用。",
+    clients_create_section: "添加应用",
+    clients_table_section: "已注册应用",
     clients_secret_once_banner: "客户端密钥仅显示一次，请立即保存到安全位置。",
     clients_table_th_name: "名称",
     clients_table_th_kind: "类型",
     clients_table_th_status: "状态",
-    clients_single_realm_note: "sui-id 是单域 IdP，所有用户均可访问所有客户端。权限范围限制客户端可请求的信息，而非限制哪些用户可以登录。",
+    clients_single_realm_note: "sui-id 是单域 IdP，所有用户均可访问所有应用。权限范围限制应用可请求的信息，而非限制哪些用户可以登录。",
     // Clients page extensions (RFC 051)
     clients_table_th_client_id: "Client ID",
-    clients_count_caption: |n| format!("当前 {n} 个。"),
+    clients_count_caption: |from, to, total| format!("共 {total} 个中，显示第 {from}–{to} 个。"),
     clients_label_app_name: "应用名称",
     clients_label_confidential_checkbox: "Confidential client（发放 client secret）",
     clients_button_register: "注册",
@@ -663,7 +663,11 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     audit_filter_hint: "例如：auth.login",
     audit_export_csv: "导出 CSV",
     // Audit log extensions (RFC 051)
-    audit_entry_count_caption: |n| format!("({n} 条)"),
+    audit_entry_count_caption: |total, per_page| {
+        format!("共 {total} 条匹配记录（每页最多显示 {per_page} 条）。")
+    },
+    pager_previous: "← 上一页",
+    pager_next: "下一页 →",
     audit_filter_button: "筛选",
     audit_chain_broken_note: |seq| format!("在 seq={seq} 处检测到不一致，请立即调查。"),
     audit_chain_ok_note: |checked, legacy| {
@@ -710,10 +714,10 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     confirm_reset_mfa_impact: "该用户的 TOTP 认证器和所有通行密钥将被删除，下次登录时需要重新注册。",
     confirm_reset_mfa_reversibility: "操作后用户可重新注册。",
     confirm_reset_mfa_button: "重置 MFA",
-    confirm_delete_client_title: "删除客户端？",
-    confirm_delete_client_impact: "此 OIDC 客户端将被永久删除，颁发给该客户端的所有活跃会话和刷新令牌将被撤销。",
+    confirm_delete_client_title: "删除应用？",
+    confirm_delete_client_impact: "此应用将被永久删除，颁发给它的所有活跃会话和刷新令牌将被撤销。",
     confirm_delete_client_reversibility: "此操作无法撤销。",
-    confirm_delete_client_button: "删除客户端",
+    confirm_delete_client_button: "删除应用",
     confirm_delete_signing_key_title: "删除签名密钥？",
     confirm_delete_signing_key_impact: "由此密钥签名且尚未过期的令牌将立即验证失败。",
     confirm_delete_signing_key_reversibility: "此操作无法撤销，请仅在所有令牌均已过期后删除。",
@@ -764,6 +768,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     user_detail_sessions_th_expires: "过期时间",
     user_detail_sessions_th_factors: "认证因素",
     user_detail_activity_section: "近期活动",
+    user_detail_activity_caption: |n| format!("显示最新 {n} 条。"),
     user_detail_danger_zone_body: "这些操作会影响此用户的访问权限，可能无法撤销。每项操作都需要确认步骤。",
     role_admin: "管理员",
     role_auditor: "审计员",
@@ -902,6 +907,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     dashboard_recent_events_empty: "暂无重要事件。",
 
     dashboard_recent_events_view_all: "查看全部 →",
+    dashboard_recent_events_caption: |n| format!("显示最新 {n} 条。"),
 
     // /me/security 选项卡 (RFC 040)
     me_tab_overview: "概览",
@@ -922,6 +928,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     me_overview_lede: "你的账户概览：两步验证、通行密钥、活动会话以及最近的活动记录。",
     me_overview_section_status: "安全状态",
     me_overview_section_activity: "最近活动",
+    me_overview_activity_caption: |n| format!("显示最新 {n} 条。"),
     me_overview_label_mfa_totp: "MFA（TOTP）",
     me_overview_label_passkeys: "通行密钥",
     me_overview_no_recent_events: "暂无最近活动记录。",

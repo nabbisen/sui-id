@@ -197,6 +197,35 @@ pub async fn list(db: &Database) -> StoreResult<Vec<ClientRow>> {
     .await
 }
 
+/// Total row count, for [`list_page`]'s own caller to compute a page count
+/// from (RFC 149 Q5 §1: a full list states its total).
+pub async fn count(db: &Database) -> StoreResult<i64> {
+    db.with_read(|conn| {
+        Ok(conn
+            .prepare("SELECT COUNT(*) FROM clients")?
+            .query_row([], |r| r.get(0))?)
+    })
+    .await
+}
+
+/// One page of [`list`]'s own order, `created_at ASC` with `id` as the
+/// tie-break (RFC 149 Q5 §2) — two rows sharing a `created_at` (seeded
+/// together, say) would otherwise sort however SQLite's own, unspecified
+/// tie-break happened to land them, which can differ between two reads of
+/// the same unchanged table.
+pub async fn list_page(db: &Database, offset: i64, limit: i64) -> StoreResult<Vec<ClientRow>> {
+    db.with_read(move |conn| {
+        let mut stmt = conn.prepare(&format!(
+            "{SELECT} ORDER BY created_at ASC, id ASC LIMIT ?1 OFFSET ?2"
+        ))?;
+        let rows = stmt
+            .query_map(params![limit, offset], map)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+    .await
+}
+
 /// The same update the removed bare `update_basic` made, run inside a
 /// caller-supplied transaction. RFC 094 M2b wave 4 stage 3: the bare
 /// async form had exactly two callers, `update_client_basic` (converted

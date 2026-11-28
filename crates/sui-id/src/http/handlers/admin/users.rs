@@ -30,16 +30,26 @@ use sui_id_web::{
     render_recovery_link_refused, render_user_detail, render_users, render_users_new,
 };
 
+/// RFC 149 Q5 §2: users and apps page 50 at a time.
+pub const LIST_PAGE_SIZE: u32 = 50;
+
+#[derive(Debug, serde::Deserialize, Default)]
+pub struct PageQuery {
+    pub page: Option<u32>,
+}
+
 pub async fn users_get(
     state_ext: AppStateExt,
     CurrentAdminOrAuditor(_admin_id, role, ref read_actor, username): CurrentAdminOrAuditor,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
+    axum::extract::Query(query): axum::extract::Query<PageQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let rows = admin_uc::list_users(&app.db, read_actor)
-        .await
-        .map_err(HttpError::html)?;
+    let (rows, total, page) =
+        admin_uc::list_users_page(&app.db, read_actor, query.page.unwrap_or(1), LIST_PAGE_SIZE)
+            .await
+            .map_err(HttpError::html)?;
     let mut summaries = Vec::with_capacity(rows.len());
     for r in rows {
         let mfa_enabled = sui_id_core::mfa::is_mfa_enabled(&app.db, r.id)
@@ -58,9 +68,15 @@ pub async fn users_get(
     }
     // summaries already collected in for loop above
     let token = crate::csrf::ensure_token(&jar);
+    let page_info = sui_id_web::components::pager::OffsetPageInfo {
+        page,
+        per_page: LIST_PAGE_SIZE,
+        total,
+    };
     let resp = Html(render_users(
         role.is_admin(),
         summaries,
+        page_info,
         None,
         username,
         token.clone(),

@@ -435,6 +435,8 @@ pub fn render_dashboard(
                             compact: true,
                         }).into_any()
                     } else {
+                        // RFC 149 Q5 §1: an excerpt says it is one.
+                        let caption = (t.dashboard_recent_events_caption)(recent_important.len());
                         let rows: Vec<_> = recent_important.into_iter().map(|r| {
                             let badge_class = match r.result.as_str() {
                                 "ok"  => "badge badge--ok",
@@ -454,6 +456,7 @@ pub fn render_dashboard(
                         }).collect();
                         view! {
                             <>
+                            <p class="muted mb-2">{caption}</p>
                             <div class="table-wrap">
                                 <table class="audit-mini">
                                     <tbody>{rows}</tbody>

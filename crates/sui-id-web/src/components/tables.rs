@@ -97,4 +97,34 @@ thead th.cell-actions {
   white-space: nowrap;
 }
 
+/* ── RFC 149 Q5 §3: the audit log's target cell truncates its own text  */
+/* inline, beside its copy button, rather than owning a cell-id column  */
+/* of its own. */
+.cell-id-inline {
+  display: inline-block;
+  vertical-align: middle;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── RFC 149 Q5 §3: a bounded, independently-scrolling table whose own */
+/* header stays in view (`.table-wrap--scroll`'s own vertical scroll), */
+/* for a list long enough that "scroll to see the header again" would  */
+/* otherwise apply. Opt-in: most tables are short enough (RFC 149 Q5    */
+/* §2's own 50-per-page cap, for one) that this would add a scrollbar   */
+/* with nothing to show for it. */
+.table-wrap--scroll {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.table-head--sticky th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 "#;

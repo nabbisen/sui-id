@@ -57,9 +57,11 @@ fn user_row_view(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_users(
     can_write: bool,
     users: Vec<UserSummary>,
+    page_info: crate::components::pager::OffsetPageInfo,
     flash: Option<Flash>,
     current_user: String,
     csrf_token: String,
@@ -68,8 +70,10 @@ pub fn render_users(
 ) -> String {
     render(move || {
         let t = lang.strings();
-        let user_count = users.len();
+        let (from, to) = page_info.range();
+        let total = page_info.total;
         let nav_username = current_user.clone();
+        let pager = crate::components::pager::offset_pager_view(t, "/admin/users", &page_info);
         let rows: Vec<_> = users
             .into_iter()
             .map(|u| user_row_view(t, u, current_user.clone()))
@@ -82,7 +86,7 @@ pub fn render_users(
                         <p class="page-header__lede">
                             {t.users_lede}
                             " "
-                            {(t.users_count_caption)(user_count)}
+                            {(t.users_count_caption)(from, to, total)}
                         </p>
                     </div>
                     // RFC 071: add button only for admins (auditors can view, not create).
@@ -119,6 +123,7 @@ pub fn render_users(
                             }.into_any()
                         }}
                     </div>
+                    {pager}
                 </section>
 
             </Shell>
@@ -402,6 +407,9 @@ pub fn render_user_detail(
 
                 <section>
                     <h2>{t.user_detail_activity_section}</h2>
+                    // RFC 149 Q5 §1: an excerpt says it is one -- no
+                    // page lists this one user's full history to link to.
+                    <p class="muted mb-2">{(t.user_detail_activity_caption)(data.recent_audit.len())}</p>
                     <div class="table-wrap">
                         <table>
                             {audit_table_head(t)}

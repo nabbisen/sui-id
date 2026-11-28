@@ -85,6 +85,29 @@ pub async fn list_users(db: &Database, actor: &ReadOnlyAdminActor) -> CoreResult
     Ok(users::list(db).await?)
 }
 
+/// One page of users, newest-last (`created_at ASC, id ASC` — RFC 149
+/// Q5 §2), the total row count, and the *effective* 1-based page
+/// (clamped to the last page rather than returning an empty one when
+/// the requested page is past the end — §2's own "a page past the
+/// end shows the last page's links, not an error"; the caller builds
+/// those links from this returned page, not the one requested).
+pub async fn list_users_page(
+    db: &Database,
+    actor: &ReadOnlyAdminActor,
+    page: u32,
+    per_page: u32,
+) -> CoreResult<(Vec<UserRow>, i64, u32)> {
+    let _ = actor; // capability proof; target list is implicit
+    let total = users::count(db).await?;
+    let per_page_i64 = i64::from(per_page.max(1));
+    let last_page_i64 = (total.max(1) - 1) / per_page_i64;
+    let page_i64 = i64::from(page.max(1)) - 1;
+    let effective_page_i64 = page_i64.min(last_page_i64).max(0);
+    let offset = effective_page_i64 * per_page_i64;
+    let rows = users::list_page(db, offset, per_page_i64).await?;
+    Ok((rows, total, (effective_page_i64 + 1) as u32))
+}
+
 pub async fn set_user_disabled(
     db: &Database,
     clock: &SharedClock,

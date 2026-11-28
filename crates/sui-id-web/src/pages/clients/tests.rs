@@ -106,6 +106,11 @@ fn render_clients_marks_a_dynamically_registered_client() {
     let html = render_clients(
         true,
         vec![client_summary("dynamic", Some("client_secret_basic"))],
+        crate::components::pager::OffsetPageInfo {
+            page: 1,
+            per_page: 50,
+            total: 1,
+        },
         None,
         None,
         "csrf".into(),
@@ -124,6 +129,11 @@ fn render_clients_does_not_mark_an_admin_created_client() {
     let html = render_clients(
         true,
         vec![client_summary("admin", Some("client_secret_basic"))],
+        crate::components::pager::OffsetPageInfo {
+            page: 1,
+            per_page: 50,
+            total: 1,
+        },
         None,
         None,
         "csrf".into(),
@@ -170,6 +180,11 @@ fn render_clients_marks_a_client_with_no_recorded_auth_method() {
     let html = render_clients(
         true,
         vec![client_summary("admin", None)],
+        crate::components::pager::OffsetPageInfo {
+            page: 1,
+            per_page: 50,
+            total: 1,
+        },
         None,
         None,
         "csrf".into(),
@@ -189,6 +204,11 @@ fn render_clients_does_not_mark_a_client_with_a_recorded_auth_method() {
     let html = render_clients(
         true,
         vec![client_summary("admin", Some("client_secret_basic"))],
+        crate::components::pager::OffsetPageInfo {
+            page: 1,
+            per_page: 50,
+            total: 1,
+        },
         None,
         None,
         "csrf".into(),
@@ -239,6 +259,11 @@ fn render_clients_marks_a_client_with_an_unrecognized_auth_method() {
     let html = render_clients(
         true,
         vec![summary],
+        crate::components::pager::OffsetPageInfo {
+            page: 1,
+            per_page: 50,
+            total: 1,
+        },
         None,
         None,
         "csrf".into(),
@@ -390,4 +415,126 @@ fn the_row_buttons_skip_browser_validation_and_save_does_not() {
     }
     // Two add buttons, two remove buttons for redirect URIs, one for post-logout.
     assert_eq!(row_buttons, 5, "every row button was checked");
+}
+
+/// Everything between `<` and `>` is markup (tags, attributes, URLs in
+/// `href`/`action`) — never what a reader sees. Stripping it leaves
+/// the page's own visible text, the only thing RFC 149 Q5 §4's rule
+/// ("the app pages' headings, buttons and empty states say *app*")
+/// is actually about; `/admin/clients/...` routes and `ClientSummary`
+/// field names would otherwise false-positive a raw-HTML scan.
+/// Removes every `<tag_name ...>...</tag_name>` element, content
+/// included -- unlike a bare angle-bracket strip, which would keep a
+/// `<style>`/`<script>` element's own text (CSS, including its
+/// comments, is never shown to a reader).
+fn strip_element(html: &str, tag_name: &str) -> String {
+    let open = format!("<{tag_name}");
+    let close = format!("</{tag_name}>");
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(start) = rest.find(&open) {
+        out.push_str(&rest[..start]);
+        let Some(tag_end_rel) = rest[start..].find('>') else {
+            return out;
+        };
+        let after_open_tag = start + tag_end_rel + 1;
+        let Some(close_rel) = rest[after_open_tag..].find(&close) else {
+            return out;
+        };
+        rest = &rest[after_open_tag + close_rel + close.len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn visible_text(html: &str) -> String {
+    let without_style = strip_element(html, "style");
+    let without_script = strip_element(&without_style, "script");
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in without_script.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// `client` survives in the visible text only inside one of the four
+/// terms RFC 149 Q5 §4 keeps because they are the protocol's own
+/// (`client ID`, `client secret`, `confidential client`, `public
+/// client`) -- every other appearance is this stage's to rename.
+fn mentions_client_outside_the_protocol_terms(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let mut redacted = lower;
+    for term in [
+        "client id",
+        "client secret",
+        "confidential client",
+        "public client",
+    ] {
+        redacted = redacted.replace(term, "");
+    }
+    redacted.contains("client")
+}
+
+#[test]
+fn no_app_page_says_client_outside_the_protocol_terms() {
+    let create_html = render_clients_new(
+        default_form("/admin/clients", "Register", "/admin/clients"),
+        None,
+        false,
+        LANG,
+        "admin".into(),
+    );
+    // `client_edit_data`'s own default app name ("a client") would
+    // otherwise false-positive this scan: it's the app's own given
+    // name echoed back, not page copy -- any admin could legitimately
+    // name an app that, and this stage has no reason to forbid it.
+    let mut edit_data = client_edit_data("admin", None);
+    edit_data.form.name = "my-app".into();
+    let edit_html = render_client_edit(edit_data, None, LANG);
+    let mut list_summary = client_summary("admin", Some("client_secret_basic"));
+    list_summary.name = "my-app".into(); // same reason as `edit_data.form.name` above
+    let list_html = render_clients(
+        true,
+        vec![list_summary],
+        crate::components::pager::OffsetPageInfo {
+            page: 1,
+            per_page: 50,
+            total: 1,
+        },
+        None,
+        None,
+        "csrf".into(),
+        false,
+        LANG,
+        "admin".into(),
+    );
+    let delete_html = crate::render_confirm_delete_client(
+        crate::ConfirmDeleteClientData {
+            client_id: "11111111-1111-1111-1111-111111111111".into(),
+            client_name: "my-app".into(),
+            csrf_token: "csrf".into(),
+            admin_username: "admin".into(),
+        },
+        false,
+        LANG,
+    );
+
+    for (name, html) in [
+        ("create", create_html),
+        ("edit", edit_html),
+        ("list", list_html),
+        ("delete-confirm", delete_html),
+    ] {
+        let text = visible_text(&html);
+        assert!(
+            !mentions_client_outside_the_protocol_terms(&text),
+            "{name}: still says \"client\" outside the protocol terms"
+        );
+    }
 }

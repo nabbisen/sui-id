@@ -102,6 +102,7 @@ fn client_row_view(
 pub fn render_clients(
     can_write: bool,
     clients: Vec<ClientSummary>,
+    page_info: crate::components::pager::OffsetPageInfo,
     flash: Option<Flash>,
     new_secret: Option<(String, String)>,
     csrf_token: String,
@@ -112,7 +113,9 @@ pub fn render_clients(
     render(move || {
         let t = lang.strings();
         let csrf_for_rows = csrf_token.clone();
-        let client_count = clients.len();
+        let (from, to) = page_info.range();
+        let total = page_info.total;
+        let pager = crate::components::pager::offset_pager_view(t, "/admin/clients", &page_info);
         let secret_block = new_secret.map(|(cid, sec)| {
             view! {
                 <div class="flash warn" role="status">
@@ -136,7 +139,7 @@ pub fn render_clients(
                         <p class="page-header__lede">
                             {t.clients_lede}
                             " "
-                            {(t.clients_count_caption)(client_count)}
+                            {(t.clients_count_caption)(from, to, total)}
                         </p>
                     </div>
                     {can_write.then(|| view! {
@@ -174,6 +177,7 @@ pub fn render_clients(
                             }.into_any()
                         }}
                     </div>
+                    {pager}
                 </section>
 
             </Shell>

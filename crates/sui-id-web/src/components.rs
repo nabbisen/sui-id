@@ -52,6 +52,7 @@ pub mod chrome;
 pub mod confirm;
 pub mod forms;
 pub mod help;
+pub mod pager;
 pub mod setup;
 pub mod tables;
 pub mod tabs;
@@ -150,6 +151,8 @@ pub fn components_css() -> &'static str {
             forms::CHOSEN_OPTION_CSS,
             // ---- RFC 149 §3 / Q3 §1: on-request help ----
             help::HELP_CSS,
+            // ---- RFC 149 Q5 §1/§2: pagination ----
+            pager::PAGER_CSS,
         ]
         .concat()
     })
