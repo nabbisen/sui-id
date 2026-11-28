@@ -1,9 +1,13 @@
 # Cycles Q and R: `0.95.0` and `0.96.0`, the plan
 
-> ## Whose turn it is: **the implementation role's, on Q5** ([dispatch](0.95.0-q5-the-lists-2026-11-27.md)).
-> Q2 (`57c80d1`), Q3 (`420001b`), Q3b (`18615bd`) and Q4 (`14a0422`) have landed. **RFC 149's four closure conditions are
-> met.** No decision is pending now. §1 lists four questions still to come, three before Q6 and one before
-> R3, each with the architect's proposed answer. Two decisions for Q3 were taken on 2026-11-27 (§1).
+> ## Whose turn it is: **the implementation role's, on `0.95.0`'s release preparation.**
+> Q2 (`57c80d1`), Q3 (`420001b`), Q3b (`18615bd`), Q4 (`14a0422`) and Q5 (`38f99f0`) have landed. **RFC 149's four closure
+> conditions are met.**
+> **Re-scoped 2026-11-28** (`@nabbisen`: *"0.95.0 now (Recommended)"*): `0.95.0` is cut after Q5, with the audit CSV fix
+> (CHANGELOG, *Security*). Q6 to Q8 ship as `0.96.0`, and cycle R as `0.97.0`. The version numbers below are the plan's
+> original ones; where they differ, this note governs.
+> RFC 152's three questions, and a fourth, were settled on 2026-11-28
+> ([considered](../152-what-a-relying-party-can-rely-on/open-questions-considered-2026-11-28.md)). One question remains, before R3 (§1).
 
 **Authorized 2026-11-26.** `@nabbisen`, on the split proposed in this plan's first version (`6577468`): *"Yes. Scope them, the
 series, carefully with consideration."* This version is that scoping, from measurements made the same day at `6577468`.

@@ -12,10 +12,17 @@ the schedule, **not this RFC's acceptance**.
 with an error, and none is silently ignored. `max_age` and `prompt=login` force a new sign-in, and the ID token says when it
 happened. Userinfo returns profile claims only under the `profile` scope. A signing-key rotation cannot fail a sign-in at a
 relying party that caches the JWKS as sui-id tells it to. Each of these is tested, with a mutation. **And the reference
-states D8's obligations**, each with what breaks when it is not met.
+states D8's obligations**, each with what breaks when it is not met. **From the second amendment**: a federated
+sign-in never makes `auth_time` newer than a credential it can show, and no app keeps an empty scope list (D9).
 **Amended.** 2026-11-26, approved by `@nabbisen`: *"Yes on both."*, on the architect's proposal from a prospective relying
 party's letter. **D8 added**: what a relying party must do for sui-id's guarantees to reach its users. It adds a documentation
 deliverable and no behaviour.
+**Amended.** 2026-11-28, on the architect's consideration of its three open questions and one more
+([`open-questions-considered-2026-11-28.md`](../handoffs/152-what-a-relying-party-can-rely-on/open-questions-considered-2026-11-28.md)).
+`@nabbisen` chose each recommendation: *"Two-choice page (Recommended)"*, *"Prove it upstream (Recommended)"* and *"End it
+by migration (Recommended)"*. The open questions are resolved in D2 and D3, and **D9 is added**: an empty scope list no
+longer means *"permit any"*. **The release moves to `0.96.0`**: `0.95.0` was cut after RFC 149 (`@nabbisen`: *"0.95.0 now
+(Recommended)"*).
 **Tracks.** The OpenID Connect provider. Raised by a relying party's questions, 2026-11-25.
 **Touches.** `crates/sui-id/src/http/handlers/oidc.rs` (the authorization request and userinfo); `crates/sui-id-core/src/oidc/`
 (the code and token issuance, discovery, JWKS); `crates/sui-id-store` (an authorization code and a refresh token carry the
@@ -62,7 +69,19 @@ it knows.
 ### D2 — `max_age` and `auth_time`
 
 - **The sign-in time** of a session is the last time its user presented a credential to it: the sign-in itself, or a
-  step-up re-authentication (RFC 102). The review checks which step-up paths ask for a credential, and only those count.
+  step-up re-authentication (RFC 102). **Resolved 2026-11-28 (open question 2)**, by one rule: *`auth_time` may be older
+  than the truth, never newer.* So the sign-in time moves only when sui-id checked a credential itself, or verified that a
+  federation provider checked one because sui-id asked:
+  - **it moves** on a local sign-in (a password, local or directory, or a passkey, with any second factor), on a step-up
+    through L05 (a TOTP code or a passkey), and on a federated sign-in that completes a local second factor;
+  - **it does not move** on B7's password re-check (`first_factor_proof`), which records nothing on the session;
+  - **a federated sign-in that must be fresh** (`prompt=login`, or `max_age` exceeded) counts only if sui-id sent
+    `prompt=login` and `max_age=0` upstream, and the provider's ID token carries an `auth_time` no earlier than the moment
+    sui-id sent the request, within the ID token check's skew. Otherwise the sign-in fails with a page that says the
+    provider did not confirm a new sign-in, and nothing is issued. Measured: today the upstream request carries neither
+    parameter (`crates/sui-id/src/http/handlers/federation.rs:532`), and the provider's `auth_time` is discarded;
+  - **any other federated sign-in**: `auth_time` is the provider's `auth_time` when it sends one, never later than sui-id
+    accepted the sign-in; when it sends none, the moment sui-id accepted it, and the reference says so (D7).
 - `max_age=N` with a session whose sign-in time is more than `N` seconds ago **sends the user through sign-in again before
   a code is issued**. `max_age=0` always does.
 - **`auth_time` is in every ID token.** OpenID Connect allows it unconditionally, and one rule is clearer than two. The
@@ -76,7 +95,7 @@ it knows.
 | `none` | Issues a code only if the user has a session and nothing would need the user, and answers `login_required`, `consent_required` or `interaction_required` otherwise. `none` with any other value is `invalid_request` |
 | `login` | Sends the user through sign-in again, even with a live session, and `auth_time` is the new time |
 | `consent` | Shows the consent screen even where the client's policy would skip it |
-| `select_account` | sui-id has one account per browser session. **Open question 1**: refused as `account_selection_required`, or treated as `login` |
+| `select_account` | **Honoured by a two-choice page** (resolved 2026-11-28, open question 1): *Continue as `<name>`*, without a new sign-in, or *Sign in as someone else*, which is `login`'s path. The page says that switching signs this browser out of `<name>` for every app that uses sui-id in it. With no session, the sign-in page is shown. With `login` as well, *Continue* asks for the credential again, for the same account |
 | anything else | `invalid_request` |
 
 Discovery gains `prompt_values_supported` with exactly the values honoured.
@@ -141,12 +160,28 @@ it. Each obligation names what breaks:
 **Tests.** None run in sui-id: the list is documentation. Each row's claim about sui-id is checked against the code when the
 section is written, as R6 and R7 were.
 
+### D9 — an empty scope list no longer means *"permit any"*
+
+Added 2026-11-28.
+- **Today** `enforce_scope_policy` skips the check for an app whose scope list is empty
+  (`crates/sui-id-core/src/oidc/authorize.rs:309`). Such an app can be issued a token carrying any scope string it names,
+  defined or not. That is fail-open, and *"empty means everything"* is a meaning nobody guesses.
+- **Nothing creates one any more.** Dynamic registration refuses an empty `scope`, and the app form always includes
+  `openid`. They remain from before migration 0002 (v0.29.12), and from the old edit form, up to `0.94.0`.
+- **A migration ends it** without breaking a working relying party:
+  - each empty list becomes `openid`, the standard scopes, and every scope defined when the migration runs;
+  - each converted app gets an audit record naming the list it was given;
+  - a `CHECK` then refuses an empty list.
+- **What changes for a relying party**: only a request for a scope nobody defined. It now gets `invalid_scope`, with the
+  message that names the console page.
+- **The upgrade note names the query** that finds such apps beforehand.
+
 ## What this RFC does not do
 
 - **Front- and back-channel logout.** A relying party learns of a disabled user through its next refresh, which a disable
   revokes in the same transaction. A logout channel is a separate decision.
 - **`acr_values` as an essential claim**, through the `claims` parameter, which D1 refuses until a later RFC.
-- **Email verification.** `email_verified` is `false` for every user until RFC 101 (Accepted; cycle R, `0.96.0`, since cycle Q's split of 2026-11-26) ships its flow.
+- **Email verification.** `email_verified` is `false` for every user until RFC 101 (Accepted; cycle R, `0.97.0`, since `0.95.0` was cut after RFC 149 on 2026-11-28) ships its flow.
   RFC 101's D2 already makes an address change a pending new address rather than an edit of the verified one.
 
 ## Tests, each with a mutation
@@ -161,14 +196,19 @@ section is written, as R6 and R7 were.
 | Userinfo without `profile` omits `preferred_username` and `name`; with it, includes them | the scope check removed |
 | After a rotation, tokens are signed by the previous key until the new one has been published for the cache lifetime, then by the new one (a controlled clock) | the new key signing at once |
 | `claims_supported` equals the union of the serialized claim names | a claim added to the ID token but not to the list |
+| `prompt=select_account` with a session shows the two choices; *Continue* issues a code with the original `auth_time` | *Continue* re-stamping `auth_time`, or the page skipped |
+| A federated sign-in under `prompt=login` whose provider returns no `auth_time`, or one older than the request, is refused and issues nothing | the upstream `auth_time` check removed |
+| After the migration, no app has an empty scope list, each converted app has an audit record, and an empty list cannot be stored | the `CHECK` removed, or an empty list skipping the check again |
 
 ## Open questions
 
-1. **`prompt=select_account`**: refused, or treated as `login`? Refusing is the honest answer for a single-account session.
+**All three are resolved, 2026-11-28** (the second amendment, above). They are kept as they were asked.
+
+1. **`prompt=select_account`** (resolved in D3): refused, or treated as `login`? Refusing is the honest answer for a single-account session.
    Treating it as `login` lets the user change account by signing out and in again, which is what a relying party sending it
    wants.
-2. **Which step-up paths count as presenting a credential** for D2 (the review measures them).
-3. **A relying party's existing behaviour**: D4 removes claims a relying party may already read without asking for `profile`.
+2. **Which step-up paths count as presenting a credential** for D2 (resolved in D2, with federated sign-in).
+3. **A relying party's existing behaviour** (resolved: no warning release is needed, because `0.95.0`'s upgrade note announces D4 one release ahead, and tells both the relying party's developer and the administrator what to do): D4 removes claims a relying party may already read without asking for `profile`.
    Should the change ship with one release of warning in the CHANGELOG first? The architect's view is no: there is no
    compatibility promise before 1.0, and the claims were returned against the specification. Naming it in *Changed* is
    enough.
