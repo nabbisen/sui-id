@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.95.0] — 2026-11-28
+
+**The audit CSV export can no longer be forged, or made to run a formula, by text an unauthenticated visitor
+controls** — every release from `0.36.0` through `0.94.0` is affected. **The console is rebuilt around what an
+operator does** (RFC 149): apps, not clients, with one shared form; a grouped sidebar replacing the flat row and
+*Settings*; the users, apps and audit-log lists page 50 at a time and say exactly what they show, with the audit
+CSV streamed out in full; a 5-step getting-started path; and in-place help on nine sections. **Added:** the
+password breach check can now be changed after setup, from *Sign-in settings*. **Fixed:** an unchecked
+*Confidential client* box still created a confidential app, in every release through `0.94.0`; the audit log's own
+count and its CSV export now match what the page shows; several language and narrow-viewport fixes. **Removed:**
+the retired footer, the settings-tab strip and the dead `/me` page, with the types and strings only they used.
+
 ### Added
 
 - **The password breach check can now be changed after setup**, from

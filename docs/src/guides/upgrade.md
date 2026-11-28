@@ -56,6 +56,40 @@ before upgrading across more than one or two of them.
 
 ## Version-specific notes
 
+### v0.95.x
+
+**No migration, and no configuration change.** The database's schema is
+the same as `0.94.0`'s.
+
+**The audit CSV export is fixed.** Treat any audit CSV exported before
+this release with care: do not open one in a spreadsheet with formulas
+enabled, and do not trust its rows over the console's own audit log. See
+the [`0.95.0` CHANGELOG
+entry](https://github.com/nabbisen/sui-id/blob/0.95.0/CHANGELOG.md#0950--2026-11-28).
+
+**The console is rebuilt** (RFC 149). What moved:
+
+- the grouped sidebar replaces the flat row and *Settings*;
+- *apps*, not *clients*;
+- lists page 50 at a time;
+- the breach check can be changed on *Sign-in settings*.
+
+**The *Confidential client* box now works.** An app created with the box
+unchecked is public. **An app created on an earlier release with the box
+unchecked is confidential**, because the box did not work then, and an
+app's type cannot be changed afterwards. Its type shows in the *Type*
+column of *Applications → Apps*. If one there was meant to be public,
+create a new app with the box unchecked, move the relying party to it,
+then disable the old one.
+
+**Planned for `0.96.0`, so that relying parties can prepare:**
+
+- userinfo will return `name` and `preferred_username` only when the
+  access token's scope includes `profile`;
+- two people act on it: the relying party's developer requests `profile`
+  if the app shows names, and the sui-id administrator allows `profile`
+  on that app's page.
+
 ### v0.94.x
 
 **Three migrations run**: `0053`, `0054` and `0055`. Starting takes an
