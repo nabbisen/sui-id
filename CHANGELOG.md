@@ -168,6 +168,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   say. The console's dev banner no longer states it, since the mode can
   be changed afterwards on *Sign-in settings*.
 
+- **An unchecked *Confidential client* box still created a confidential
+  app**, in every release through `0.94.0`. A browser sends nothing for an
+  unchecked box, and the form's handler read that absence as
+  *confidential*, so a public client (a browser or mobile app, which keeps
+  no secret) could not be created from the console. The app form now reads
+  an unchecked box as public, and only a confidential app is given a
+  secret. On an earlier release, dynamic client registration with
+  `"token_endpoint_auth_method": "none"` creates a public client.
+
 ### Removed
 
 - `sui-id-web`: `MeSecurityData`, `render_me_security` (the dead `/me`
@@ -189,6 +198,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `RequestLocale` instead).
 - `sui-id-core`: `SparklineRange::label_ja` (the labels are
   translated strings now).
+
+### Security
+
+- **The audit CSV export quoted a value incorrectly, and never neutralised a
+  formula.** A double quote inside a value was written as *three* quotes
+  instead of two, breaking the field it was in and letting the rest of that
+  value be read as further columns or a further row by any CSV reader.
+  Separately, a value beginning with `=`, `+`, `-` or `@` was written as is;
+  a spreadsheet evaluates such a value as a formula when the file is opened
+  (CWE-1236) — one path is `=HYPERLINK("https://…", "…")`. **Anyone who can
+  reach the sign-in page could plant this text, without authenticating**: a
+  failed sign-in for an unknown username records the submitted username,
+  exactly as typed, as that audit row's target. **Every release from
+  `0.36.0` through `0.94.0` is affected.** An operator who upgrades should
+  treat any audit CSV exported before this release with care: do not open
+  one in a spreadsheet with formulas enabled, and do not trust its rows over
+  the console's own audit log, whose hash chain this defect never touched.
+  A double quote is now doubled (RFC 4180), and a value beginning with `=`,
+  `+`, `-`, `@`, a tab, or a carriage return is now prefixed with `'`, so a
+  spreadsheet shows it as text rather than evaluating it.
 
 ## [0.94.0] — 2026-11-26
 

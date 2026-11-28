@@ -214,6 +214,10 @@ After setup, point your relying party at:
 
 ## Documentation
 
+**These documents describe `main`**, which can be ahead of the latest release. A release's own
+documents are at its tag: `https://github.com/nabbisen/sui-id/tree/<version>/docs`, for example
+`<version>` = `0.95.0`.
+
 - [the deployment guide](docs/src/guides/deployment.md) — chronological,
   opinionated walkthrough from a fresh Linux server to a hardened
   production install. Start here for a first-time deployment.

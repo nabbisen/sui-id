@@ -101,6 +101,29 @@ password-complexity parameters) will be added here.
 
 ---
 
+## Rate limits
+
+The limits are fixed in the code and cannot be configured. Each counts requests in a fixed 60-second window
+(`crates/sui-id/src/runtime/ratelimit.rs`). Past a limit, the request is refused with `429 Too Many Requests` and a
+`Retry-After` header.
+
+| What | Limit, per 60 seconds | Counted per |
+|---|---|---|
+| Sign-in: the password, the second-factor code, the passkey, and the password change on *My security*, counted together | 10 | client address |
+| Step-up: re-authenticating before a sensitive action | 10 | client address |
+| The token endpoint (`/oauth2/token`) | 60 | client address |
+| The setup wizard | 20 | client address |
+| *Forgot password* | 5 | client address |
+| Introspection and revocation (`/oauth2/introspect`, `/oauth2/revoke`) | 300 | client address |
+| Introspection and revocation, again | 600 | the `client_id` the request claims |
+
+**The client address is the connection's own address**, unless the connection comes from a proxy listed in
+`trusted_proxies`, whose `X-Forwarded-For` is then used. **Behind a reverse proxy that is not listed, every user counts as
+the proxy's one address**: ten sign-in attempts a minute, from anyone, successful or not, refuse sign-in to everyone for
+the rest of that minute. List the proxy in `trusted_proxies`, and no wider range than it.
+
+The counters are kept in the process's memory. A restart clears them.
+
 ## Environment variables
 
 | Variable | Required | Description |

@@ -4,6 +4,10 @@ Pre-1.0, under active development, not yet recommended for production — see
 the [FAQ](faq.md#is-sui-id-production-ready) for what that does and does not
 mean.
 
+**This page describes `main`**, which can be ahead of the latest release. For the release you
+install, read its own copy, at its tag: `https://github.com/nabbisen/sui-id/tree/<version>/docs`.
+A command named here may not exist in an older release.
+
 ## Install
 
 ### Download the binary (no toolchain needed)

@@ -470,3 +470,47 @@ async fn an_empty_stored_scope_list_is_named_before_a_save_can_restrict_it() {
         "only an empty list gets the notice"
     );
 }
+
+/// A finding sent by a relying party's team (planeter, 2026-11-27,
+/// measured against `0.92.0`): with *Confidential client* unchecked,
+/// the console still created a confidential app, because a browser sends
+/// no field for an unchecked box and the handler read an absent value as
+/// `true` (`unwrap_or(true)`). The Quick Start says to leave the box
+/// unchecked for a browser-only or native app, so a public client could
+/// not be created from the console as documented. Q4's rewrite reads an
+/// absent box as public; this pins it, both ways.
+#[tokio::test]
+async fn an_unchecked_confidential_box_creates_a_public_app() {
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+    for (name, confidential_field, expect_confidential) in [
+        ("browser-app", "", false),
+        ("server-app", "&confidential=true", true),
+    ] {
+        let csrf = fetch_csrf(&state, &session).await;
+        let body = format!(
+            "name={name}&redirect_uri_0=https%3A%2F%2Frp.test%2Fcb{confidential_field}&save=1&_csrf={csrf}"
+        );
+        let resp = post_form(&state, "/admin/clients", &session, &csrf, &body).await;
+        assert!(
+            resp.status().is_success() || resp.status().is_redirection(),
+            "{name}: {}",
+            resp.status()
+        );
+        let row = sui_id_store::repos::clients::list(&state.db)
+            .await
+            .expect("list")
+            .into_iter()
+            .find(|c| c.name == name)
+            .expect("the app was created");
+        assert_eq!(
+            row.confidential, expect_confidential,
+            "{name}: the box decides the app's type"
+        );
+        assert_eq!(
+            row.secret_hash.is_some(),
+            expect_confidential,
+            "{name}: only a confidential app is given a secret"
+        );
+    }
+}
