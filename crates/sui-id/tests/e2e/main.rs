@@ -27,6 +27,7 @@ mod common;
 mod tls_mock;
 
 mod acr_amr;
+mod audit_csv_export;
 mod auth_flow_integrity;
 mod backup;
 mod backup_checks;

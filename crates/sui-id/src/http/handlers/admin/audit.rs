@@ -62,6 +62,22 @@ pub async fn audit_get(
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
+/// One CSV field, quoted as RFC 4180 requires: a `"` inside is doubled.
+///
+/// **And neutralised against formula injection** (CWE-1236): a field that
+/// begins with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed
+/// with `'`, so a spreadsheet shows it as text instead of evaluating it.
+/// The audit log holds text an unauthenticated visitor chose: a failed
+/// sign-in records the submitted username as its target.
+fn csv_escape(s: &str) -> String {
+    let neutralised = if s.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        format!("'{s}")
+    } else {
+        s.to_owned()
+    };
+    format!("\"{}\"", neutralised.replace('"', "\"\""))
+}
+
 pub async fn audit_csv_get(
     state_ext: AppStateExt,
     CurrentAdminOrAuditor(_, _role, _, _): CurrentAdminOrAuditor,
@@ -79,9 +95,7 @@ pub async fn audit_csv_get(
 
     let mut csv = String::from("when,actor,action,target,result,note\n");
     for r in entries {
-        fn esc(s: &str) -> String {
-            format!("\"{}\"", s.replace('"', "\"\"\""))
-        }
+        let esc = csv_escape;
         let actor_str = r.actor.map(|id| id.to_string()).unwrap_or_default();
         let target_str = r.target.unwrap_or_default();
         let note_str = r.note.unwrap_or_default();
