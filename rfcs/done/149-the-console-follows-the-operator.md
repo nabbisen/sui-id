@@ -1,6 +1,9 @@
 # RFC 149 — The admin console is organised around what an operator does
 
-**Status.** Accepted
+**Status.** Implemented (v0.95.0)
+**Closure reviewed on.** 2026-11-28, on the architect's [closure assessment](../handoffs/149-the-console-follows-the-operator/closure-assessment-0.95.0-2026-11-28.md) of RFCs 148, 149 and 151.
+**Closure approved by.** `@nabbisen`, 2026-11-26, authorizing the cycle Q plan (`f0107e1`), which closes it at `0.95.0`'s cut: *"Authorized."*
+**Closure evidence.** The [closure assessment](../handoffs/149-the-console-follows-the-operator/closure-assessment-0.95.0-2026-11-28.md), condition by condition: `e2e::q2_navigation::every_admin_get_route_belongs_to_exactly_one_group` (Q2); `e2e::q3_help_and_dashboard::the_first_run_path_opens_with_recommended_and_optional_steps_and_folds`, `every_console_and_account_page_has_a_nonempty_lede` and `no_hover_only_tooltip_anywhere` (Q3); the `e2e::q4_app_form` tests, which post plain forms (Q4). Each was mutated and caught.
 **Accepted on.** 2026-11-15
 **Approved by.** `@nabbisen`, 2026-11-15: *"All accepted and authorized."*, on the architect's review of its mockup questions.
 **Security review.** Required

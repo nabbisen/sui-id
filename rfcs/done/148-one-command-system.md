@@ -1,6 +1,9 @@
 # RFC 148 — One command system a newcomer can find their way through
 
-**Status.** Accepted
+**Status.** Implemented (v0.95.0)
+**Closure reviewed on.** 2026-11-28, on the architect's [closure assessment](../handoffs/149-the-console-follows-the-operator/closure-assessment-0.95.0-2026-11-28.md) of RFCs 148, 149 and 151.
+**Closure approved by.** `@nabbisen`, 2026-11-26, on its [first closure assessment](../handoffs/148-one-command-system/closure-assessment-2026-11-26.md): *"Your recommendation is accepted."* That is one test through a real terminal first, then closure at `0.95.0`. The cycle Q plan (`f0107e1`) closes it at the cut, also authorized: *"Authorized."*
+**Closure evidence.** The [closure assessment](../handoffs/149-the-console-follows-the-operator/closure-assessment-0.95.0-2026-11-28.md). Q1's five tests drive the binary in a real terminal (`e2e::o2b_init_and_first_run::the_offer_appears_and_n_writes_nothing` and four more; all five fail with the terminal check forced false; CI run `45806896282`). The other conditions are held by tests shipped in `0.93.0`.
 **Accepted on.** 2026-11-15
 **Approved by.** `@nabbisen`, 2026-11-15: *"All accepted."* Its §6 questions, the same day: *"Your recommendation is accepted."*
 **Security review.** Required

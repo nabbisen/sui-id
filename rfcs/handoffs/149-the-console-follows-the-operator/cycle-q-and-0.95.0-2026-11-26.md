@@ -1,6 +1,8 @@
 # Cycles Q and R: `0.95.0` and `0.96.0`, the plan
 
-> ## Whose turn it is: **the implementation role's, on `0.95.0`'s release preparation.**
+> ## Whose turn it is: **the architect's, on Q6's dispatch for `0.96.0`.**
+> **`0.95.0` was released 2026-11-28** (tag at `93cc6a5`, publish run `46136922636`). RFCs 148, 149 and 151 moved to `done/`
+> ([closure assessment](closure-assessment-0.95.0-2026-11-28.md)).
 > Q2 (`57c80d1`), Q3 (`420001b`), Q3b (`18615bd`), Q4 (`14a0422`) and Q5 (`38f99f0`) have landed. **RFC 149's four closure
 > conditions are met.**
 > **Re-scoped 2026-11-28** (`@nabbisen`: *"0.95.0 now (Recommended)"*): `0.95.0` is cut after Q5, with the audit CSV fix

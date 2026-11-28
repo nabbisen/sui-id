@@ -1,6 +1,9 @@
 # RFC 151 — The password policy can be made stricter, never weaker
 
-**Status.** Accepted
+**Status.** Implemented (v0.95.0)
+**Closure reviewed on.** 2026-11-28, on the architect's [closure assessment](../handoffs/149-the-console-follows-the-operator/closure-assessment-0.95.0-2026-11-28.md) of RFCs 148, 149 and 151.
+**Closure approved by.** `@nabbisen`, 2026-11-26, authorizing the cycle Q plan (`f0107e1`), which closes it at `0.95.0`'s cut: *"Authorized."*
+**Closure evidence.** The [closure assessment](../handoffs/149-the-console-follows-the-operator/closure-assessment-0.95.0-2026-11-28.md). Its last condition, *"from the *Sign-in* settings"*, is held by `e2e::q2_navigation::rfc151_closure_the_minimum_length_is_under_sign_in` (Q2). The rest are held by `e2e::password_min_len` and the S11 tests, shipped in `0.94.0`.
 **Accepted on.** 2026-11-16
 **Approved by.** `@nabbisen`, 2026-11-16: *"All accepted."*
 **Security review.** Required

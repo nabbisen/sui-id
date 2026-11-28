@@ -1,6 +1,6 @@
 # RFC 148 — the design review record, 2026-11-15
 
-**RFC.** [`../../accepted/148-one-command-system.md`](../../accepted/148-one-command-system.md)
+**RFC.** [`../../done/148-one-command-system.md`](../../done/148-one-command-system.md)
 **Reviewer.** `@nabbisen`, the accountable owner. He did not author it; the architect did.
 **What was put to him.** RFC 148 as proposed on 2026-11-15.
 **Outcome.** Accepted, 2026-11-15.

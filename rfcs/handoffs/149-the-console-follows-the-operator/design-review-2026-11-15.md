@@ -1,6 +1,6 @@
 # RFC 149 — the design review record, 2026-11-15
 
-**RFC.** [`../../accepted/149-the-console-follows-the-operator.md`](../../accepted/149-the-console-follows-the-operator.md)
+**RFC.** [`../../done/149-the-console-follows-the-operator.md`](../../done/149-the-console-follows-the-operator.md)
 **Reviewer.** **The architect, at `@nabbisen`'s request**: *"Review them carefully
 by yourself with my fundamental philosophy."*, on the RFC's three mockup
 questions. That is `ROADMAP.md` §S1c's owner-invoked exception, as for
